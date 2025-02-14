@@ -1,0 +1,40 @@
+[package]
+name = "cooker"
+version = "0.1.0"
+edition = "2021"
+
+[package.metadata.release]
+release = false
+
+# https://github.com/rustwasm/wasm-pack/issues/1247
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+strum = { workspace = true, features = ["strum_macros"] }
+dotenvy = { workspace = true }
+chrono = { workspace = true }
+utils = { path = "../utils" }
+worker = { version="0.5.0", features=['http', 'axum'] }
+worker-macros = { version="0.5.0", features=['http'] }
+console_error_panic_hook = { version = "0.1.1" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+log = { workspace = true }
+env_logger = { workspace = true }
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1
