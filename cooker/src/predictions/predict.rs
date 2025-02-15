@@ -12,24 +12,24 @@ pub async fn get_prediction(
     symbol: &str,
     provider: &GeminiProvider,
     model: &GeminiModel,
+    limit: i32,
 ) -> Result<PredictionOutput> {
-    let limit = 10;
-
     println!("Fetching Kline data (5m)...");
-    let kline_data_5m = fetch_binance_kline_data(symbol, "5m").await?;
+    let kline_data_5m = fetch_binance_kline_data(symbol, "5m", limit).await?;
     let price_history_5m_json = serde_json::to_string_pretty(&kline_data_5m)?;
 
     println!("Fetching Kline data (1h)...");
-    let kline_data_1h = fetch_binance_kline_data(symbol, "1h").await?;
+    let kline_data_1h = fetch_binance_kline_data(symbol, "1h", limit).await?;
     let price_history_1h_json = serde_json::to_string_pretty(&kline_data_1h)?;
 
     println!("Fetching Kline data (4h)...");
-    let kline_data_4h = fetch_binance_kline_data(symbol, "4h").await?;
+    let kline_data_4h = fetch_binance_kline_data(symbol, "4h", limit).await?;
     let price_history_4h_json = serde_json::to_string_pretty(&kline_data_4h)?;
 
-    println!("Fetching Kline data (1d)...");
-    let kline_data_1d = fetch_binance_kline_data(symbol, "1d").await?;
-    let price_history_1d_json = serde_json::to_string_pretty(&kline_data_1d)?;
+    // TODO: If we include this, it will over 1m token for 1000 point data.
+    // println!("Fetching Kline data (1d)...");
+    // let kline_data_1d = fetch_binance_kline_data(symbol, "1d", limit).await?;
+    // let price_history_1d_json = serde_json::to_string_pretty(&kline_data_1d)?;
 
     println!("Fetching Order Book Depth...");
     let orderbook_data = fetch_orderbook_depth(symbol, limit).await?;
@@ -42,7 +42,6 @@ pub async fn get_prediction(
         &price_history_5m_json,
         &price_history_1h_json,
         &price_history_4h_json,
-        &price_history_1d_json,
         &order_book_depth_json,
         model,
     );

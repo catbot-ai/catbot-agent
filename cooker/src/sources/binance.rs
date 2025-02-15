@@ -4,10 +4,13 @@ use chrono::Utc;
 use reqwest::Client;
 use utils::{Kline, OrderBook};
 
-pub async fn fetch_binance_kline_data(symbol: &str, interval: &str) -> Result<Vec<Kline>> {
+pub async fn fetch_binance_kline_data(
+    symbol: &str,
+    interval: &str,
+    limit: i32,
+) -> Result<Vec<Kline>> {
     let client = Client::new();
     let current_time = Utc::now().timestamp_millis();
-    let limit = 10; // Fetch last 1000 data points
 
     let url = format!(
         "https://www.binance.com/api/v3/uiKlines?endTime={}&limit={}&symbol={}&interval={}",

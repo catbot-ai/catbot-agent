@@ -152,86 +152,128 @@ impl AiProvider for GeminiProvider {
     }
 }
 
-// --- Prompt Building Function ---
 #[allow(clippy::too_many_arguments, unused)]
 pub fn build_prompt_stage1(
-    symbol: &str,
+    symbol_with_usdt: &str,
     price_history_5m: &str,
     price_history_1h: &str,
     price_history_4h: &str,
-    price_history_1d: &str,
     order_book_depth: &str,
     model: &GeminiModel,
 ) -> String {
-    let schema_instruction = format!(
-        r#"**IMPORTANT:** Format the output strictly as a JSON object, and ensure it adheres to the following JSON structure:
+    let symbol = symbol_with_usdt
+        .split("USDT")
+        .next()
+        .expect("Expect USDT as a suffix");
 
-        ```json
-        {{
-          "summary": {{
-            "title": "string",  // Some short word for notifications.
-            "detail": "string", // Summary detail about technical analysis.
-            "vibe": "string"    // Optional, e.g., "bullish", "bearish", "neutral"
-          }},
-          "buy_signals": [
-            {{
-              "price": number,
-              "amount_usd": number,
-              "amount_sol": number,
-              "pair": "{symbol}"
-            }}
-          ],
-          "sell_signals": [
-            {{
-              "price": number,
-              "amount_usd": number,
-              "amount_sol": number,
-              "pair": "{symbol}"
-            }}
-          ],
-          "price_prediction_graph": [
-            {{
-                "minute": number, 
-                "price": number
-            }}
-          ]
-        }}
-        ```
-        Ensure all keys are snake_case.
+    let fund = format!("1 {}", symbol);
+    let schema_instruction = format!(
+        r#"**IMPORTANT:** Format the output strictly as a valid JSON object, and ensure it adheres to the following JSON structure:
+
+```json
+{{
+  "summary": {{
+    "title": "string",  // Suggest action title e.g. "Consider long {symbol} in next 5 minutes" in ja
+    "detail": "string", // One sentence less than 255 characters.
+    "vibe": "string"    // Bear/Bull/Natural with percent e.g. Bull 100% in next hour.
+  }},
+  "long_signals": [
+    {{
+      "symbol": "{symbol}",
+      "amount": number,         // Calculate based on the {fund} fund and entry price
+      "entry_price": number,    // in USD
+      "target_price": number,   // in USD
+      "stop_loss": number
+      "rationale": "string",
+    }}
+  ],
+  "short_signals": [
+    {{
+      "symbol": "{symbol}",
+      "amount": number,         // amount of {symbol}
+      "entry_price": number,    // in USD
+      "target_price": number,   // in USD
+      "stop_loss": number
+      "rationale": "string",
+    }}
+  ],
+  "price_prediction_graph_5m": [
+    {{
+      "price": number,
+      "upper": number,
+      "lower": number
+    }}
+  ]
+}}
+```
+Ensure all keys are snake_case. Numbers should be at least 3 decimals. Provide specific rationale, profit targets, and stop-loss levels. 
+The long_signals and short_signals arrays should contain signals appropriate for their respective positions.  
+Be concise and focus on profitable trades while managing the {fund} fund. 
+Consider $10 fees, especially for short positions (e.g., funding rates for perpetual contracts).
 "#
     );
 
     format!(
-        r#"Analyze the {} market for potential price movement in the next hour based on the following data:
+        r#"Analyze the {symbol} market for potential price movement in the next 4 hours (240 minutes) based on the following data:
 
         **Price History (5m timeframe):**
-        {}
+        {price_history_5m}
 
         **Price History (1h timeframe):**
-        {}
+        {price_history_1h}
 
         **Price History (4h timeframe):**
-        {}
-
-        **Price History (1d timeframe):**
-        {}
+        {price_history_4h}
 
         **Order Book Depth:**
-        {}
+        {order_book_depth}
 
-        Perform technical analysis considering price trends, volatility, and order book depth.
-        Identify key support and resistance levels.
-        Based on a hypothetical $100 fund, suggest specific buy and sell signals (price, Token amount, USD amount) for {}. Include pair information in each signal.
-        Provide a price prediction graph with price points every 5 minutes for the next hour.
-        {}
-        "#,
-        symbol,
-        price_history_5m,
-        price_history_1h,
-        price_history_4h,
-        price_history_1d,
-        order_book_depth,
-        symbol,
-        schema_instruction, // Conditionally include schema instruction
+Perform a comprehensive technical analysis for {symbol}, considering: Trend Analysis, Volatility, Support and Resistance, Order Book Analysis.
+Based on a hypothetical {fund} fund, suggest 2-5 high-probability signals, separated into long_signals and short_signals.
+e.g. for 1 {symbol} we will use 0.5 {symbol} for long and 0.5 {symbol} for short which mean we can long or short 0.1 {symbol} amount for each invest.
+Do not suggest long or short if the profit will be less than $1.
+
+Be concise and focus on profitable trades while carefully managing the {fund} fund.
+Consider fees, especially funding rates for short positions in perpetual contracts.
+
+Provide a price prediction graph with 5-minute intervals for the next 4 hours.
+Include upper and lower bounds. Format this in the price_prediction_graph_5m field.
+
+{schema_instruction}"#
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::providers::gemini::GeminiModel;
+    use anyhow::Result;
+
+    #[test]
+    fn test_build_prompt_stage1_empty_price_history() -> Result<()> {
+        let symbol_with_usdt = "SOLUSDT";
+        let price_history_5m = "[]"; // Empty price history
+        let price_history_1h = "[]";
+        let price_history_4h = "[]";
+        let order_book_depth = "{}"; // Empty order book
+
+        let model = GeminiModel::FlashLitePreview; // Choose a model
+
+        let prompt = build_prompt_stage1(
+            symbol_with_usdt,
+            price_history_5m,
+            price_history_1h,
+            price_history_4h,
+            order_book_depth,
+            &model,
+        );
+
+        println!("\n--- Prompt Output for Empty Price History ---");
+        println!("{}", prompt); // Print the prompt for inspection
+
+        // You can add assertions here to check if the prompt is structured as expected
+        // For example, you might want to check if certain keywords or data placeholders are present in the prompt string.
+
+        Ok(())
+    }
 }
