@@ -173,28 +173,29 @@ pub fn build_prompt_stage1(
 ```json
 {{
   "summary": {{
-    "title": "string",  // Suggest action title e.g. "Consider long {symbol} in next 5 minutes" in ja
-    "detail": "string", // One sentence less than 255 characters.
-    "vibe": "string"    // Bear/Bull/Natural with percent e.g. Bull 100% in next hour.
+    "title": "string",      // Short detail for notification header.
+    "detail": "string",     // Prediction trade analysis including upper, lower bound number; less than 255 characters.
+    "suggestion: "string",  // Suggest action title e.g. "Consider long {symbol} in next 5 minutes" in ja
+    "vibe": "string"        // Bear/Bull/Natural prediction with percent e.g. "100% Bull in next hour".
   }},
   "long_signals": [
     {{
       "symbol": "{symbol}",
-      "amount": number,         // Calculate based on the {fund} fund and entry price
-      "entry_price": number,    // in USD
-      "target_price": number,   // in USD
-      "stop_loss": number
-      "rationale": "string",
+      "amount": number,         // Calculate based on the {fund} fund and entry price, precise decimals as possible.
+      "entry_price": number,    // Precise decimals number in USD
+      "target_price": number,   // Precise decimals number in USD
+      "stop_loss": number,      // Precise decimals number in USD
+      "rationale": "string"
     }}
   ],
   "short_signals": [
     {{
       "symbol": "{symbol}",
-      "amount": number,         // amount of {symbol}
-      "entry_price": number,    // in USD
-      "target_price": number,   // in USD
-      "stop_loss": number
-      "rationale": "string",
+      "amount": number,         // Calculate based on the {fund} fund and entry price, precise decimals as possible.
+      "entry_price": number,    // Precise decimals number in USD
+      "target_price": number,   // Precise decimals number in USD
+      "stop_loss": number,      // Precise decimals number in USD
+      "rationale": "string"
     }}
   ],
   "price_prediction_graph_5m": [

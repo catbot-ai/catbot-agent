@@ -16,6 +16,7 @@ pub struct PredictionOutput {
 pub struct Summary {
     pub title: String,
     pub detail: String,
+    pub suggestion: String,
     pub vibe: Option<String>,
     #[serde(flatten)]
     pub _other: std::collections::HashMap<String, serde_json::Value>,
