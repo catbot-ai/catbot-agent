@@ -1,6 +1,6 @@
-# catbot-box
+# catbot-agent
 
-Let's put everything in the box!
+Let's llm do the things!
 
 ## Dev
 
