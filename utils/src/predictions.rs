@@ -28,7 +28,6 @@ pub struct LongSignal {
     pub amount: f64,
     pub entry_price: f64,
     pub target_price: f64,
-    pub target_profit: f64,
     pub stop_loss: f64,
     pub rationale: String,
     #[serde(flatten)]
@@ -42,7 +41,6 @@ pub struct ShortSignal {
     pub amount: f64,
     pub entry_price: f64,
     pub target_price: f64,
-    pub target_profit: f64,
     pub stop_loss: f64,
     pub rationale: String,
     #[serde(flatten)]
