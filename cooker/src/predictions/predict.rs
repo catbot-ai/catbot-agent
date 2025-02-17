@@ -1,4 +1,4 @@
-use utils::{ConciseKline, PredictionOutput};
+use utils::{ConciseKline, PredictionOutput, PredictionOutputWithTimeStamp};
 
 use crate::providers::gemini::AiProvider;
 use crate::{
@@ -13,7 +13,7 @@ pub async fn get_prediction(
     provider: &GeminiProvider,
     model: &GeminiModel,
     limit: i32,
-) -> Result<PredictionOutput> {
+) -> Result<PredictionOutputWithTimeStamp> {
     println!("Fetching Kline data (1s)...");
     let kline_data_1s = fetch_binance_kline_data::<ConciseKline>(symbol, "1s", 1).await?;
     let price_history_1s_string = serde_json::to_string_pretty(&kline_data_1s)?;
@@ -59,5 +59,14 @@ pub async fn get_prediction(
         .call_api::<PredictionOutput>(model, &prompt, None)
         .await?;
 
-    Ok(gemini_response)
+    let prediction_output_with_timestamp: PredictionOutputWithTimeStamp =
+        PredictionOutputWithTimeStamp {
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            summary: gemini_response.summary,
+            long_signals: gemini_response.long_signals,
+            short_signals: gemini_response.short_signals,
+            price_prediction_graph_5m: gemini_response.price_prediction_graph_5m,
+        };
+
+    Ok(prediction_output_with_timestamp)
 }

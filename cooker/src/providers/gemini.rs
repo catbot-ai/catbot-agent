@@ -133,14 +133,26 @@ impl AiProvider for GeminiProvider {
             .await?;
 
         if response.status().is_success() {
-            let raw_response: GeminiResponse = response.json().await?;
+            let raw_text_response = response.text().await?;
+
+            let raw_response: GeminiResponse =
+                serde_json::from_str(&raw_text_response).map_err(|e| {
+                    anyhow!("Failed to deserialize GeminiResponse from raw text: {}", e)
+                })?;
+
             let output_string = raw_response
                 .candidates
                 .first()
                 .and_then(|candidate| candidate.content.parts.first())
                 .map(|part| part.text.clone())
                 .ok_or_else(|| anyhow!("No text output found in Gemini response"))?;
-            let parsed_output: T = serde_json::from_str(&output_string)?;
+            let parsed_output: T = serde_json::from_str(&output_string).map_err(|error| {
+                anyhow!(
+                    "Raw Gemini API Response: {}, error: {}",
+                    &raw_text_response,
+                    error
+                )
+            })?;
 
             Ok(parsed_output)
         } else {
@@ -176,7 +188,7 @@ pub fn build_prompt(
 {{
   "summary": {{
     "title": "string",        // Short detail for notification header.
-    "current_price: "number", // Current {symbol} price, precise decimals number in USD.
+    "current_price": "number", // Current {symbol} price, precise decimals number in USD.
     "upper_bound": "number",  // Current {symbol} upper bound.
     "lower_bound": "number",  // Current {symbol} lower bound.
     "first_resistance": "number"  // Current {symbol} first significant amount of resistance.
@@ -191,7 +203,7 @@ pub fn build_prompt(
     {{
       "symbol": "{symbol}",
       "amount": "number",         // Calculate based on the {fund} fund and entry price, precise decimals as possible.
-      "current_price: "number",   // Current {symbol} price, precise decimals number in USD.
+      "current_price": "number",   // Current {symbol} price, precise decimals number in USD.
       "entry_price": "number",    // Precise decimals number in USD.
       "target_price": "number",   // Precise decimals number in USD.
       "stop_loss": "number",      // Precise decimals number in USD.
