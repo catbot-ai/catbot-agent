@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Kline {
@@ -14,6 +14,45 @@ pub struct Kline {
     pub taker_buy_base_asset_volume: String,
     pub taker_buy_quote_asset_volume: String,
     pub ignore: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ConciseKline {
+    pub open_time: i64,
+    #[serde(serialize_with = "remove_trailing_zeros")]
+    pub open_price: String,
+    #[serde(serialize_with = "remove_trailing_zeros")]
+    pub high_price: String,
+    #[serde(serialize_with = "remove_trailing_zeros")]
+    pub low_price: String,
+    #[serde(serialize_with = "remove_trailing_zeros")]
+    pub close_price: String,
+    #[serde(serialize_with = "remove_trailing_zeros")]
+    pub volume: String,
+}
+
+fn remove_trailing_zeros<S>(value: &str, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut s = value.trim_end_matches('0').to_string();
+    if s.ends_with('.') {
+        s.pop();
+    }
+    serializer.serialize_str(&s)
+}
+
+impl From<Kline> for ConciseKline {
+    fn from(kline: Kline) -> Self {
+        ConciseKline {
+            open_time: kline.open_time,
+            open_price: kline.open_price.clone(),
+            high_price: kline.high_price.clone(),
+            low_price: kline.low_price.clone(),
+            close_price: kline.close_price.clone(),
+            volume: kline.volume.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]

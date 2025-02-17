@@ -15,6 +15,9 @@ pub struct PredictionOutput {
 #[serde(rename_all = "snake_case")]
 pub struct Summary {
     pub title: String,
+    pub current_price: f64,
+    pub upper_bound: f64,
+    pub lower_bound: f64,
     pub detail: String,
     pub suggestion: String,
     pub vibe: Option<String>,
@@ -30,6 +33,7 @@ pub struct LongSignal {
     pub entry_price: f64,
     pub target_price: f64,
     pub stop_loss: f64,
+    pub timeframe: String,
     pub rationale: String,
     #[serde(flatten)]
     pub _other: std::collections::HashMap<String, serde_json::Value>,
@@ -43,6 +47,7 @@ pub struct ShortSignal {
     pub entry_price: f64,
     pub target_price: f64,
     pub stop_loss: f64,
+    pub timeframe: String,
     pub rationale: String,
     #[serde(flatten)]
     pub _other: std::collections::HashMap<String, serde_json::Value>,
@@ -52,8 +57,8 @@ pub struct ShortSignal {
 #[serde(rename_all = "snake_case")]
 pub struct PricePredictionPoint5m {
     pub price: f64,
-    pub upper: f64,
-    pub lower: f64,
+    pub upper_bound: f64,
+    pub lower_bound: f64,
     #[serde(flatten)]
     pub _other: std::collections::HashMap<String, serde_json::Value>,
 }

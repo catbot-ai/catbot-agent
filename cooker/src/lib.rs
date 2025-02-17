@@ -71,7 +71,7 @@ pub async fn predict_with_gemini(
 mod tests {
     use crate::predict_with_gemini;
 
-    #[ignore]
+    // #[ignore]
     #[tokio::test]
     async fn test() {
         dotenvy::from_filename(".env").expect("No .env file");

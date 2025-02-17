@@ -153,11 +153,13 @@ impl AiProvider for GeminiProvider {
 }
 
 #[allow(clippy::too_many_arguments, unused)]
-pub fn build_prompt_stage1(
+pub fn build_prompt(
     symbol_with_usdt: &str,
+    price_history_1s: &str,
     price_history_5m: &str,
     price_history_1h: &str,
     price_history_4h: &str,
+    price_history_1d: &str,
     order_book_depth: &str,
     model: &GeminiModel,
 ) -> String {
@@ -174,42 +176,48 @@ pub fn build_prompt_stage1(
 {{
   "summary": {{
     "title": "string",      // Short detail for notification header.
-    "detail": "string",     // Prediction trade analysis including upper, lower bound number; less than 255 characters.
+    "current_price: "number", // Current {symbol} price, precise decimals number in USD.
+    "upper_bound": "number",  // Current {symbol} upper bound.
+    "lower_bound": "number",  // Current {symbol} lower bound.
+    "detail": "string",     // Prediction trade analysis summary less than 255 characters.
     "suggestion: "string",  // Suggest action title e.g. "Consider long {symbol} in next 5 minutes" in ja
     "vibe": "string"        // Bear/Bull/Natural prediction with percent e.g. "100% Bull in next hour".
   }},
   "long_signals": [
     {{
       "symbol": "{symbol}",
-      "amount": number,         // Calculate based on the {fund} fund and entry price, precise decimals as possible.
-      "entry_price": number,    // Precise decimals number in USD
-      "target_price": number,   // Precise decimals number in USD
-      "stop_loss": number,      // Precise decimals number in USD
+      "amount": "number",         // Calculate based on the {fund} fund and entry price, precise decimals as possible.
+      "current_price: "number",   // Current {symbol} price, precise decimals number in USD.
+      "entry_price": "number",    // Precise decimals number in USD.
+      "target_price": "number",   // Precise decimals number in USD.
+      "stop_loss": "number",      // Precise decimals number in USD.
+      "timeframe": "string",     // Indicated expected time frame e.g. 5m, 15m, 1h, 4h, 1d
       "rationale": "string"
     }}
   ],
   "short_signals": [
     {{
       "symbol": "{symbol}",
-      "amount": number,         // Calculate based on the {fund} fund and entry price, precise decimals as possible.
-      "entry_price": number,    // Precise decimals number in USD
-      "target_price": number,   // Precise decimals number in USD
-      "stop_loss": number,      // Precise decimals number in USD
+      "amount": "number",         // Calculate based on the {fund} fund and entry price, precise decimals as possible.
+      "entry_price": "number",    // Precise decimals number in USD.
+      "target_price": "number",   // Precise decimals number in USD.
+      "stop_loss": "number",      // Precise decimals number in USD.
+      "timeframe": "string",     // Indicated expected time frame e.g. 5m, 15m, 1h, 4h, 1d
       "rationale": "string"
     }}
   ],
   "price_prediction_graph_5m": [
     {{
-      "price": number,
-      "upper": number,
-      "lower": number
+      "price": "number", // Start with current {symbol} price.
+      "upper_bound": "number", // Start with current {symbol} upper bound.
+      "lower_bound": "number"  // Start with current {symbol} lower bound.
     }}
   ]
 }}
 ```
 Ensure all keys are snake_case. Numbers should be at least 3 decimals. Provide specific rationale, profit targets, and stop-loss levels. 
 The long_signals and short_signals arrays should contain signals appropriate for their respective positions.  
-Be concise and focus on profitable trades while managing the {fund} fund. 
+Be concise and focus on profitable trades while managing the {fund} fund.
 Consider $10 fees, especially for short positions (e.g., funding rates for perpetual contracts).
 "#
     );
@@ -217,22 +225,31 @@ Consider $10 fees, especially for short positions (e.g., funding rates for perpe
     format!(
         r#"Analyze the {symbol} market for potential price movement in the next 4 hours (240 minutes) based on the following data:
 
-        **Price History (5m timeframe):**
-        {price_history_5m}
+**Current Price:**
+{price_history_1s}
 
-        **Price History (1h timeframe):**
-        {price_history_1h}
+**Price History (5m timeframe):**
+{price_history_5m}
 
-        **Price History (4h timeframe):**
-        {price_history_4h}
+**Price History (1h timeframe):**
+{price_history_1h}
 
-        **Order Book Depth:**
-        {order_book_depth}
+**Price History (4h timeframe):**
+{price_history_4h}
+
+**Price History (1d timeframe):**
+{price_history_1d}
+
+**Order Book Depth:**
+{order_book_depth}
 
 Perform a comprehensive technical analysis for {symbol}, considering: Trend Analysis, Volatility, Support and Resistance, Order Book Analysis.
 Based on a hypothetical {fund} fund, suggest 2-5 high-probability signals, separated into long_signals and short_signals.
 e.g. for 1 {symbol} we will use 0.5 {symbol} for long and 0.5 {symbol} for short which mean we can long or short 0.1 {symbol} amount for each invest.
-Do not suggest long or short if the profit will be less than $1.
+
+Do not suggest long or short if the profit will be less than $5.
+Do suggest signals for vary timeframe that matched current(usually too small to have profit) and next support/resistant (usually to wide but profitable).
+Also consider upper_bound and lower_bound (especially the one that match support/resistant) as a price target long and short signals.
 
 Be concise and focus on profitable trades while carefully managing the {fund} fund.
 Consider fees, especially funding rates for short positions in perpetual contracts.
@@ -253,18 +270,33 @@ mod tests {
     #[test]
     fn test_build_prompt_stage1_empty_price_history() -> Result<()> {
         let symbol_with_usdt = "SOLUSDT";
+        let price_history_1s = r#"[
+  {
+    "open_time": 1739773540000,
+    "open_price": "184.58",
+    "high_price": "184.58",
+    "low_price": "184.56",
+    "close_price": "184.56",
+    "volume": "8.911"
+  }
+]"#;
         let price_history_5m = "[]"; // Empty price history
         let price_history_1h = "[]";
         let price_history_4h = "[]";
+        let price_history_1d = "[]";
         let order_book_depth = "{}"; // Empty order book
+
+        println!("price_history_1s:{:#?}", price_history_1s);
 
         let model = GeminiModel::FlashLitePreview; // Choose a model
 
-        let prompt = build_prompt_stage1(
+        let prompt = build_prompt(
             symbol_with_usdt,
+            price_history_1s,
             price_history_5m,
             price_history_1h,
             price_history_4h,
+            price_history_1d,
             order_book_depth,
             &model,
         );

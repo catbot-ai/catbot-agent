@@ -4,20 +4,19 @@ use chrono::Utc;
 use reqwest::Client;
 use utils::{Kline, OrderBook};
 
-pub async fn fetch_binance_kline_data(
-    symbol: &str,
-    interval: &str,
-    limit: i32,
-) -> Result<Vec<Kline>> {
+pub async fn fetch_binance_kline_data<T>(symbol: &str, interval: &str, limit: i32) -> Result<Vec<T>>
+where
+    T: serde::de::DeserializeOwned + Send + std::convert::From<utils::Kline>,
+{
     let client = Client::new();
-    let current_time = Utc::now().timestamp_millis();
+    // let current_time = Utc::now().timestamp_millis();
 
     let url = format!(
-        "https://www.binance.com/api/v3/uiKlines?endTime={}&limit={}&symbol={}&interval={}",
-        current_time, limit, symbol, interval
+        "https://www.binance.com/api/v3/uiKlines?limit={}&symbol={}&interval={}",
+        limit, symbol, interval
     );
 
-    println!("fetch_binance_kline_data: {}", url);
+    println!("Fetching data from: {}", url);
 
     let response = client
         .get(&url)
@@ -29,12 +28,18 @@ pub async fn fetch_binance_kline_data(
         return Err(anyhow!("Binance API error: {:?}", response.status()));
     }
 
+    if !response.status().is_success() {
+        return Err(anyhow!("Binance API error: {:?}", response.status()));
+    }
+
     let kline_data: Vec<Kline> = response
         .json()
         .await
         .context("Failed to parse JSON response from Binance API")?;
 
-    Ok(kline_data)
+    let concise_kline_data: Vec<T> = kline_data.into_iter().map(|kline| kline.into()).collect();
+
+    Ok(concise_kline_data)
 }
 
 pub async fn fetch_orderbook_depth(symbol: &str, limit: i32) -> Result<OrderBook> {
