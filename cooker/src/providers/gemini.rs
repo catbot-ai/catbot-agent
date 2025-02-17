@@ -179,6 +179,10 @@ pub fn build_prompt(
     "current_price: "number", // Current {symbol} price, precise decimals number in USD.
     "upper_bound": "number",  // Current {symbol} upper bound.
     "lower_bound": "number",  // Current {symbol} lower bound.
+    "first_resistance": "number"  // Current {symbol} first significant amount of resistance.
+    "first_support": "number"     // Current {symbol} first significant amount of support.
+    "second_resistance": "number" // Current {symbol} second significant amount of resistance.
+    "second_support": "number"    // Current {symbol} second significant amount of support.
     "detail": "string",       // Prediction trade analysis summary less than 255 characters.
     "suggestion: "string",    // Suggest action title e.g. "Consider long {symbol} in next 5 minutes" in ja
     "vibe": "string"          // Bear/Bull/Natural prediction with percent e.g. "Bull 100% in next hour".
@@ -208,9 +212,13 @@ pub fn build_prompt(
   ],
   "price_prediction_graph_5m": [
     {{
-      "price": "number",       // Start with current {symbol} price.
-      "upper_bound": "number", // Start with current {symbol} upper bound.
-      "lower_bound": "number"  // Start with current {symbol} lower bound.
+      "price": "number",            // Start with current {symbol} price and so on.
+      "upper_bound": "number",      // Start with current {symbol} upper bound and so on.
+      "lower_bound": "number"       // Start with current {symbol} lower bound and so on.
+      "first_resistance": "number"  // Start with current {symbol} first significant amount of resistance and so on.
+      "first_support": "number"     // Start with current {symbol} first significant amount of support and so on.
+      "second_resistance": "number" // Start with current {symbol} second significant amount of resistance and so on.
+      "second_support": "number"    // Start with current {symbol} second significant amount of support and so on.
     }}
   ]
 }}

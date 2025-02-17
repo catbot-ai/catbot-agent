@@ -18,6 +18,10 @@ pub struct Summary {
     pub current_price: f64,
     pub upper_bound: f64,
     pub lower_bound: f64,
+    pub first_resistance: f64,
+    pub first_support: f64,
+    pub second_resistance: f64,
+    pub second_support: f64,
     pub detail: String,
     pub suggestion: String,
     pub vibe: Option<String>,
@@ -59,6 +63,10 @@ pub struct PricePredictionPoint5m {
     pub price: f64,
     pub upper_bound: f64,
     pub lower_bound: f64,
+    pub first_resistance: f64,
+    pub first_support: f64,
+    pub second_resistance: f64,
+    pub second_support: f64,
     #[serde(flatten)]
     pub _other: std::collections::HashMap<String, serde_json::Value>,
 }
