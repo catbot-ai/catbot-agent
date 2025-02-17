@@ -187,23 +187,23 @@ pub fn build_prompt(
 ```json
 {{
   "summary": {{
-    "title": "string",        // Short detail for notification header.
+    "title": "string",         // Short summary less than 128 characters. e.g. "{symbol} long opportunity"
     "current_price": "number", // Current {symbol} price, precise decimals number in USD.
-    "upper_bound": "number",  // Current {symbol} upper bound.
-    "lower_bound": "number",  // Current {symbol} lower bound.
+    "upper_bound": "number",   // Current {symbol} upper bound.
+    "lower_bound": "number",   // Current {symbol} lower bound.
     "first_resistance": "number"  // Current {symbol} first significant amount of resistance.
     "first_support": "number"     // Current {symbol} first significant amount of support.
     "second_resistance": "number" // Current {symbol} second significant amount of resistance.
     "second_support": "number"    // Current {symbol} second significant amount of support.
     "detail": "string",       // Prediction trade analysis summary less than 255 characters.
-    "suggestion: "string",    // Suggest action title e.g. "Consider long {symbol} in next 5 minutes" in ja
+    "suggestion": "string",   // Suggest action title e.g. "Consider long {symbol} in next 5 minutes" in ja
     "vibe": "string"          // Bear/Bull/Natural prediction with percent e.g. "Bull 100% in next hour".
   }},
   "long_signals": [
     {{
       "symbol": "{symbol}",
       "amount": "number",         // Calculate based on the {fund} fund and entry price, precise decimals as possible.
-      "current_price": "number",   // Current {symbol} price, precise decimals number in USD.
+      "current_price": "number",  // Current {symbol} price, precise decimals number in USD.
       "entry_price": "number",    // Precise decimals number in USD.
       "target_price": "number",   // Precise decimals number in USD.
       "stop_loss": "number",      // Precise decimals number in USD.
