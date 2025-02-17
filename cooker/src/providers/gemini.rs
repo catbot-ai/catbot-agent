@@ -175,13 +175,13 @@ pub fn build_prompt(
 ```json
 {{
   "summary": {{
-    "title": "string",      // Short detail for notification header.
+    "title": "string",        // Short detail for notification header.
     "current_price: "number", // Current {symbol} price, precise decimals number in USD.
     "upper_bound": "number",  // Current {symbol} upper bound.
     "lower_bound": "number",  // Current {symbol} lower bound.
-    "detail": "string",     // Prediction trade analysis summary less than 255 characters.
-    "suggestion: "string",  // Suggest action title e.g. "Consider long {symbol} in next 5 minutes" in ja
-    "vibe": "string"        // Bear/Bull/Natural prediction with percent e.g. "100% Bull in next hour".
+    "detail": "string",       // Prediction trade analysis summary less than 255 characters.
+    "suggestion: "string",    // Suggest action title e.g. "Consider long {symbol} in next 5 minutes" in ja
+    "vibe": "string"          // Bear/Bull/Natural prediction with percent e.g. "Bull 100% in next hour".
   }},
   "long_signals": [
     {{
@@ -191,7 +191,7 @@ pub fn build_prompt(
       "entry_price": "number",    // Precise decimals number in USD.
       "target_price": "number",   // Precise decimals number in USD.
       "stop_loss": "number",      // Precise decimals number in USD.
-      "timeframe": "string",     // Indicated expected time frame e.g. 5m, 15m, 1h, 4h, 1d
+      "timeframe": "string",      // Indicated expected time frame e.g. 5m, 15m, 1h, 4h, 1d, ...
       "rationale": "string"
     }}
   ],
@@ -202,13 +202,13 @@ pub fn build_prompt(
       "entry_price": "number",    // Precise decimals number in USD.
       "target_price": "number",   // Precise decimals number in USD.
       "stop_loss": "number",      // Precise decimals number in USD.
-      "timeframe": "string",     // Indicated expected time frame e.g. 5m, 15m, 1h, 4h, 1d
+      "timeframe": "string",      // Indicated expected time frame e.g. 5m, 15m, 1h, 4h, 1d, ...
       "rationale": "string"
     }}
   ],
   "price_prediction_graph_5m": [
     {{
-      "price": "number", // Start with current {symbol} price.
+      "price": "number",       // Start with current {symbol} price.
       "upper_bound": "number", // Start with current {symbol} upper bound.
       "lower_bound": "number"  // Start with current {symbol} lower bound.
     }}
@@ -217,6 +217,7 @@ pub fn build_prompt(
 ```
 Ensure all keys are snake_case. Numbers should be at least 3 decimals. Provide specific rationale, profit targets, and stop-loss levels. 
 The long_signals and short_signals arrays should contain signals appropriate for their respective positions.  
+
 Be concise and focus on profitable trades while managing the {fund} fund.
 Consider $10 fees, especially for short positions (e.g., funding rates for perpetual contracts).
 "#
@@ -243,13 +244,16 @@ Consider $10 fees, especially for short positions (e.g., funding rates for perpe
 **Order Book Depth:**
 {order_book_depth}
 
-Perform a comprehensive technical analysis for {symbol}, considering: Trend Analysis, Volatility, Support and Resistance, Order Book Analysis.
+Perform a comprehensive technical analysis for {symbol_with_usdt}, considering: Trend Analysis, Volatility, Support and Resistance, Order Book Analysis.
 Based on a hypothetical {fund} fund, suggest 2-5 high-probability signals, separated into long_signals and short_signals.
 e.g. for 1 {symbol} we will use 0.5 {symbol} for long and 0.5 {symbol} for short which mean we can long or short 0.1 {symbol} amount for each invest.
 
 Do not suggest long or short if the profit will be less than $5.
 Do suggest signals for vary timeframe that matched current(usually too small to have profit) and next support/resistant (usually to wide but profitable).
 Also consider upper_bound and lower_bound (especially the one that match support/resistant) as a price target long and short signals.
+
+Prioritize signals with timeframes of 1h, 4h, and potentially 1d, in addition to shorter-term 5m signals,
+to capture both intraday and potential swing trading opportunities.
 
 Be concise and focus on profitable trades while carefully managing the {fund} fund.
 Consider fees, especially funding rates for short positions in perpetual contracts.
