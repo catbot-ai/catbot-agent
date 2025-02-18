@@ -65,7 +65,7 @@ pub async fn get_prediction(
             summary: gemini_response.summary,
             long_signals: gemini_response.long_signals,
             short_signals: gemini_response.short_signals,
-            price_prediction_graph_5m: gemini_response.price_prediction_graph_5m,
+            // price_prediction_graph_5m: gemini_response.price_prediction_graph_5m,
         };
 
     Ok(prediction_output_with_timestamp)

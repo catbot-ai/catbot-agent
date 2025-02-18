@@ -10,9 +10,10 @@ where
 {
     let client = Client::new();
     // let current_time = Utc::now().timestamp_millis();
+    // https://adversely-amazing-wildcat.edgecompute.app/?url=https://api.binance.com/api/v3/uiKlines?limit=1&symbol=SOLUSDT&interval=1s
 
     let url = format!(
-        "https://www.binance.com/api/v3/uiKlines?limit={}&symbol={}&interval={}",
+        "https://adversely-amazing-wildcat.edgecompute.app/?url=https://api.binance.com/api/v3/uiKlines?limit={}&symbol={}&interval={}",
         limit, symbol, interval
     );
 
@@ -45,8 +46,9 @@ where
 pub async fn fetch_orderbook_depth(symbol: &str, limit: i32) -> Result<OrderBook> {
     println!("fetch_orderbook_depth: {}", symbol);
     let client = Client::new();
+    // https://adversely-amazing-wildcat.edgecompute.app/?url=https://api.binance.com/api/v3/depth?symbol=SOLUSDT&limit=1
     let url = format!(
-        "https://www.binance.com/api/v3/depth?symbol={}&limit={}",
+        "https://adversely-amazing-wildcat.edgecompute.app/?url=https://api.binance.com/api/v3/depth?symbol={}&limit={}",
         symbol, limit
     );
     let response = client.get(&url).send().await?;

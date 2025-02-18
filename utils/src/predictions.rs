@@ -6,7 +6,7 @@ pub struct PredictionOutput {
     pub summary: Summary,
     pub long_signals: Vec<LongSignal>,
     pub short_signals: Vec<ShortSignal>,
-    pub price_prediction_graph_5m: Vec<PricePredictionPoint5m>,
+    // pub price_prediction_graph_5m: Vec<PricePredictionPoint5m>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -16,7 +16,7 @@ pub struct PredictionOutputWithTimeStamp {
     pub summary: Summary,
     pub long_signals: Vec<LongSignal>,
     pub short_signals: Vec<ShortSignal>,
-    pub price_prediction_graph_5m: Vec<PricePredictionPoint5m>,
+    // pub price_prediction_graph_5m: Vec<PricePredictionPoint5m>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -70,3 +70,19 @@ pub struct PricePredictionPoint5m {
     pub second_resistance: f64,
     pub second_support: f64,
 }
+
+// TODO: separated call for price prediction
+// "price_prediction_graph_5m": [
+//     {{
+//       "price": "number",            // Start with current {symbol} price and so on.
+//       "upper_bound": "number",      // Start with current {symbol} upper bound and so on.
+//       "lower_bound": "number"       // Start with current {symbol} lower bound and so on.
+//       "first_resistance": "number"  // Start with current {symbol} first significant amount of resistance and so on.
+//       "first_support": "number"     // Start with current {symbol} first significant amount of support and so on.
+//       "second_resistance": "number" // Start with current {symbol} second significant amount of resistance and so on.
+//       "second_support": "number"    // Start with current {symbol} second significant amount of support and so on.
+//     }}
+//   ]
+
+// Provide a price prediction graph with 5-minute intervals for the next 4 hours.
+// Include upper and lower bounds. Format this in the price_prediction_graph_5m field.
