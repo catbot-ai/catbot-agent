@@ -257,7 +257,7 @@ Based on a hypothetical "{fund} {symbol}" fund, suggest 2-5 high-probability sig
 e.g. In neutral vibe for 1 {symbol} we may split 0.5 {symbol} for long and 0.5 {symbol} for short which mean we may long or short 0.1 {symbol} amount for 5+5 invests attempt for next 4 hours.
 e.g. In bull vibe for 1 {symbol} we may use all 1 {symbol} for long and 0 {symbol} for short which mean we may long or short 0.5 {symbol} amount for 2 invests attempt for next 4 hours.
 
-Do not suggest long or short if the profit is too small e.g. profit that less than $5.
+Do suggest long or short only for profitable one (must be more than 5% and more than 5 USD).
 Do suggest signals for vary timeframe that matched current(usually too small to have profit) and next support/resistant (usually to wide but profitable).
 Do consider upper_bound and lower_bound (especially the one that match support/resistant) both current and next one as a price target for long and short signals.
 Do take order book into the account for target price both first support/resistant for short term position and second one for long term position.
