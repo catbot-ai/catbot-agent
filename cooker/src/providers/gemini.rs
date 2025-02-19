@@ -215,6 +215,7 @@ pub fn build_prompt(
     {{
       "symbol": "{symbol}",
       "amount": "number",         // Calculate based on the {fund} fund and entry price, precise decimals as possible.
+      "current_price": "number",  // Current {symbol} price, precise decimals number in USD.
       "entry_price": "number",    // Precise decimals number in USD.
       "target_price": "number",   // Precise decimals number in USD.
       "stop_loss": "number",      // Precise decimals number in USD.

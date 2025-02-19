@@ -40,6 +40,7 @@ pub struct Summary {
 pub struct LongSignal {
     pub symbol: String,
     pub amount: f64,
+    pub current_price: f64,
     pub entry_price: f64,
     pub target_price: f64,
     pub stop_loss: f64,
@@ -52,6 +53,7 @@ pub struct LongSignal {
 pub struct ShortSignal {
     pub symbol: String,
     pub amount: f64,
+    pub current_price: f64,
     pub entry_price: f64,
     pub target_price: f64,
     pub stop_loss: f64,
