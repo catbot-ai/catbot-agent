@@ -43,6 +43,7 @@ pub async fn get_prediction(
     // --- Build Prompt for Gemini API ---
     println!("Building prompt for Gemini API...");
     let prompt = build_prompt(
+        3f64,
         symbol,
         &price_history_1s_string,
         &price_history_5m_string,

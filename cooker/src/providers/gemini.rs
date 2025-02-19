@@ -166,6 +166,7 @@ impl AiProvider for GeminiProvider {
 
 #[allow(clippy::too_many_arguments, unused)]
 pub fn build_prompt(
+    fund: f64,
     symbol_with_usdt: &str,
     price_history_1s: &str,
     price_history_5m: &str,
@@ -180,7 +181,6 @@ pub fn build_prompt(
         .next()
         .expect("Expect USDT as a suffix");
 
-    let fund = format!("1 {}", symbol);
     let schema_instruction = format!(
         r#"**IMPORTANT:** Format the output strictly as a valid JSON object, and ensure it adheres to the following JSON structure:
 
@@ -225,10 +225,8 @@ pub fn build_prompt(
 }}
 ```
 Ensure all keys are snake_case. Numbers should be at least 3 decimals. Provide specific rationale, profit targets, and stop-loss levels. 
-The long_signals and short_signals arrays should contain signals appropriate for their respective positions.  
-
-Be concise and focus on profitable trades while managing the {fund} fund.
-Consider $10 fees, especially for short positions (e.g., funding rates for perpetual contracts).
+The long_signals and short_signals arrays should contain signals appropriate for their respective positions.
+Do not include newline \n in response.
 "#
     );
 
@@ -254,17 +252,19 @@ Consider $10 fees, especially for short positions (e.g., funding rates for perpe
 {order_book_depth}
 
 Perform a comprehensive technical analysis for {symbol_with_usdt}, considering: Trend Analysis, Volatility, Support and Resistance, Order Book Analysis.
-Based on a hypothetical {fund} fund, suggest 2-5 high-probability signals, separated into long_signals and short_signals.
-e.g. for 1 {symbol} we will use 0.5 {symbol} for long and 0.5 {symbol} for short which mean we can long or short 0.1 {symbol} amount for each invest.
+Based on a hypothetical "{fund} {symbol}" fund, suggest 2-5 high-probability signals, separated into long_signals and short_signals.
+e.g. In neutral vibe for 1 {symbol} we may split 0.5 {symbol} for long and 0.5 {symbol} for short which mean we may long or short 0.1 {symbol} amount for 5+5 invests attempt for next 4 hours.
+e.g. In bull vibe for 1 {symbol} we may use all 1 {symbol} for long and 0 {symbol} for short which mean we may long or short 0.5 {symbol} amount for 2 invests attempt for next 4 hours.
 
-Do not suggest long or short if the profit will be less than $5.
+Do not suggest long or short if the profit is too small e.g. profit that less than $5.
 Do suggest signals for vary timeframe that matched current(usually too small to have profit) and next support/resistant (usually to wide but profitable).
-Also consider upper_bound and lower_bound (especially the one that match support/resistant) as a price target long and short signals.
+Do consider upper_bound and lower_bound (especially the one that match support/resistant) both current and next one as a price target for long and short signals.
+Do take order book into the account for target price both first support/resistant for short term position and second one for long term position.
 
 Prioritize signals with timeframes of 1h, 4h, and potentially 1d, in addition to shorter-term 5m signals,
 to capture both intraday and potential swing trading opportunities.
 
-Be concise and focus on profitable trades while carefully managing the {fund} fund.
+Be concise and focus on profitable trades while carefully managing the "{fund} {symbol}" fund.
 Consider fees, especially funding rates for short positions in perpetual contracts.
 
 {schema_instruction}"#
@@ -301,6 +301,7 @@ mod tests {
         let model = GeminiModel::FlashLitePreview; // Choose a model
 
         let prompt = build_prompt(
+            3f64,
             symbol_with_usdt,
             price_history_1s,
             price_history_5m,
