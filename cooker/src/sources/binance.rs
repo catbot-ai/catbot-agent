@@ -1,12 +1,12 @@
 use anyhow::{anyhow, Context, Result};
 // use chrono::Utc;
 
+use common::{Kline, OrderBook};
 use reqwest::Client;
-use utils::{Kline, OrderBook};
 
 pub async fn fetch_binance_kline_data<T>(symbol: &str, interval: &str, limit: i32) -> Result<Vec<T>>
 where
-    T: serde::de::DeserializeOwned + Send + std::convert::From<utils::Kline>,
+    T: serde::de::DeserializeOwned + Send + std::convert::From<common::Kline>,
 {
     let client = Client::new();
     // let current_time = Utc::now().timestamp_millis();

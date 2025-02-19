@@ -20,7 +20,7 @@ worker-macros = { version="0.5.0", features=['http'] }
 axum  = { version = "0.8.1", default-features = false }
 tower-service = "0.3.2"
 console_error_panic_hook = { version = "0.1.1" }
-utils = { path="../utils" }
+common = { path="../common" }
 
 [profile.release]
 lto = true

@@ -1,4 +1,4 @@
-use utils::{ConciseKline, PredictionOutput, PredictionOutputWithTimeStamp};
+use common::{ConciseKline, PredictionOutput, PredictionOutputWithTimeStamp};
 
 use crate::providers::gemini::AiProvider;
 use crate::{
