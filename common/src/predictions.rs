@@ -23,11 +23,13 @@ pub struct PredictionOutputWithTimeStamp {
 #[serde(rename_all = "snake_case")]
 pub struct Summary {
     pub title: String,
-    pub current_price: f64,
+    pub price: f64,
     pub upper_bound: f64,
     pub lower_bound: f64,
     pub top_3_resistances: [f64; 3],
     pub top_3_supports: [f64; 3],
+    pub technical_resistance_4h: f64,
+    pub technical_support_4h: f64,
     pub detail: String,
     pub suggestion: String,
     pub vibe: Option<String>,

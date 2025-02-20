@@ -188,31 +188,25 @@ pub fn build_prompt(
     let schema_instruction = format!(
         r#"**Instructions:**
 
-1. **Support & Resistance:**
-    * **Resistance:** Top 3 ask prices with highest cumulative volume (highest to lowest volume).
-    * **Support:** Top 3 bid prices with highest cumulative volume (highest to lowest volume).
+- Do technical analysis on all history prices.
+- Predict actionable trading signals based on the provided technical, order book and sentiment analysis for vary timeframe 4h, 6h, 12h.
+- Concentrate on spike price that regularly occurred at the nearly same time for target_datetime.
 
-2. **Current Price:** Use provided current price. Note discrepancies if order book suggests otherwise in 'detail'.
-
-3. **Sentiment (Next 4h):**
-    * Bullish: Strong support below, resistance above, strong bids below current price.
-    * Bearish: Strong resistance above, support below, strong asks above current price.
-    * Neutral: Balanced support/resistance, unclear volume distribution.
-    * Output: "Bullish/Bearish/Neutral [Confidence %]".
-
-4. **JSON Output:**
+**JSON Output:**
 ```json
 {{
     "summary": {{
         "title": "string", // Short summary (less than 128 characters). E.g., "{symbol} Long Opportunity" or "{symbol} Neutral Market"
-        "current_price": "number", // Current {symbol} price (precise decimals).
+        "price": "number", // Current {symbol} price (precise decimals).
         "upper_bound": "number", // Current {symbol} upper bound (strongest resistance price).
         "lower_bound": "number", // Current {symbol} lower bound (strongest support price).
-        "top_3_resistances": "[number]", // Top 3 resistance prices (highest volume first).
-        "top_3_supports": "[number]", // Top 3 support prices (highest volume first).
+        "top_3_resistances": "[number]", // Top 3 ask prices with highest cumulative volume (highest to lowest volume).
+        "top_3_supports": "[number]", // Top 3 bid prices with highest cumulative volume (highest to lowest volume).
+        "technical_resistance_4h": "number", // Possible highest price in 4h timeframe.
+        "technical_support_4h": "number", // Possible lowest price in 4h timeframe.
         "detail": "string", // Trade analysis summary (less than 255 characters). Include reasons for sentiment and signal generation or lack thereof. Mention any discrepancies.
         "suggestion": "string", // Suggested action. E.g., "Consider Long {symbol} if price holds above 173" or "Neutral. Observe price action." or "Consider Short {symbol} below 174."
-        "vibe": "string" // Market sentiment with percentage. E.g., "Bullish 65%", "Bearish 70%", "Neutral 80%".
+        "vibe": "string" // Market sentiment with confidence percentage. E.g., "Bullish 65%", "Bearish 70%", "Neutral 80%".
     }},
     "long_signals": [
     {{
@@ -222,7 +216,7 @@ pub fn build_prompt(
         "entry_price": "number",    // Suggested entry price for long position in USD.
         "target_price": "number",   // Target price for long position in USD.
         "stop_loss": "number",      // Stop loss price for long position in USD.
-        "timeframe": "string",      // 1h, 4h, 6h, 1d, ...
+        "timeframe": "string",      // 1h, 4h, 6h, 12h, 1d, ...
         "target_datetime": "string",// Estimated target datetime in ISO format to reach target_price from {current_datetime}.
         "rationale": "string"       // Explanation for the long signal, referencing support, sentiment, etc.
     }}],
@@ -234,13 +228,13 @@ pub fn build_prompt(
         "entry_price": "number",    // Suggested entry price for short position in USD.
         "target_price": "number",   // Target price for short position in USD.
         "stop_loss": "number",      // Stop loss price for short position in USD.
-        "timeframe": "string",      // 1h, 4h, 6h, 1d, ...
+        "timeframe": "string",      // 1h, 4h, 6h, 12h, 1d, ...
         "target_datetime": "string",// Estimated target datetime in ISO format to reach target_price from {current_datetime}.
         "rationale": "string"       // Explanation for the short signal, referencing resistance, sentiment, etc.
     }}]
 }}
 
-Be concise, Think step by step and think again. No need to rush. Focus on generating actionable trading signals based on the provided order book data and sentiment analysis for the next 4 hours.
+Be concise, Think step by step especially top_3_resistances and top_3_supports.
 "#
     );
 
