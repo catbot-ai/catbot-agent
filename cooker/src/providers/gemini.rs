@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 
+use chrono::Utc;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
@@ -165,108 +166,102 @@ impl AiProvider for GeminiProvider {
 }
 
 #[allow(clippy::too_many_arguments, unused)]
+#[allow(clippy::too_many_arguments, unused)]
 pub fn build_prompt(
+    model: &GeminiModel,
     fund: f64,
-    symbol_with_usdt: &str,
-    price_history_1s: &str,
+    pair_symbol: &str,
+    current_price: f64,
     price_history_5m: &str,
     price_history_1h: &str,
     price_history_4h: &str,
     price_history_1d: &str,
-    order_book_depth: &str,
-    model: &GeminiModel,
+    order_amount_bids_csv: &str,
+    order_amount_asks_csv: &str,
 ) -> String {
-    let symbol = symbol_with_usdt
+    let current_datetime = Utc::now();
+    let symbol = pair_symbol
         .split("USDT")
         .next()
         .expect("Expect USDT as a suffix");
 
     let schema_instruction = format!(
-        r#"**IMPORTANT:** Format the output strictly as a valid JSON object, and ensure it adheres to the following JSON structure:
+        r#"**Instructions:**
 
+1. **Support & Resistance:**
+    * **Resistance:** Top 3 ask prices with highest cumulative volume (highest to lowest volume).
+    * **Support:** Top 3 bid prices with highest cumulative volume (highest to lowest volume).
+
+2. **Current Price:** Use provided current price. Note discrepancies if order book suggests otherwise in 'detail'.
+
+3. **Sentiment (Next 4h):**
+    * Bullish: Strong support below, resistance above, strong bids below current price.
+    * Bearish: Strong resistance above, support below, strong asks above current price.
+    * Neutral: Balanced support/resistance, unclear volume distribution.
+    * Output: "Bullish/Bearish/Neutral [Confidence %]".
+
+4. **JSON Output:**
 ```json
 {{
-  "summary": {{
-    "title": "string",         // Short summary less than 128 characters. e.g. "{symbol} long opportunity"
-    "current_price": "number", // Current {symbol} price, precise decimals number in USD.
-    "upper_bound": "number",   // Current {symbol} upper bound.
-    "lower_bound": "number",   // Current {symbol} lower bound.
-    "first_resistance": "number"  // Current {symbol} first significant amount of resistance.
-    "first_support": "number"     // Current {symbol} first significant amount of support.
-    "second_resistance": "number" // Current {symbol} second significant amount of resistance.
-    "second_support": "number"    // Current {symbol} second significant amount of support.
-    "detail": "string",       // Prediction trade analysis summary less than 255 characters.
-    "suggestion": "string",   // Suggest action title e.g. "Consider long {symbol} in next 5 minutes" in ja
-    "vibe": "string"          // Bear/Bull/Natural prediction with percent e.g. "Bull 100% in next hour".
-  }},
-  "long_signals": [
+    "summary": {{
+        "title": "string", // Short summary (less than 128 characters). E.g., "{symbol} Long Opportunity" or "{symbol} Neutral Market"
+        "current_price": "number", // Current {symbol} price (precise decimals).
+        "upper_bound": "number", // Current {symbol} upper bound (strongest resistance price).
+        "lower_bound": "number", // Current {symbol} lower bound (strongest support price).
+        "top_3_resistances": "[number]", // Top 3 resistance prices (highest volume first).
+        "top_3_supports": "[number]", // Top 3 support prices (highest volume first).
+        "detail": "string", // Trade analysis summary (less than 255 characters). Include reasons for sentiment and signal generation or lack thereof. Mention any discrepancies.
+        "suggestion": "string", // Suggested action. E.g., "Consider Long {symbol} if price holds above 173" or "Neutral. Observe price action." or "Consider Short {symbol} below 174."
+        "vibe": "string" // Market sentiment with percentage. E.g., "Bullish 65%", "Bearish 70%", "Neutral 80%".
+    }},
+    "long_signals": [
     {{
-      "symbol": "{symbol}",
-      "amount": "number",         // Calculate based on the {fund} fund and entry price, precise decimals as possible.
-      "current_price": "number",  // Current {symbol} price, precise decimals number in USD.
-      "entry_price": "number",    // Precise decimals number in USD.
-      "target_price": "number",   // Precise decimals number in USD.
-      "stop_loss": "number",      // Precise decimals number in USD.
-      "timeframe": "string",      // Indicated expected time frame e.g. 5m, 15m, 1h, 4h, 1d, ...
-      "rationale": "string"
-    }}
-  ],
-  "short_signals": [
+        "symbol": "{symbol}",
+        "amount": "number",         // Calculated trade amount in {symbol} based on fund and entry price.
+        "current_price": "number",  // Current {symbol} price in USD.
+        "entry_price": "number",    // Suggested entry price for long position in USD.
+        "target_price": "number",   // Target price for long position in USD.
+        "stop_loss": "number",      // Stop loss price for long position in USD.
+        "timeframe": "string",      // 1h, 4h, 6h, 1d, ...
+        "target_datetime": "string",// Estimated target datetime in ISO format to reach target_price from {current_datetime}.
+        "rationale": "string"       // Explanation for the long signal, referencing support, sentiment, etc.
+    }}],
+    "short_signals": [
     {{
-      "symbol": "{symbol}",
-      "amount": "number",         // Calculate based on the {fund} fund and entry price, precise decimals as possible.
-      "current_price": "number",  // Current {symbol} price, precise decimals number in USD.
-      "entry_price": "number",    // Precise decimals number in USD.
-      "target_price": "number",   // Precise decimals number in USD.
-      "stop_loss": "number",      // Precise decimals number in USD.
-      "timeframe": "string",      // Indicated expected time frame e.g. 5m, 15m, 1h, 4h, 1d, ...
-      "rationale": "string"
-    }}
-  ]
+        "symbol": "{symbol}",
+        "amount": "number",         // Calculated trade amount in {symbol} based on fund and entry price.
+        "current_price": "number",  // Current {symbol} price in USD.
+        "entry_price": "number",    // Suggested entry price for short position in USD.
+        "target_price": "number",   // Target price for short position in USD.
+        "stop_loss": "number",      // Stop loss price for short position in USD.
+        "timeframe": "string",      // 1h, 4h, 6h, 1d, ...
+        "target_datetime": "string",// Estimated target datetime in ISO format to reach target_price from {current_datetime}.
+        "rationale": "string"       // Explanation for the short signal, referencing resistance, sentiment, etc.
+    }}]
 }}
-```
-Ensure all keys are snake_case. Numbers should be at least 3 decimals. Provide specific rationale, profit targets, and stop-loss levels. 
-The long_signals and short_signals arrays should contain signals appropriate for their respective positions.
-Do not include newline \n in response.
+
+Be concise, Think step by step and think again. No need to rush. Focus on generating actionable trading signals based on the provided order book data and sentiment analysis for the next 4 hours.
 "#
     );
 
     format!(
-        r#"Analyze the {symbol} market for potential price movement in the next 4 hours (240 minutes) based on the following data:
+        r#"Analyze the {symbol} market for potential price movement in the next 4 hours based on the following data.
+Pay close attention to the *volume* of bids and asks when determining support and resistance.:
 
 **Current Price:**
-{price_history_1s}
+{current_price}
 
-**Price History (5m timeframe):**
-{price_history_5m}
+**Asks:**
+{order_amount_asks_csv}
+
+**Bids:**
+{order_amount_bids_csv}
 
 **Price History (1h timeframe):**
 {price_history_1h}
 
 **Price History (4h timeframe):**
 {price_history_4h}
-
-**Price History (1d timeframe):**
-{price_history_1d}
-
-**Order Book Depth:**
-{order_book_depth}
-
-Perform a comprehensive technical analysis for {symbol_with_usdt}, considering: Trend Analysis, Volatility, Support and Resistance, Order Book Analysis.
-Based on a hypothetical "{fund} {symbol}" fund, suggest 2-5 high-probability signals, separated into long_signals and short_signals.
-e.g. In neutral vibe for 1 {symbol} we may split 0.5 {symbol} for long and 0.5 {symbol} for short which mean we may long or short 0.1 {symbol} amount for 5+5 invests attempt for next 4 hours.
-e.g. In bull vibe for 1 {symbol} we may use all 1 {symbol} for long and 0 {symbol} for short which mean we may long or short 0.5 {symbol} amount for 2 invests attempt for next 4 hours.
-
-Do suggest long or short only for profitable one (must be more than 5% and more than 5 USD).
-Do suggest signals for vary timeframe that matched current(usually too small to have profit) and next support/resistant (usually to wide but profitable).
-Do consider upper_bound and lower_bound (especially the one that match support/resistant) both current and next one as a price target for long and short signals.
-Do take order book into the account for target price both first support/resistant for short term position and second one for long term position.
-
-Prioritize signals with timeframes of 1h, 4h, and potentially 1d, in addition to shorter-term 5m signals,
-to capture both intraday and potential swing trading opportunities.
-
-Be concise and focus on profitable trades while carefully managing the "{fund} {symbol}" fund.
-Consider fees, especially funding rates for short positions in perpetual contracts.
 
 {schema_instruction}"#
     )
@@ -275,42 +270,69 @@ Consider fees, especially funding rates for short positions in perpetual contrac
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::providers::gemini::GeminiModel;
+    use crate::{
+        providers::gemini::GeminiModel,
+        sources::binance::{fetch_binance_kline_data, fetch_orderbook_depth},
+        transforms::numbers::{
+            group_by_fractional_part, to_csv, top_n_support_resistance, FractionalPart,
+        },
+    };
     use anyhow::Result;
+    use common::ConciseKline;
 
-    #[test]
-    fn test_build_prompt_stage1_empty_price_history() -> Result<()> {
-        let symbol_with_usdt = "SOLUSDT";
-        let price_history_1s = r#"[
-  {
-    "open_time": 1739773540000,
-    "open_price": "184.58",
-    "high_price": "184.58",
-    "low_price": "184.56",
-    "close_price": "184.56",
-    "volume": "8.911"
-  }
-]"#;
+    #[tokio::test]
+    async fn test_build_prompt_stage1_empty_price_history() -> Result<()> {
+        let pair_symbol = "SOLUSDT";
+
+        let kline_data_1s = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1s", 1).await?;
+        let current_price = kline_data_1s[0]
+            .close_price
+            .parse::<f64>()
+            .expect("Invalid close price");
+
         let price_history_5m = "[]"; // Empty price history
         let price_history_1h = "[]";
         let price_history_4h = "[]";
         let price_history_1d = "[]";
-        let order_book_depth = "{}"; // Empty order book
 
-        println!("price_history_1s:{:#?}", price_history_1s);
+        // let orderbook_json = r#"{"lastUpdateId":18560646066,
+        // "bids":[["170.02000000","204.47900000"],["170.01000000","150.14900000"],["170.00000000","86.51000000"],["169.99000000","104.08900000"],["169.98000000","168.26600000"],["169.97000000","102.02100000"],["169.96000000","189.04000000"],["169.95000000","190.76100000"],["168.94000000","308.73800000"],["167.93000000","224.72800000"]],
+        // "asks":[["170.03000000","12.03800000"],["170.04000000","3.84100000"],["170.05000000","34.67200000"],["170.06000000","90.68600000"],["170.07000000","200.38200000"],["170.08000000","98.31900000"],["170.09000000","102.28700000"],["170.10000000","196.39600000"],["171.11000000","191.37100000"],["172.12000000","169.14700000"]]}"#;
+        // let orderbook: OrderBook = serde_json::from_str(orderbook_json).unwrap();
+        // let (grouped_bids, grouped_asks) =
+        //     group_by_fractional_part(&orderbook, FractionalPart::OneTenth);
+
+        // let (_, top_bids) = top_n_support_resistance(&grouped_bids, 10);
+        // let (top_asks, _) = top_n_support_resistance(&grouped_asks, 10);
+
+        // let order_amount_bids_csv = to_csv(&top_bids);
+        // let order_amount_asks_csv = to_csv(&top_asks);
+
+        let orderbook = fetch_orderbook_depth("SOLUSDT", 1000).await.unwrap();
+        // let order_book_depth_string = serde_json::to_string_pretty(&orderbook)?;
+
+        let (grouped_bids, grouped_asks) =
+            group_by_fractional_part(&orderbook, FractionalPart::One);
+
+        let (_, top_bids) = top_n_support_resistance(&grouped_bids, 10);
+        let (top_asks, _) = top_n_support_resistance(&grouped_asks, 10);
+
+        let order_amount_bids_csv = to_csv(&top_bids);
+        let order_amount_asks_csv = to_csv(&top_asks);
 
         let model = GeminiModel::FlashLitePreview; // Choose a model
 
         let prompt = build_prompt(
+            &model,
             3f64,
-            symbol_with_usdt,
-            price_history_1s,
+            pair_symbol,
+            current_price,
             price_history_5m,
             price_history_1h,
             price_history_4h,
             price_history_1d,
-            order_book_depth,
-            &model,
+            &order_amount_bids_csv,
+            &order_amount_asks_csv,
         );
 
         println!("\n--- Prompt Output for Empty Price History ---");

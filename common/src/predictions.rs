@@ -26,10 +26,8 @@ pub struct Summary {
     pub current_price: f64,
     pub upper_bound: f64,
     pub lower_bound: f64,
-    pub first_resistance: f64,
-    pub first_support: f64,
-    pub second_resistance: f64,
-    pub second_support: f64,
+    pub top_3_resistances: [f64; 3],
+    pub top_3_supports: [f64; 3],
     pub detail: String,
     pub suggestion: String,
     pub vibe: Option<String>,
@@ -45,6 +43,7 @@ pub struct LongSignal {
     pub target_price: f64,
     pub stop_loss: f64,
     pub timeframe: String,
+    pub target_datetime: String,
     pub rationale: String,
 }
 
@@ -58,6 +57,7 @@ pub struct ShortSignal {
     pub target_price: f64,
     pub stop_loss: f64,
     pub timeframe: String,
+    pub target_datetime: String,
     pub rationale: String,
 }
 

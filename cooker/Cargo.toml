@@ -33,6 +33,7 @@ tokio = { workspace = true, features = ["full"] }
 [dev-dependencies]
 log = { workspace = true }
 env_logger = { workspace = true }
+tokio = { workspace = true }
 
 [profile.release]
 lto = true

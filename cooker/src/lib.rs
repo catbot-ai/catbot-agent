@@ -4,6 +4,7 @@ use providers::gemini::{GeminiModel, GeminiProvider};
 mod predictions;
 mod providers;
 mod sources;
+mod transforms;
 
 use worker::*;
 
@@ -22,9 +23,10 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
     let router = Router::new();
     router
         .get_async("/suggest/:token", |_req, ctx| async move {
-            if let Some(symbol) = ctx.param("token") {
+            if let Some(pair_symbol) = ctx.param("token") {
                 let output_result =
-                    predict_with_gemini(gemini_api_key.to_owned(), symbol.to_owned(), limit).await;
+                    predict_with_gemini(gemini_api_key.to_owned(), pair_symbol.to_owned(), limit)
+                        .await;
 
                 match output_result {
                     Ok(output) => {
@@ -52,13 +54,13 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
 
 pub async fn predict_with_gemini(
     gemini_api_key: String,
-    symbol: String,
+    pair_symbol: String,
     limit: i32,
 ) -> anyhow::Result<String, String> {
     let gemini_model = GeminiModel::FlashLitePreview;
     let provider = GeminiProvider::new_v1beta(&gemini_api_key);
 
-    let prediction_result = get_prediction(&symbol, &provider, &gemini_model, limit).await;
+    let prediction_result = get_prediction(&pair_symbol, &provider, &gemini_model, limit).await;
 
     match prediction_result {
         Ok(prediction_output) => Ok(serde_json::to_string(&prediction_output)
@@ -78,7 +80,7 @@ mod tests {
 
         let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
         let symbol = "SOLUSDT";
-        let limit = 10;
+        let limit = 1000;
         let result = predict_with_gemini(gemini_api_key, symbol.to_string(), limit)
             .await
             .unwrap();

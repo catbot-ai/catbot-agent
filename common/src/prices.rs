@@ -31,6 +31,15 @@ pub struct ConciseKline {
     pub volume: String,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ClosePriceKline {
+    pub open_time: i64,
+    #[serde(serialize_with = "remove_trailing_zeros")]
+    pub close_price: String,
+    #[serde(serialize_with = "remove_trailing_zeros")]
+    pub volume: String,
+}
+
 fn remove_trailing_zeros<S>(value: &str, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -49,6 +58,16 @@ impl From<Kline> for ConciseKline {
             open_price: kline.open_price.clone(),
             high_price: kline.high_price.clone(),
             low_price: kline.low_price.clone(),
+            close_price: kline.close_price.clone(),
+            volume: kline.volume.clone(),
+        }
+    }
+}
+
+impl From<Kline> for ClosePriceKline {
+    fn from(kline: Kline) -> Self {
+        ClosePriceKline {
+            open_time: kline.open_time,
             close_price: kline.close_price.clone(),
             volume: kline.volume.clone(),
         }
