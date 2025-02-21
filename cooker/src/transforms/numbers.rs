@@ -1,4 +1,6 @@
 use common::OrderBook;
+use serde::Serialize;
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use strum::{Display, EnumString};
 
@@ -50,76 +52,102 @@ pub fn group_by_fractional_part(
         }
     }
 
-    println!("Grouped Asks: {:?}", grouped_asks);
     println!("Grouped Bids: {:?}", grouped_bids);
+    println!("Grouped Asks: {:?}", grouped_asks);
 
     (grouped_bids, grouped_asks)
 }
 
 type PriceAmountVec = Vec<(String, f64)>;
 
-pub fn top_n_support_resistance(
-    grouped_data: &BTreeMap<String, f64>,
-    n: usize,
-) -> (PriceAmountVec, PriceAmountVec) {
-    let mut sorted_data: Vec<(&String, &f64)> = grouped_data.iter().collect();
-
-    sorted_data.sort_by_key(|&(k, _)| k);
-
-    let top_n = sorted_data
+pub fn top_n_support_resistance(grouped_data: &BTreeMap<String, f64>, n: usize) -> PriceAmountVec {
+    let mut price_amount_vec: Vec<PriceAmount> = grouped_data
         .iter()
-        .take(n)
-        .map(|(k, v)| (k.to_string(), **v))
+        .filter_map(|(price_str, amount)| {
+            if let Ok(price) = price_str.parse::<f64>() {
+                Some(PriceAmount {
+                    price,
+                    cumulative_amount: *amount,
+                })
+            } else {
+                eprintln!("Error parsing price: {}", price_str);
+                None
+            }
+        })
         .collect();
 
-    let bottom_n = sorted_data
+    // Sort by cumulative_amount in descending order (highest volume first)
+    price_amount_vec.sort_by(|a, b| {
+        b.cumulative_amount
+            .partial_cmp(&a.cumulative_amount)
+            .unwrap()
+    });
+
+    let top_n_prices_amounts: PriceAmountVec = price_amount_vec
         .iter()
-        .rev()
         .take(n)
-        .map(|(k, v)| (k.to_string(), **v))
+        .map(|pa| (pa.price.to_string(), pa.cumulative_amount))
         .collect();
 
-    println!("Top N: {:?}", top_n);
-    println!("Bottom N: {:?}", bottom_n);
-
-    (top_n, bottom_n)
+    top_n_prices_amounts
 }
 
-pub fn to_csv(data: &[(String, f64)]) -> String {
-    let mut csv = String::from("price,cumulative_amount\n");
-    for (price_str, amount) in data {
-        // Parse the price string back to f64 to format it.
-        if let Ok(price) = price_str.parse::<f64>() {
-            csv.push_str(&format!("{:.0},{:.3}\n", price, amount)); // Format price to 1 decimal place
+pub fn extract_prices_f64(price_amount_vec: &PriceAmountVec, n: usize) -> [f64; 3] {
+    let mut prices_array = [0.0; 3]; // Initialize with default values
+
+    for (i, price_amount) in price_amount_vec.iter().take(n).enumerate() {
+        if let Ok(price) = price_amount.0.parse::<f64>() {
+            // Access tuple element by index .0 (price string)
+            prices_array[i] = price;
         } else {
-            // Handle parsing errors if necessary (e.g., log a warning).
+            eprintln!("Error parsing price string: {}", price_amount.0);
+        }
+    }
+    prices_array
+}
+
+pub fn btree_map_to_csv(grouped_data: &BTreeMap<String, f64>) -> String {
+    let mut csv_string = String::new();
+    csv_string.push_str("price,cumulative_amount\n"); // Add CSV header
+
+    for (price_str, amount) in grouped_data.iter() {
+        // Parse price_str to f64 for formatting (as in your to_csv function)
+        if let Ok(price) = price_str.parse::<f64>() {
+            csv_string.push_str(&format!("{:.0},{:.3}\n", price, amount));
+        } else {
             eprintln!("Error parsing price: {}", price_str);
         }
     }
-    csv
+    csv_string
 }
 
-#[cfg(test)]
-#[tokio::test]
-async fn test_group_and_top_n() {
-    // let orderbook_json = r#"{"lastUpdateId":18560646066,"bids":[["170.02000000","204.47900000"],["170.01000000","150.14900000"],["170.00000000","86.51000000"],["169.99000000","104.08900000"],["169.98000000","168.26600000"],["169.97000000","102.02100000"],["169.96000000","189.04000000"],["169.95000000","190.76100000"],["169.94000000","308.73800000"],["169.93000000","224.72800000"]],"asks":[["170.03000000","12.03800000"],["170.04000000","3.84100000"],["170.05000000","34.67200000"],["170.06000000","90.68600000"],["170.07000000","200.38200000"],["170.08000000","98.31900000"],["170.09000000","102.28700000"],["170.10000000","196.39600000"],["170.11000000","191.37100000"],["170.12000000","169.14700000"]]}"#;
-    // let orderbook: OrderBook = serde_json::from_str(orderbook_json).unwrap();
-
-    use crate::sources::binance::fetch_orderbook_depth;
-
-    let orderbook = fetch_orderbook_depth("SOLUSDT", 1000).await.unwrap();
-
-    let (grouped_bids, grouped_asks) = group_by_fractional_part(&orderbook, FractionalPart::One);
-
-    let (top_asks, _) = top_n_support_resistance(&grouped_asks, 10);
-    let (_, top_bids) = top_n_support_resistance(&grouped_bids, 10);
-
-    let order_amount_asks_csv = to_csv(&top_asks);
-    let order_amount_bids_csv = to_csv(&top_bids);
-
-    println!("Asks CSV:\n{}", order_amount_asks_csv);
-    println!("Bids CSV:\n{}", order_amount_bids_csv);
-
-    // assert!(order_amount_bids_csv.contains("169.9,1287.643"));
-    // assert!(order_amount_asks_csv.contains("170.0,542.225"));
+#[derive(Serialize)]
+struct PriceAmount {
+    price: f64,
+    cumulative_amount: f64,
 }
+
+// #[cfg(test)]
+// #[tokio::test]
+// async fn test_group_and_top_n() {
+//     // let orderbook_json = r#"{"lastUpdateId":18560646066,"bids":[["170.02000000","204.47900000"],["170.01000000","150.14900000"],["170.00000000","86.51000000"],["169.99000000","104.08900000"],["169.98000000","168.26600000"],["169.97000000","102.02100000"],["169.96000000","189.04000000"],["169.95000000","190.76100000"],["169.94000000","308.73800000"],["169.93000000","224.72800000"]],"asks":[["170.03000000","12.03800000"],["170.04000000","3.84100000"],["170.05000000","34.67200000"],["170.06000000","90.68600000"],["170.07000000","200.38200000"],["170.08000000","98.31900000"],["170.09000000","102.28700000"],["170.10000000","196.39600000"],["170.11000000","191.37100000"],["170.12000000","169.14700000"]]}"#;
+//     // let orderbook: OrderBook = serde_json::from_str(orderbook_json).unwrap();
+
+//     use crate::sources::binance::fetch_orderbook_depth;
+
+//     let orderbook = fetch_orderbook_depth("SOLUSDT", 1000).await.unwrap();
+
+//     let (grouped_bids, grouped_asks) = group_by_fractional_part(&orderbook, FractionalPart::One);
+
+//     let (top_asks, _) = top_n_support_resistance(&grouped_asks, 10);
+//     let (_, top_bids) = top_n_support_resistance(&grouped_bids, 10);
+
+//     let order_amount_bids = to_json(&top_bids).to_string();
+//     let order_amount_asks = to_json(&top_asks).to_string();
+
+//     println!("Asks :\n{:#}", order_amount_bids);
+//     println!("Bids :\n{:#}", order_amount_asks);
+
+//     // assert!(order_amount_bids_csv.contains("169.9,1287.643"));
+//     // assert!(order_amount_asks_csv.contains("170.0,542.225"));
+// }

@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 
 use chrono::Utc;
+use common::OrderBook;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
@@ -8,6 +9,12 @@ use serde_json::json;
 use std::sync::Arc;
 use strum::AsRefStr;
 use strum::EnumString;
+
+use crate::transforms::numbers::btree_map_to_csv;
+use crate::transforms::numbers::extract_prices_f64;
+use crate::transforms::numbers::group_by_fractional_part;
+use crate::transforms::numbers::top_n_support_resistance;
+use crate::transforms::numbers::FractionalPart;
 
 // --- Gemini Model Enum ---
 
@@ -166,7 +173,6 @@ impl AiProvider for GeminiProvider {
 }
 
 #[allow(clippy::too_many_arguments, unused)]
-#[allow(clippy::too_many_arguments, unused)]
 pub fn build_prompt(
     model: &GeminiModel,
     fund: f64,
@@ -176,14 +182,36 @@ pub fn build_prompt(
     price_history_1h: &str,
     price_history_4h: &str,
     price_history_1d: &str,
-    order_amount_bids_csv: &str,
-    order_amount_asks_csv: &str,
+    orderbook: OrderBook,
 ) -> String {
     let current_datetime = Utc::now();
     let symbol = pair_symbol
         .split("USDT")
         .next()
         .expect("Expect USDT as a suffix");
+
+    let (grouped_bids, grouped_asks) = group_by_fractional_part(&orderbook, FractionalPart::One);
+
+    // Limit 10
+    let top_supports_price_amount = top_n_support_resistance(&grouped_bids, 3);
+    let top_resistances_price_amount = top_n_support_resistance(&grouped_asks, 3);
+
+    // Top 3
+    let top_3_supports = extract_prices_f64(&top_supports_price_amount, 3);
+    let top_3_resistances = extract_prices_f64(&top_resistances_price_amount, 3);
+    let top_3_supports_string = top_3_supports
+        .iter()
+        .map(|&x| x.to_string())
+        .collect::<Vec<String>>()
+        .join(",");
+    let top_3_resistances_string = top_3_resistances
+        .iter()
+        .map(|&x| x.to_string())
+        .collect::<Vec<String>>()
+        .join(",");
+
+    let grouped_bids_string = btree_map_to_csv(&grouped_bids);
+    let grouped_asks_string = btree_map_to_csv(&grouped_asks);
 
     let schema_instruction = format!(
         r#"**Instructions:**
@@ -198,10 +226,10 @@ pub fn build_prompt(
     "summary": {{
         "title": "string", // Short summary (less than 128 characters). E.g., "{symbol} Long Opportunity" or "{symbol} Neutral Market"
         "price": "number", // Current {symbol} price (precise decimals).
+        "top_3_supports": [{top_3_supports_string}], // Use as is
+        "top_3_resistances": [{top_3_resistances_string}], // Use as is
         "upper_bound": "number", // Current {symbol} upper bound (strongest resistance price).
         "lower_bound": "number", // Current {symbol} lower bound (strongest support price).
-        "top_3_resistances": "[number]", // Top 3 ask prices with highest cumulative volume (highest to lowest volume).
-        "top_3_supports": "[number]", // Top 3 bid prices with highest cumulative volume (highest to lowest volume).
         "technical_resistance_4h": "number", // Possible highest price in 4h timeframe.
         "technical_support_4h": "number", // Possible lowest price in 4h timeframe.
         "detail": "string", // Trade analysis summary (less than 255 characters). Include reasons for sentiment and signal generation or lack thereof. Mention any discrepancies.
@@ -246,10 +274,10 @@ Pay close attention to the *volume* of bids and asks when determining support an
 {current_price}
 
 **Asks:**
-{order_amount_asks_csv}
+{grouped_bids_string}
 
 **Bids:**
-{order_amount_bids_csv}
+{grouped_asks_string}
 
 **Price History (1h timeframe):**
 {price_history_1h}
@@ -267,9 +295,6 @@ mod tests {
     use crate::{
         providers::gemini::GeminiModel,
         sources::binance::{fetch_binance_kline_data, fetch_orderbook_depth},
-        transforms::numbers::{
-            group_by_fractional_part, to_csv, top_n_support_resistance, FractionalPart,
-        },
     };
     use anyhow::Result;
     use common::ConciseKline;
@@ -305,14 +330,14 @@ mod tests {
         let orderbook = fetch_orderbook_depth("SOLUSDT", 1000).await.unwrap();
         // let order_book_depth_string = serde_json::to_string_pretty(&orderbook)?;
 
-        let (grouped_bids, grouped_asks) =
-            group_by_fractional_part(&orderbook, FractionalPart::One);
+        // let (grouped_bids, grouped_asks) =
+        //     group_by_fractional_part(&orderbook, FractionalPart::One);
 
-        let (_, top_bids) = top_n_support_resistance(&grouped_bids, 10);
-        let (top_asks, _) = top_n_support_resistance(&grouped_asks, 10);
+        // let (_, top_bids) = top_n_support_resistance(&grouped_bids, 10);
+        // let (top_asks, _) = top_n_support_resistance(&grouped_asks, 10);
 
-        let order_amount_bids_csv = to_csv(&top_bids);
-        let order_amount_asks_csv = to_csv(&top_asks);
+        // let order_amount_bids = to_json(&top_bids).to_string();
+        // let order_amount_asks = to_json(&top_asks).to_string();
 
         let model = GeminiModel::FlashLitePreview; // Choose a model
 
@@ -325,8 +350,7 @@ mod tests {
             price_history_1h,
             price_history_4h,
             price_history_1d,
-            &order_amount_bids_csv,
-            &order_amount_asks_csv,
+            orderbook,
         );
 
         println!("\n--- Prompt Output for Empty Price History ---");

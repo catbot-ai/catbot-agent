@@ -1,13 +1,8 @@
-use common::{ClosePriceKline, PredictionOutput, PredictionOutputWithTimeStamp};
-
-use crate::providers::gemini::AiProvider;
-use crate::transforms::numbers::{
-    group_by_fractional_part, to_csv, top_n_support_resistance, FractionalPart,
-};
 use crate::{
-    providers::gemini::{build_prompt, GeminiModel, GeminiProvider},
+    providers::gemini::{build_prompt, AiProvider, GeminiModel, GeminiProvider},
     sources::binance::{fetch_binance_kline_data, fetch_orderbook_depth},
 };
+use common::{ClosePriceKline, PredictionOutput, PredictionOutputWithTimeStamp};
 
 use anyhow::Result;
 
@@ -51,16 +46,6 @@ pub async fn get_prediction(
     let orderbook = fetch_orderbook_depth(pair_symbol, limit).await?;
     // let order_book_depth_string = serde_json::to_string_pretty(&orderbook)?;
 
-    let (grouped_bids, grouped_asks) = group_by_fractional_part(&orderbook, FractionalPart::One);
-
-    let (top_asks, _) = top_n_support_resistance(&grouped_asks, 10);
-    let (_, top_bids) = top_n_support_resistance(&grouped_bids, 10);
-
-    let order_amount_asks_csv = to_csv(&top_asks);
-    let order_amount_bids_csv = to_csv(&top_bids);
-
-    // println!("{group_by_fractional_part_csv_string:?}");
-
     // --- Build Prompt for Gemini API ---
     println!("Building prompt for Gemini API...");
     let prompt = build_prompt(
@@ -72,8 +57,7 @@ pub async fn get_prediction(
         &price_history_1h_string,
         &price_history_4h_string,
         &price_history_1d_string,
-        &order_amount_bids_csv,
-        &order_amount_asks_csv,
+        orderbook,
     );
 
     println!("{prompt:?}");
