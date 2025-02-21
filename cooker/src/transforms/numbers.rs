@@ -1,6 +1,5 @@
 use common::OrderBook;
 use serde::Serialize;
-use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use strum::{Display, EnumString};
 
