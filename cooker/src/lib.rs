@@ -84,7 +84,6 @@ mod tests {
         let result = predict_with_gemini(gemini_api_key, symbol.to_string(), limit)
             .await
             .unwrap();
-        println!("{:#?}", result);
         println!(
             "{:#?}",
             serde_json::from_str::<serde_json::Value>(&result).unwrap()

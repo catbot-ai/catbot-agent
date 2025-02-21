@@ -2,7 +2,7 @@ use crate::{
     providers::gemini::{build_prompt, AiProvider, GeminiModel, GeminiProvider},
     sources::binance::{fetch_binance_kline_data, fetch_orderbook_depth},
 };
-use common::{ClosePriceKline, PredictionOutput, PredictionOutputWithTimeStamp};
+use common::{ClosePriceKline, ConciseKline, PredictionOutput, PredictionOutputWithTimeStamp};
 
 use anyhow::Result;
 
@@ -22,24 +22,20 @@ pub async fn get_prediction(
     // println!("price_history_1s_string:{}", price_history_1s_string);
 
     // println!("Fetching Kline data (5m)...");
-    let kline_data_5m =
-        fetch_binance_kline_data::<ClosePriceKline>(pair_symbol, "5m", limit).await?;
+    let kline_data_5m = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "5m", limit).await?;
     let price_history_5m_string = serde_json::to_string_pretty(&kline_data_5m)?;
     // println!("price_history_5m_string:{}", price_history_5m_string);
 
     // println!("Fetching Kline data (1h)...");
-    let kline_data_1h =
-        fetch_binance_kline_data::<ClosePriceKline>(pair_symbol, "1h", limit).await?;
+    let kline_data_1h = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1h", limit).await?;
     let price_history_1h_string = serde_json::to_string_pretty(&kline_data_1h)?;
 
     // println!("Fetching Kline data (4h)...");
-    let kline_data_4h =
-        fetch_binance_kline_data::<ClosePriceKline>(pair_symbol, "4h", limit).await?;
+    let kline_data_4h = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "4h", limit).await?;
     let price_history_4h_string = serde_json::to_string_pretty(&kline_data_4h)?;
 
     // println!("Fetching Kline data (1d)...");
-    let kline_data_1d =
-        fetch_binance_kline_data::<ClosePriceKline>(pair_symbol, "1d", limit).await?;
+    let kline_data_1d = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1d", limit).await?;
     let price_history_1d_string = serde_json::to_string_pretty(&kline_data_1d)?;
 
     // println!("Fetching Order Book Depth...");

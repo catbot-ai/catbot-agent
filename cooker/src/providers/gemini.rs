@@ -213,6 +213,9 @@ pub fn build_prompt(
     let grouped_bids_string = btree_map_to_csv(&grouped_bids);
     let grouped_asks_string = btree_map_to_csv(&grouped_asks);
 
+    println!("\ngrouped_bids_string:{grouped_bids_string}");
+    println!("grouped_asks_string:{grouped_asks_string}\n");
+
     let schema_instruction = format!(
         r#"**Instructions:**
 
@@ -352,12 +355,6 @@ mod tests {
             price_history_1d,
             orderbook,
         );
-
-        println!("\n--- Prompt Output for Empty Price History ---");
-        println!("{}", prompt); // Print the prompt for inspection
-
-        // You can add assertions here to check if the prompt is structured as expected
-        // For example, you might want to check if certain keywords or data placeholders are present in the prompt string.
 
         Ok(())
     }

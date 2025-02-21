@@ -18,9 +18,7 @@ pub struct Kline {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ConciseKline {
-    pub open_time: i64,
-    #[serde(serialize_with = "remove_trailing_zeros")]
-    pub open_price: String,
+    pub close_time: i64,
     #[serde(serialize_with = "remove_trailing_zeros")]
     pub high_price: String,
     #[serde(serialize_with = "remove_trailing_zeros")]
@@ -54,8 +52,7 @@ where
 impl From<Kline> for ConciseKline {
     fn from(kline: Kline) -> Self {
         ConciseKline {
-            open_time: kline.open_time,
-            open_price: kline.open_price.clone(),
+            close_time: kline.open_time,
             high_price: kline.high_price.clone(),
             low_price: kline.low_price.clone(),
             close_price: kline.close_price.clone(),
