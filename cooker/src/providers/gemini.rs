@@ -185,6 +185,7 @@ pub fn build_prompt(
     orderbook: OrderBook,
 ) -> String {
     let current_datetime = Utc::now();
+    let current_timestamp = Utc::now().timestamp_millis();
     let symbol = pair_symbol
         .split("USDT")
         .next()
@@ -213,11 +214,11 @@ pub fn build_prompt(
     let grouped_bids_string = btree_map_to_csv(&grouped_bids);
     let grouped_asks_string = btree_map_to_csv(&grouped_asks);
 
-    println!("\ngrouped_bids_string:{grouped_bids_string}");
-    println!("grouped_asks_string:{grouped_asks_string}\n");
+    // println!("\ngrouped_bids_string:{grouped_bids_string}");
+    // println!("grouped_asks_string:{grouped_asks_string}\n");
 
-    println!("top_3_supports_string:{top_3_supports_string}\n");
-    println!("top_3_resistances_string:{top_3_resistances_string}\n");
+    // println!("top_3_supports_string:{top_3_supports_string}\n");
+    // println!("top_3_resistances_string:{top_3_resistances_string}\n");
 
     let schema_instruction = format!(
         r#"**Instructions:**
@@ -275,6 +276,12 @@ Be concise, Think step by step especially top_3_resistances and top_3_supports.
     format!(
         r#"Analyze the {symbol} market for potential price movement in the next 4 hours based on the following data.
 Pay close attention to the *volume* of bids and asks when determining support and resistance.:
+
+**Current DateTime:**
+{current_datetime}
+
+**Current TimeStamp:**
+{current_timestamp}
 
 **Current Price:**
 {current_price}
@@ -367,6 +374,8 @@ mod tests {
             price_history_1d,
             orderbook,
         );
+
+        println!("{}", prompt);
 
         Ok(())
     }
