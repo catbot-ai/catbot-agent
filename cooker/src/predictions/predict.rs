@@ -64,14 +64,7 @@ pub async fn get_prediction(
         .call_api::<PredictionOutput>(model, &prompt, None)
         .await?;
 
-    let prediction_output_with_timestamp: PredictionOutputWithTimeStamp =
-        PredictionOutputWithTimeStamp {
-            timestamp: chrono::Utc::now().timestamp_millis(),
-            summary: gemini_response.summary,
-            long_signals: gemini_response.long_signals,
-            short_signals: gemini_response.short_signals,
-            // price_prediction_graph_5m: gemini_response.price_prediction_graph_5m,
-        };
+    let prediction_output_with_timestamp = PredictionOutputWithTimeStamp::from(gemini_response);
 
     Ok(prediction_output_with_timestamp)
 }

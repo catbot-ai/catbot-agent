@@ -1,3 +1,5 @@
+use chrono::{DateTime, Utc};
+use chrono_tz::{Asia::Tokyo, Tz};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -13,10 +15,52 @@ pub struct PredictionOutput {
 #[serde(rename_all = "snake_case")]
 pub struct PredictionOutputWithTimeStamp {
     pub timestamp: i64,
+    pub local_datetime: String,
     pub summary: Summary,
     pub long_signals: Vec<LongSignal>,
     pub short_signals: Vec<ShortSignal>,
     // pub price_prediction_graph_5m: Vec<PricePredictionPoint5m>,
+}
+
+fn convert_to_tokyo_iso(datetime_str: &str) -> String {
+    let utc_datetime =
+        DateTime::parse_from_rfc3339(datetime_str).expect("Failed to parse datetime");
+    let tokyo_datetime: DateTime<Tz> = utc_datetime.with_timezone(&Tokyo);
+    tokyo_datetime.to_rfc3339()
+}
+
+impl From<PredictionOutput> for PredictionOutputWithTimeStamp {
+    fn from(gemini_response: PredictionOutput) -> Self {
+        let now_utc: DateTime<Utc> = Utc::now();
+        let iso_tokyo = convert_to_tokyo_iso(&now_utc.to_rfc3339());
+
+        let long_signals = gemini_response
+            .long_signals
+            .into_iter()
+            .map(|mut signal| {
+                signal.local_target_datetime = convert_to_tokyo_iso(&signal.target_datetime);
+                signal
+            })
+            .collect();
+
+        let short_signals = gemini_response
+            .short_signals
+            .into_iter()
+            .map(|mut signal| {
+                signal.local_target_datetime = convert_to_tokyo_iso(&signal.target_datetime);
+                signal
+            })
+            .collect();
+
+        PredictionOutputWithTimeStamp {
+            timestamp: now_utc.timestamp_millis(),
+            local_datetime: iso_tokyo,
+            summary: gemini_response.summary,
+            long_signals,
+            short_signals,
+            // price_prediction_graph_5m: gemini_response.price_prediction_graph_5m,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -45,6 +89,7 @@ pub struct LongSignal {
     pub stop_loss: f64,
     pub timeframe: String,
     pub target_datetime: String,
+    pub local_target_datetime: String,
     pub rationale: String,
 }
 
@@ -59,6 +104,7 @@ pub struct ShortSignal {
     pub stop_loss: f64,
     pub timeframe: String,
     pub target_datetime: String,
+    pub local_target_datetime: String,
     pub rationale: String,
 }
 

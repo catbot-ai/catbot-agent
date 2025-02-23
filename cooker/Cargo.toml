@@ -22,6 +22,7 @@ serde_json = { workspace = true }
 strum = { workspace = true, features = ["strum_macros"] }
 dotenvy = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 common = { path = "../common" }
 worker = { version="0.5.0", features=['http', 'axum'] }
 worker-macros = { version="0.5.0", features=['http'] }
