@@ -6,59 +6,60 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub struct PredictionOutput {
     pub summary: Summary,
-    pub long_signals: Vec<LongSignal>,
-    pub short_signals: Vec<ShortSignal>,
+    pub long_signals: Vec<PredictedLongShortSignal>,
+    pub short_signals: Vec<PredictedLongShortSignal>,
     // pub price_prediction_graph_5m: Vec<PricePredictionPoint5m>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
-pub struct PredictionOutputWithTimeStamp {
+pub struct RefinedPredictionOutput {
     pub timestamp: i64,
     pub local_datetime: String,
     pub summary: Summary,
-    pub long_signals: Vec<LongSignal>,
-    pub short_signals: Vec<ShortSignal>,
+    pub long_signals: Vec<LongShortSignal>,
+    pub short_signals: Vec<LongShortSignal>,
     // pub price_prediction_graph_5m: Vec<PricePredictionPoint5m>,
 }
 
-fn convert_to_tokyo_iso(datetime_str: &str) -> String {
-    let utc_datetime =
-        DateTime::parse_from_rfc3339(datetime_str).expect("Failed to parse datetime");
-    let tokyo_datetime: DateTime<Tz> = utc_datetime.with_timezone(&Tokyo);
-    tokyo_datetime.to_rfc3339()
+pub struct PredictionOutputWithTimeStampBuilder {
+    pub gemini_response: PredictionOutput,
+    pub timezone: Tz, // Store the timezone here.
 }
 
-impl From<PredictionOutput> for PredictionOutputWithTimeStamp {
-    fn from(gemini_response: PredictionOutput) -> Self {
-        let now_utc: DateTime<Utc> = Utc::now();
-        let iso_tokyo = convert_to_tokyo_iso(&now_utc.to_rfc3339());
+impl PredictionOutputWithTimeStampBuilder {
+    pub fn new(gemini_response: PredictionOutput, timezone: Tz) -> Self {
+        PredictionOutputWithTimeStampBuilder {
+            gemini_response,
+            timezone,
+        }
+    }
 
-        let long_signals = gemini_response
+    pub fn build(self) -> RefinedPredictionOutput {
+        let now_utc: DateTime<Utc> = Utc::now();
+        let now_local = now_utc.with_timezone(&self.timezone);
+        let iso_local = now_local.to_rfc3339();
+
+        let long_signals = self
+            .gemini_response
             .long_signals
             .into_iter()
-            .map(|mut signal| {
-                signal.local_target_datetime = convert_to_tokyo_iso(&signal.target_datetime);
-                signal
-            })
+            .map(LongShortSignal::from)
             .collect();
 
-        let short_signals = gemini_response
+        let short_signals = self
+            .gemini_response
             .short_signals
             .into_iter()
-            .map(|mut signal| {
-                signal.local_target_datetime = convert_to_tokyo_iso(&signal.target_datetime);
-                signal
-            })
+            .map(LongShortSignal::from)
             .collect();
 
-        PredictionOutputWithTimeStamp {
+        RefinedPredictionOutput {
             timestamp: now_utc.timestamp_millis(),
-            local_datetime: iso_tokyo,
-            summary: gemini_response.summary,
+            local_datetime: iso_local,
+            summary: self.gemini_response.summary,
             long_signals,
             short_signals,
-            // price_prediction_graph_5m: gemini_response.price_prediction_graph_5m,
         }
     }
 }
@@ -78,9 +79,10 @@ pub struct Summary {
     pub suggestion: String,
     pub vibe: Option<String>,
 }
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
-pub struct LongSignal {
+pub struct PredictedLongShortSignal {
     pub symbol: String,
     pub amount: f64,
     pub current_price: f64,
@@ -89,13 +91,12 @@ pub struct LongSignal {
     pub stop_loss: f64,
     pub timeframe: String,
     pub target_datetime: String,
-    pub local_target_datetime: String,
     pub rationale: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
-pub struct ShortSignal {
+pub struct LongShortSignal {
     pub symbol: String,
     pub amount: f64,
     pub current_price: f64,
@@ -104,8 +105,30 @@ pub struct ShortSignal {
     pub stop_loss: f64,
     pub timeframe: String,
     pub target_datetime: String,
-    pub local_target_datetime: String,
+    pub target_local_datetime: String,
     pub rationale: String,
+}
+
+impl From<PredictedLongShortSignal> for LongShortSignal {
+    fn from(signal: PredictedLongShortSignal) -> Self {
+        let utc_datetime = DateTime::parse_from_rfc3339(&signal.target_datetime)
+            .expect("Failed to parse datetime");
+        let tokyo_datetime: DateTime<Tz> = utc_datetime.with_timezone(&Tokyo);
+        let target_local_datetime = tokyo_datetime.to_rfc3339();
+
+        LongShortSignal {
+            symbol: signal.symbol,
+            amount: signal.amount,
+            current_price: signal.current_price,
+            entry_price: signal.entry_price,
+            target_price: signal.target_price,
+            stop_loss: signal.stop_loss,
+            timeframe: signal.timeframe,
+            target_datetime: signal.target_datetime,
+            target_local_datetime,
+            rationale: signal.rationale,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

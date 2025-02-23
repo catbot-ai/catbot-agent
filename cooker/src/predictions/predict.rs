@@ -2,7 +2,11 @@ use crate::{
     providers::gemini::{build_prompt, AiProvider, GeminiModel, GeminiProvider},
     sources::binance::{fetch_binance_kline_data, fetch_orderbook_depth},
 };
-use common::{ClosePriceKline, ConciseKline, PredictionOutput, PredictionOutputWithTimeStamp};
+use chrono_tz::Asia::Tokyo;
+use common::{
+    ClosePriceKline, ConciseKline, PredictionOutput, PredictionOutputWithTimeStampBuilder,
+    RefinedPredictionOutput,
+};
 
 use anyhow::Result;
 
@@ -11,7 +15,7 @@ pub async fn get_prediction(
     provider: &GeminiProvider,
     model: &GeminiModel,
     limit: i32,
-) -> Result<PredictionOutputWithTimeStamp> {
+) -> Result<RefinedPredictionOutput> {
     // println!("Fetching Kline data (1s)...");
     let kline_data_1s = fetch_binance_kline_data::<ClosePriceKline>(pair_symbol, "1s", 1).await?;
     let current_price = kline_data_1s[0]
@@ -64,7 +68,8 @@ pub async fn get_prediction(
         .call_api::<PredictionOutput>(model, &prompt, None)
         .await?;
 
-    let prediction_output_with_timestamp = PredictionOutputWithTimeStamp::from(gemini_response);
+    let prediction_output_with_timestamp =
+        PredictionOutputWithTimeStampBuilder::new(gemini_response, Tokyo).build();
 
     Ok(prediction_output_with_timestamp)
 }
