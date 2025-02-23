@@ -216,6 +216,9 @@ pub fn build_prompt(
     println!("\ngrouped_bids_string:{grouped_bids_string}");
     println!("grouped_asks_string:{grouped_asks_string}\n");
 
+    println!("top_3_supports_string:{top_3_supports_string}\n");
+    println!("top_3_resistances_string:{top_3_resistances_string}\n");
+
     let schema_instruction = format!(
         r#"**Instructions:**
 
@@ -229,8 +232,8 @@ pub fn build_prompt(
     "summary": {{
         "title": "string", // Short summary (less than 128 characters). E.g., "{symbol} Long Opportunity" or "{symbol} Neutral Market"
         "price": "number", // Current {symbol} price (precise decimals).
-        "top_3_supports": [{top_3_supports_string}], // Use as is
-        "top_3_resistances": [{top_3_resistances_string}], // Use as is
+        "top_3_supports": [number], // Use provided value: {top_3_supports_string}
+        "top_3_resistances": [number], // Use provided value: {top_3_resistances_string}
         "upper_bound": "number", // Current {symbol} upper bound (strongest resistance price).
         "lower_bound": "number", // Current {symbol} lower bound (strongest support price).
         "technical_resistance_4h": "number", // Possible highest price in 4h timeframe.
@@ -276,17 +279,26 @@ Pay close attention to the *volume* of bids and asks when determining support an
 **Current Price:**
 {current_price}
 
-**Asks:**
+**Consolidated Asks:**
 {grouped_bids_string}
 
-**Bids:**
+**Consolidated Bids:**
 {grouped_asks_string}
+
+**top_3_supports_string**
+{top_3_supports_string}
+
+**top_3_resistances**
+{top_3_resistances_string}
 
 **Price History (1h timeframe):**
 {price_history_1h}
 
 **Price History (4h timeframe):**
 {price_history_4h}
+
+**Price History (1d timeframe):**
+{price_history_1d}
 
 {schema_instruction}"#
     )
