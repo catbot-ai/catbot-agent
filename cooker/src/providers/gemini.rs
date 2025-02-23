@@ -175,7 +175,7 @@ impl AiProvider for GeminiProvider {
 #[allow(clippy::too_many_arguments, unused)]
 pub fn build_prompt(
     model: &GeminiModel,
-    fund: f64,
+    fund_usd: f64,
     pair_symbol: &str,
     current_price: f64,
     price_history_5m: &str,
@@ -224,7 +224,7 @@ pub fn build_prompt(
         r#"**Instructions:**
 
 - Do technical analysis on all history prices.
-- Predict actionable trading signals based on the provided technical, order book and sentiment analysis for vary timeframe 4h, 6h, 12h.
+- Predict profitable (more than 5%) trading signals for vary timeframe based on that technical analysis along with provided order book.
 - Concentrate on spike price that regularly occurred at the nearly same time for target_datetime.
 
 **JSON Output:**
@@ -246,36 +246,38 @@ pub fn build_prompt(
     "long_signals": [
     {{
         "symbol": "{symbol}",
-        "amount": "number",         // Calculated trade amount in {symbol} based on fund and entry price.
+        "confidence": "number",     // Confidence in between 0.00 - 1.00 about this signal.
         "current_price": "number",  // Current {symbol} price in USD.
         "entry_price": "number",    // Suggested entry price for long position in USD.
-        "target_price": "number",   // Target price for long position in USD.
+        "target_price": "number",   // Target price for long position in USD, should more than first resistance.
         "stop_loss": "number",      // Stop loss price for long position in USD.
         "timeframe": "string",      // 1h, 4h, 6h, 12h, 1d, ...
         "target_datetime": "string",// Estimated target datetime in ISO format to reach target_price from {current_datetime}.
-        "rationale": "string"       // Explanation for the long signal, referencing support, sentiment, etc.
+        "rationale": "string"       // Explanation for the long signal, referencing support/resistance, sentiment, etc.
     }}],
     "short_signals": [
     {{
         "symbol": "{symbol}",
-        "amount": "number",         // Calculated trade amount in {symbol} based on fund and entry price.
+        "confidence": "number",     // Confidence in between 0.00 - 1.00 about this signal.
         "current_price": "number",  // Current {symbol} price in USD.
         "entry_price": "number",    // Suggested entry price for short position in USD.
-        "target_price": "number",   // Target price for short position in USD.
+        "target_price": "number",   // Target price for short position in USD, should more than first support.
         "stop_loss": "number",      // Stop loss price for short position in USD.
         "timeframe": "string",      // 1h, 4h, 6h, 12h, 1d, ...
         "target_datetime": "string",// Estimated target datetime in ISO format to reach target_price from {current_datetime}.
-        "rationale": "string"       // Explanation for the short signal, referencing resistance, sentiment, etc.
+        "rationale": "string"       // Explanation for the short signal, referencing support/resistance, sentiment, etc.
     }}]
 }}
 
-Be concise, Think step by step especially top_3_resistances and top_3_supports.
+Be concise, Think step by step especially top_3_supports and top_3_resistances both price and consolidated volume.
+target_price should more than first resistance/support to be profitable.
+target_datetime should match current market movement especially **Price History (5m timeframe):**.
 "#
     );
 
     format!(
-        r#"Analyze the {symbol} market for potential price movement in the next 4 hours based on the following data.
-Pay close attention to the *volume* of bids and asks when determining support and resistance.:
+        r#"You are the best trading signals bot. Analyze the {symbol} market for potential price movement in the next 4 hours based on the following data.
+Pay close attention to the *volume* of bids and asks, make technical analysis before make assumption on trading signals.:
 
 **Current DateTime:**
 {current_datetime}
@@ -298,14 +300,14 @@ Pay close attention to the *volume* of bids and asks when determining support an
 **top_3_resistances**
 {top_3_resistances_string}
 
-**Price History (1h timeframe):**
-{price_history_1h}
-
 **Price History (4h timeframe):**
 {price_history_4h}
 
-**Price History (1d timeframe):**
-{price_history_1d}
+**Price History (1h timeframe):**
+{price_history_1h}
+
+**Price History (5m timeframe):**
+{price_history_5m}
 
 {schema_instruction}"#
     )
@@ -365,7 +367,7 @@ mod tests {
 
         let prompt = build_prompt(
             &model,
-            3f64,
+            1000f64,
             pair_symbol,
             current_price,
             price_history_5m,

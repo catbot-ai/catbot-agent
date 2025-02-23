@@ -84,7 +84,7 @@ pub struct Summary {
 #[serde(rename_all = "snake_case")]
 pub struct PredictedLongShortSignal {
     pub symbol: String,
-    pub amount: f64,
+    pub confidence: f64,
     pub current_price: f64,
     pub entry_price: f64,
     pub target_price: f64,
@@ -98,7 +98,7 @@ pub struct PredictedLongShortSignal {
 #[serde(rename_all = "snake_case")]
 pub struct LongShortSignal {
     pub symbol: String,
-    pub amount: f64,
+    pub confidence: f64,
     pub current_price: f64,
     pub entry_price: f64,
     pub target_price: f64,
@@ -118,7 +118,7 @@ impl From<PredictedLongShortSignal> for LongShortSignal {
 
         LongShortSignal {
             symbol: signal.symbol,
-            amount: signal.amount,
+            confidence: signal.confidence,
             current_price: signal.current_price,
             entry_price: signal.entry_price,
             target_price: signal.target_price,
