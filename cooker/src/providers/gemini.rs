@@ -270,8 +270,9 @@ pub fn build_prompt(
 }}
 
 Be concise, Think step by step especially top_3_supports and top_3_resistances both price and consolidated volume.
-target_price should more than first resistance/support to be profitable.
-target_datetime should match current market movement especially **Price History (5m timeframe):**.
+target_price should target more than first resistance/support to be profitable.
+target_datetime should match current market movement especially **Price History (5m timeframe):** for short term and 4h for long term.
+suggestion should matched the output signals and should clarify the strategy.
 "#
     );
 
