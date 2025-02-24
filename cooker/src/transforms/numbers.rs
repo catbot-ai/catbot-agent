@@ -1,4 +1,5 @@
 use common::OrderBook;
+use currency_rs::{Currency, CurrencyOpts};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use strum::{Display, EnumString};
@@ -59,14 +60,21 @@ pub fn group_by_fractional_part(
 
 type PriceAmountVec = Vec<(String, f64)>;
 
-pub fn top_n_support_resistance(grouped_data: &BTreeMap<String, f64>, n: usize) -> PriceAmountVec {
+pub fn top_n_bids_asks(grouped_data: &BTreeMap<String, f64>, n: usize) -> PriceAmountVec {
     let mut price_amount_vec: Vec<PriceAmount> = grouped_data
         .iter()
         .filter_map(|(price_str, amount)| {
             if let Ok(price) = price_str.parse::<f64>() {
                 Some(PriceAmount {
                     price,
-                    cumulative_amount: *amount,
+                    cumulative_amount: Currency::new_string(
+                        &amount.to_string(),
+                        Some(CurrencyOpts::new().set_symbol("").set_precision(3)),
+                    )
+                    .unwrap()
+                    .to_string()
+                    .parse::<f64>()
+                    .unwrap(),
                 })
             } else {
                 eprintln!("Error parsing price: {}", price_str);
@@ -91,6 +99,7 @@ pub fn top_n_support_resistance(grouped_data: &BTreeMap<String, f64>, n: usize) 
     top_n_prices_amounts
 }
 
+#[allow(unused)]
 pub fn extract_prices_f64(price_amount_vec: &PriceAmountVec, n: usize) -> [f64; 3] {
     let mut prices_array = [0.0; 3]; // Initialize with default values
 

@@ -11,9 +11,8 @@ use strum::AsRefStr;
 use strum::EnumString;
 
 use crate::transforms::numbers::btree_map_to_csv;
-use crate::transforms::numbers::extract_prices_f64;
 use crate::transforms::numbers::group_by_fractional_part;
-use crate::transforms::numbers::top_n_support_resistance;
+use crate::transforms::numbers::top_n_bids_asks;
 use crate::transforms::numbers::FractionalPart;
 
 // --- Gemini Model Enum ---
@@ -186,99 +185,77 @@ pub fn build_prompt(
 ) -> String {
     let current_datetime = Utc::now();
     let current_timestamp = Utc::now().timestamp_millis();
-    let symbol = pair_symbol
-        .split("USDT")
-        .next()
-        .expect("Expect USDT as a suffix");
+    let symbol = pair_symbol.split("USDT").next().unwrap_or(pair_symbol);
 
     let (grouped_bids, grouped_asks) = group_by_fractional_part(&orderbook, FractionalPart::One);
 
     // Limit 10
-    let top_supports_price_amount = top_n_support_resistance(&grouped_bids, 3);
-    let top_resistances_price_amount = top_n_support_resistance(&grouped_asks, 3);
-
-    // Top 3
-    let top_3_supports = extract_prices_f64(&top_supports_price_amount, 3);
-    let top_3_resistances = extract_prices_f64(&top_resistances_price_amount, 3);
-    let top_3_supports_string = top_3_supports
-        .iter()
-        .map(|&x| x.to_string())
-        .collect::<Vec<String>>()
-        .join(",");
-    let top_3_resistances_string = top_3_resistances
-        .iter()
-        .map(|&x| x.to_string())
-        .collect::<Vec<String>>()
-        .join(",");
+    let top_bids_price_amount = top_n_bids_asks(&grouped_bids, 5);
+    let top_asks_price_amount = top_n_bids_asks(&grouped_asks, 5);
 
     let grouped_bids_string = btree_map_to_csv(&grouped_bids);
     let grouped_asks_string = btree_map_to_csv(&grouped_asks);
 
-    // println!("\ngrouped_bids_string:{grouped_bids_string}");
-    // println!("grouped_asks_string:{grouped_asks_string}\n");
-
-    // println!("top_3_supports_string:{top_3_supports_string}\n");
-    // println!("top_3_resistances_string:{top_3_resistances_string}\n");
+    let min_profit = fund_usd * 0.05;
 
     let schema_instruction = format!(
         r#"**Instructions:**
 
-- Do technical analysis on all history prices.
-- Predict profitable (more than 5%) trading signals for vary timeframe based on that technical analysis along with provided order book.
-- Concentrate on spike price that regularly occurred at the nearly same time for target_datetime.
+- Perform technical analysis on price histories (5m, 1h, 4h, 1d) and order book volume.
+- Generate trading signals with at least 5% profit potential from `entry_price` to `target_price`, ensuring a minimum 5% return on `fund_usd`. E.g., for `fund_usd` ${fund_usd}, profit at least $${min_profit}.
+- Use 5m history for 1h signals (target_datetime within 1-2h) and 4h for 4h+ signals.
+- Quantify bid/ask volume in rationale and detail (e.g., "bids at 158 total 15438 SOL vs. asks at 160 total 17671 SOL").
+- Identify recurring price spikes in history and align target_datetime accordingly.
+- Match suggestion to signals; explain discrepancies if no signals.
 
 **JSON Output:**
 ```json
 {{
     "summary": {{
-        "title": "string", // Short summary (less than 128 characters). E.g., "{symbol} Long Opportunity" or "{symbol} Neutral Market"
-        "price": "number", // Current {symbol} price (precise decimals).
-        "top_3_supports": [number], // Use provided value: {top_3_supports_string}
-        "top_3_resistances": [number], // Use provided value: {top_3_resistances_string}
-        "upper_bound": "number", // Current {symbol} upper bound (strongest resistance price).
-        "lower_bound": "number", // Current {symbol} lower bound (strongest support price).
-        "technical_resistance_4h": "number",
-        "technical_support_4h": "number",
-        "detail": "string", // Trade analysis summary (less than 255 characters). Include reasons for sentiment and signal generation or lack thereof. Mention any discrepancies.
-        "suggestion": "string", // Suggested action. E.g., "Consider Long {symbol} if price holds above 173" or "Neutral. Observe price action." or "Consider Short {symbol} below 174."
-        "vibe": "string" // Market sentiment with confidence percentage. E.g., "Bullish 65%", "Bearish 70%", "Neutral 80%".
+        "title": "string", // E.g., "{symbol} Short-term Bearish"
+        "price": {current_price},
+        "upper_bound": number, // Highest top_3_resistance
+        "lower_bound": number, // Lowest top_3_support
+        "technical_resistance_4h": number, // From 4h analysis
+        "technical_support_4h": number, // From 4h analysis
+        "top_bids_price_amount": {top_bids_price_amount:?},
+        "top_asks_price_amount": {top_asks_price_amount:?},
+        "detail": "string", // <500 chars, include volume and momentum insights
+        "suggestion": "string", // E.g., "Short {symbol} at 170.1 if volume confirms resistance"
+        "vibe": "string" // E.g., "Bearish 65%", match signal confidence
     }},
-    "long_signals": [
-    {{
+    "long_signals": [{{
         "symbol": "{symbol}",
-        "confidence": "number",     // Confidence in between 0.00 - 1.00 about this signal.
-        "current_price": "number",  // Current {symbol} price in USD.
-        "entry_price": "number",    // Suggested entry price for long position in USD.
-        "target_price": "number",   // Target price for long position in USD, should more than first resistance.
-        "stop_loss": "number",      // Stop loss price for long position in USD.
-        "timeframe": "string",      // 1h, 4h, 6h, 12h, 1d, ...
-        "target_datetime": "string",// Estimated target datetime in ISO format to reach target_price from {current_datetime}.
-        "rationale": "string"       // Explanation for the long signal, referencing support/resistance, sentiment, etc.
+        "confidence": number, // 0.0-1.0
+        "current_price": {current_price},
+        "entry_price": number,
+        "target_price": number, // >5% above entry, beyond first resistance
+        "stop_loss": number,
+        "timeframe": "string", // "1h" or "4h"
+        "target_datetime": "string", // ISO, based on timeframe (5m for 1h, 4h for 4h)
+        "rationale": "string" // E.g., "4h momentum up, bids outpace asks"
     }}],
-    "short_signals": [
-    {{
+    "short_signals": [{{
         "symbol": "{symbol}",
-        "confidence": "number",     // Confidence in between 0.00 - 1.00 about this signal.
-        "current_price": "number",  // Current {symbol} price in USD.
-        "entry_price": "number",    // Suggested entry price for short position in USD.
-        "target_price": "number",   // Target price for short position in USD, should more than first support.
-        "stop_loss": "number",      // Stop loss price for short position in USD.
-        "timeframe": "string",      // 1h, 4h, 6h, 12h, 1d, ...
-        "target_datetime": "string",// Estimated target datetime in ISO format to reach target_price from {current_datetime}.
-        "rationale": "string"       // Explanation for the short signal, referencing support/resistance, sentiment, etc.
+        "confidence": number, // 0.0-1.0
+        "current_price": {current_price},
+        "entry_price": number,
+        "target_price": number, // >5% below entry, beyond first support
+        "stop_loss": number,
+        "timeframe": "string", // "1h" or "4h"
+        "target_datetime": "string", // ISO, based on timeframe
+        "rationale": "string" // E.g., "1h rejection at 170, high ask volume"
     }}]
 }}
-
-Be concise, Think step by step especially top_3_supports and top_3_resistances both price and consolidated volume.
-target_price should target more than first resistance/support to be profitable.
-target_datetime should match current market movement especially **Price History (5m timeframe):** for short term and 4h for long term.
-suggestion should matched the output signals and should clarify the strategy.
+```
+Be concise, Think step by step.
 "#
     );
 
     format!(
-        r#"You are the best trading signals bot. Analyze the {symbol} market for potential price movement in the next 4 hours based on the following data.
-Pay close attention to the *volume* of bids and asks, make technical analysis before make assumption on trading signals.:
+        r#"Analyze {symbol} for price movement in the next 4 hours using:
+**Fund USD:**
+{fund_usd}
 
 **Current DateTime:**
 {current_datetime}
@@ -289,17 +266,14 @@ Pay close attention to the *volume* of bids and asks, make technical analysis be
 **Current Price:**
 {current_price}
 
-**Consolidated Asks:**
+**Consolidated Bids:**
 {grouped_bids_string}
 
-**Consolidated Bids:**
+**Consolidated Asks:**
 {grouped_asks_string}
 
-**top_3_supports_string**
-{top_3_supports_string}
-
-**top_3_resistances**
-{top_3_resistances_string}
+**Price History (1d timeframe):**
+{price_history_1d}
 
 **Price History (4h timeframe):**
 {price_history_4h}
@@ -368,7 +342,7 @@ mod tests {
 
         let prompt = build_prompt(
             &model,
-            1000f64,
+            100f64,
             pair_symbol,
             current_price,
             price_history_5m,
