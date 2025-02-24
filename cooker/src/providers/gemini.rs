@@ -237,8 +237,8 @@ pub fn build_prompt(
         "top_3_resistances": [number], // Use provided value: {top_3_resistances_string}
         "upper_bound": "number", // Current {symbol} upper bound (strongest resistance price).
         "lower_bound": "number", // Current {symbol} lower bound (strongest support price).
-        "technical_resistance_4h": "number", // Possible highest price in 4h timeframe.
-        "technical_support_4h": "number", // Possible lowest price in 4h timeframe.
+        "technical_resistance_4h": "number",
+        "technical_support_4h": "number",
         "detail": "string", // Trade analysis summary (less than 255 characters). Include reasons for sentiment and signal generation or lack thereof. Mention any discrepancies.
         "suggestion": "string", // Suggested action. E.g., "Consider Long {symbol} if price holds above 173" or "Neutral. Observe price action." or "Consider Short {symbol} below 174."
         "vibe": "string" // Market sentiment with confidence percentage. E.g., "Bullish 65%", "Bearish 70%", "Neutral 80%".
