@@ -58,7 +58,7 @@ pub fn group_by_fractional_part(
     (grouped_bids, grouped_asks)
 }
 
-type PriceAmountVec = Vec<(String, f64)>;
+type PriceAmountVec = Vec<(f64, f64)>;
 
 pub fn top_n_bids_asks(grouped_data: &BTreeMap<String, f64>, n: usize) -> PriceAmountVec {
     let mut price_amount_vec: Vec<PriceAmount> = grouped_data
@@ -93,7 +93,7 @@ pub fn top_n_bids_asks(grouped_data: &BTreeMap<String, f64>, n: usize) -> PriceA
     let top_n_prices_amounts: PriceAmountVec = price_amount_vec
         .iter()
         .take(n)
-        .map(|pa| (pa.price.to_string(), pa.cumulative_amount))
+        .map(|pa| (pa.price, pa.cumulative_amount))
         .collect();
 
     top_n_prices_amounts
@@ -101,15 +101,10 @@ pub fn top_n_bids_asks(grouped_data: &BTreeMap<String, f64>, n: usize) -> PriceA
 
 #[allow(unused)]
 pub fn extract_prices_f64(price_amount_vec: &PriceAmountVec, n: usize) -> [f64; 3] {
-    let mut prices_array = [0.0; 3]; // Initialize with default values
+    let mut prices_array = [0.0; 3];
 
     for (i, price_amount) in price_amount_vec.iter().take(n).enumerate() {
-        if let Ok(price) = price_amount.0.parse::<f64>() {
-            // Access tuple element by index .0 (price string)
-            prices_array[i] = price;
-        } else {
-            eprintln!("Error parsing price string: {}", price_amount.0);
-        }
+        prices_array[i] = price_amount.0;
     }
     prices_array
 }

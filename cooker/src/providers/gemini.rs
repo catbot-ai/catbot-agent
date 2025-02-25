@@ -187,14 +187,17 @@ pub fn build_prompt(
     let current_timestamp = Utc::now().timestamp_millis();
     let symbol = pair_symbol.split("USDT").next().unwrap_or(pair_symbol);
 
-    let (grouped_bids, grouped_asks) = group_by_fractional_part(&orderbook, FractionalPart::One);
+    let (grouped_one_bids, grouped_one_asks) =
+        group_by_fractional_part(&orderbook, FractionalPart::One);
+    let (grouped_one_tenth_bids, grouped_one_tenth_asks) =
+        group_by_fractional_part(&orderbook, FractionalPart::OneTenth);
 
     // Limit 10
-    let top_bids_price_amount = top_n_bids_asks(&grouped_bids, 5);
-    let top_asks_price_amount = top_n_bids_asks(&grouped_asks, 5);
+    let top_bids_price_amount = top_n_bids_asks(&grouped_one_bids, 5);
+    let top_asks_price_amount = top_n_bids_asks(&grouped_one_asks, 5);
 
-    let grouped_bids_string = btree_map_to_csv(&grouped_bids);
-    let grouped_asks_string = btree_map_to_csv(&grouped_asks);
+    let grouped_bids_string = btree_map_to_csv(&grouped_one_bids);
+    let grouped_asks_string = btree_map_to_csv(&grouped_one_asks);
 
     let min_profit = fund_usd * 0.05;
 
@@ -254,7 +257,7 @@ Be concise, Think step by step.
 
     format!(
         r#"Analyze {symbol} for price movement in the next 4 hours using:
-**Fund USD:**
+**fund_usd:**
 {fund_usd}
 
 **Current DateTime:**
