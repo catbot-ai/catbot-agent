@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 
 use chrono::Utc;
 use common::OrderBook;
+use common::PerpsPosition;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
@@ -182,6 +183,7 @@ pub fn build_prompt(
     price_history_4h: &str,
     price_history_1d: &str,
     orderbook: OrderBook,
+    maybe_positions: Option<Vec<PerpsPosition>>,
 ) -> String {
     let current_datetime = Utc::now();
     let current_timestamp = Utc::now().timestamp_millis();
@@ -200,6 +202,25 @@ pub fn build_prompt(
     let grouped_asks_string = btree_map_to_csv(&grouped_one_asks);
 
     let min_profit = fund_usd * 0.025;
+
+    let maybe_position_schema = if maybe_positions.is_some() {
+        r#",
+"positions": [{{
+    "side": "long", // Position side: long or shot
+    "symbol": "{symbol}",
+    "confidence": number, // 0.0-1.0
+    "entry_price": number,
+    "leverage": number,
+    "liquidation_price: number,
+    "pnl_after_fees_usd: number,
+    "value": number, // Current position value in USD
+    "suggested_target_price": Option<number>, // Suggestion for new target_price (optional)
+    "suggested_stop_loss": Option<number>, // Suggestion for new stop_loss (optional)
+    "suggested_add_value": Option<number>,  // Suggestion to add more value to position or not (optional)
+}}]"#
+    } else {
+        ""
+    };
 
     let schema_instruction = format!(
         r#"**Instructions:**
@@ -227,28 +248,18 @@ pub fn build_prompt(
         "suggestion": "string", // E.g., "Short {symbol} at 170.1 if volume confirms resistance"
         "vibe": "string" // E.g., "Bearish 65%", match signal confidence
     }},
-    "long_signals": [{{
+    "signals": [{{
+        "type": "long", // Position type: long or shot
         "symbol": "{symbol}",
-        "confidence": number, // 0.0-1.0
+        "confidence": number, // Confidence about this signal: 0.0-1.0
         "current_price": {current_price},
         "entry_price": number,
         "target_price": number, // >2.5% above entry, beyond first resistance
         "stop_loss": number,
         "timeframe": "string", // "1h" or "4h"
         "target_datetime": "string", // ISO, based on timeframe (5m for 1h, 4h for 4h)
-        "rationale": "string" // E.g., "4h momentum up, bids outpace asks"
-    }}],
-    "short_signals": [{{
-        "symbol": "{symbol}",
-        "confidence": number, // 0.0-1.0
-        "current_price": {current_price},
-        "entry_price": number,
-        "target_price": number, // >2.5% below entry, beyond first support
-        "stop_loss": number,
-        "timeframe": "string", // "1h" or "4h"
-        "target_datetime": "string", // ISO, based on timeframe
-        "rationale": "string" // E.g., "1h rejection at 170, high ask volume"
-    }}]
+        "rationale": "string" // E.g., "4h momentum up, bids outpace asks", "1h rejection at 170, high ask volume"
+    }}]{maybe_position_schema}
 }}
 ```
 Be concise, Think step by step.
@@ -353,6 +364,7 @@ mod tests {
             price_history_4h,
             price_history_1d,
             orderbook,
+            None,
         );
 
         println!("{}", prompt);

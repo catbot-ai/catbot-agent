@@ -58,6 +58,7 @@ pub async fn get_prediction(
         &price_history_4h_string,
         &price_history_1d_string,
         orderbook,
+        None,
     );
 
     println!("{prompt:?}");

@@ -295,8 +295,10 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "chrono-tz",
+ "jup-sdk",
  "serde",
  "serde_json",
+ "strum",
 ]
 
 [[package]]
@@ -321,6 +323,7 @@ dependencies = [
  "currency_rs",
  "dotenvy",
  "env_logger",
+ "jup-sdk",
  "log",
  "reqwest",
  "serde",
@@ -908,6 +911,20 @@ checksum = "1cfaf33c695fc6e08064efbc1f72ec937429614f25eef83af942d0e227c3a28f"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "jup-sdk"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "currency_rs",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "strum",
+ "strum_macros",
+ "tokio",
 ]
 
 [[package]]
