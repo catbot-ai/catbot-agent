@@ -199,13 +199,13 @@ pub fn build_prompt(
     let grouped_bids_string = btree_map_to_csv(&grouped_one_bids);
     let grouped_asks_string = btree_map_to_csv(&grouped_one_asks);
 
-    let min_profit = fund_usd * 0.05;
+    let min_profit = fund_usd * 0.025;
 
     let schema_instruction = format!(
         r#"**Instructions:**
 
 - Perform technical analysis on price histories (5m, 1h, 4h, 1d) and order book volume.
-- Generate trading signals with at least 5% profit potential from `entry_price` to `target_price`, ensuring a minimum 5% return on `fund_usd`. E.g., for `fund_usd` ${fund_usd}, profit at least $${min_profit}.
+- Generate trading signals with at least 2.5% profit potential from `entry_price` to `target_price`, ensuring a minimum 2.5% return on `fund_usd`. E.g., for `fund_usd` ${fund_usd}, profit at least $${min_profit}.
 - Use 5m history for 1h signals (target_datetime within 1-2h) and 4h for 4h+ signals.
 - Quantify bid/ask volume in rationale and detail (e.g., "bids at 158 total 15438 SOL vs. asks at 160 total 17671 SOL").
 - Identify recurring price spikes in history and align target_datetime accordingly.
@@ -232,7 +232,7 @@ pub fn build_prompt(
         "confidence": number, // 0.0-1.0
         "current_price": {current_price},
         "entry_price": number,
-        "target_price": number, // >5% above entry, beyond first resistance
+        "target_price": number, // >2.5% above entry, beyond first resistance
         "stop_loss": number,
         "timeframe": "string", // "1h" or "4h"
         "target_datetime": "string", // ISO, based on timeframe (5m for 1h, 4h for 4h)
@@ -243,7 +243,7 @@ pub fn build_prompt(
         "confidence": number, // 0.0-1.0
         "current_price": {current_price},
         "entry_price": number,
-        "target_price": number, // >5% below entry, beyond first support
+        "target_price": number, // >2.5% below entry, beyond first support
         "stop_loss": number,
         "timeframe": "string", // "1h" or "4h"
         "target_datetime": "string", // ISO, based on timeframe
@@ -257,23 +257,15 @@ Be concise, Think step by step.
 
     format!(
         r#"Analyze {symbol} for price movement in the next 4 hours using:
-**fund_usd:**
-{fund_usd}
 
-**Current DateTime:**
-{current_datetime}
+## Input Data
 
-**Current TimeStamp:**
-{current_timestamp}
+fund_usd={fund_usd}
+current_datetime={current_datetime}
+current_timestamp={current_timestamp}
+current_price={current_price}
 
-**Current Price:**
-{current_price}
-
-**Consolidated Bids:**
-{grouped_bids_string}
-
-**Consolidated Asks:**
-{grouped_asks_string}
+## Historical Data
 
 **Price History (1d timeframe):**
 {price_history_1d}
@@ -286,6 +278,14 @@ Be concise, Think step by step.
 
 **Price History (5m timeframe):**
 {price_history_5m}
+
+## Consolidated Data:
+
+**Bids:**
+{grouped_bids_string}
+
+**Asks:**
+{grouped_asks_string}
 
 {schema_instruction}"#
     )
