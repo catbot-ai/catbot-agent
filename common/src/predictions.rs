@@ -51,7 +51,7 @@ impl PredictionOutputWithTimeStampBuilder {
             .map(LongShortSignal::from)
             .collect();
 
-        let positions = self.gemini_response.positions;
+        let positions = self.gemini_response.positions.or(Some(vec![]));
 
         RefinedPredictionOutput {
             timestamp: now_utc.timestamp_millis(),
