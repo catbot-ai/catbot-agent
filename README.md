@@ -9,6 +9,12 @@ cd cooker
 npx wrangler dev
 ```
 
+## Deploy
+
+```
+npx wrangler deploy
+```
+
 ## TODO
 
 - Get vibe from x.
