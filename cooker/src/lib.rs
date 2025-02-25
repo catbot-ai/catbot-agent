@@ -6,7 +6,15 @@ mod providers;
 mod sources;
 mod transforms;
 
+use sources::jup::get_preps_position;
+
+use serde::Deserialize;
 use worker::*;
+
+#[derive(Deserialize)]
+struct SuggestQuery {
+    wallet_address: String,
+}
 
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
@@ -22,11 +30,20 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
 
     let router = Router::new();
     router
-        .get_async("/suggest/:token", |_req, ctx| async move {
+        .get_async("/suggest/:token", |req, ctx| async move {
             if let Some(pair_symbol) = ctx.param("token") {
-                let output_result =
-                    predict_with_gemini(gemini_api_key.to_owned(), pair_symbol.to_owned(), limit)
-                        .await;
+                let maybe_wallet_address = match req.query::<SuggestQuery>() {
+                    Ok(q) => Some(q.wallet_address),
+                    Err(_e) => None,
+                };
+
+                let output_result = predict_with_gemini(
+                    gemini_api_key.to_owned(),
+                    pair_symbol.to_owned(),
+                    limit,
+                    maybe_wallet_address,
+                )
+                .await;
 
                 match output_result {
                     Ok(output) => {
@@ -56,12 +73,27 @@ pub async fn predict_with_gemini(
     gemini_api_key: String,
     pair_symbol: String,
     limit: i32,
+    maybe_wallet_address: Option<String>,
 ) -> anyhow::Result<String, String> {
     let gemini_model = GeminiModel::FlashLitePreview;
     let provider = GeminiProvider::new_v1beta(&gemini_api_key);
 
-    let prediction_result = get_prediction(&pair_symbol, &provider, &gemini_model, limit).await;
+    // Get position from wallet_address if has
+    let maybe_preps_positions = match get_preps_position(maybe_wallet_address).await {
+        Ok(positions) => positions,
+        Err(error) => return Err(format!("Error getting position: {:?}", error)),
+    };
 
+    let prediction_result = get_prediction(
+        &pair_symbol,
+        &provider,
+        &gemini_model,
+        limit,
+        maybe_preps_positions,
+    )
+    .await;
+
+    // TODO: return as json
     match prediction_result {
         Ok(prediction_output) => Ok(serde_json::to_string(&prediction_output)
             .map_err(|e| format!("Failed to serialize prediction output to JSON: {}", e))?),
@@ -80,8 +112,10 @@ mod tests {
 
         let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
         let symbol = "SOLUSDT";
-        let limit = 1000;
-        let result = predict_with_gemini(gemini_api_key, symbol.to_string(), limit)
+        let wallet_address = std::env::var("WALLET_ADDRESS").ok();
+
+        let limit = 1;
+        let result = predict_with_gemini(gemini_api_key, symbol.to_string(), limit, wallet_address)
             .await
             .unwrap();
         println!(

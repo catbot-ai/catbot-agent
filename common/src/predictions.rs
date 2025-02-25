@@ -82,6 +82,7 @@ pub struct Summary {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct PredictedLongShortSignal {
+    pub side: String,
     pub symbol: String,
     pub confidence: f64,
     pub current_price: f64,
@@ -96,6 +97,7 @@ pub struct PredictedLongShortSignal {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct LongShortSignal {
+    pub side: String,
     pub symbol: String,
     pub confidence: f64,
     pub current_price: f64,
@@ -116,6 +118,7 @@ impl From<PredictedLongShortSignal> for LongShortSignal {
         let target_local_datetime = tokyo_datetime.to_rfc3339();
 
         LongShortSignal {
+            side: signal.side,
             symbol: signal.symbol,
             confidence: signal.confidence,
             current_price: signal.current_price,
@@ -150,8 +153,8 @@ pub enum Side {
     Short,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "snake_case")]
 pub struct PerpsPosition {
     pub side: Side,              // Position side: long or short
     pub symbol: String,          // Trading pair symbol (e.g., "SOL")
@@ -199,7 +202,7 @@ impl From<PositionData> for PerpsPosition {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct PredictedPosition {
     pub side: Side,                          // Position side: long or short
     pub symbol: String,                      // Trading pair symbol (e.g., "SOL")
@@ -231,53 +234,6 @@ impl From<PerpsPosition> for PredictedPosition {
         }
     }
 }
-
-// impl From<PositionData> for PredictedPosition {
-//     fn from(position: PositionData) -> Self {
-//         // Extract symbol from market_mint or use a default if parsing fails
-//         let symbol = position
-//             .market_mint
-//             .split("USDT")
-//             .next()
-//             .unwrap_or("UNKNOWN")
-//             .to_string();
-
-//         // Parse string fields into f64, defaulting to 0.0 if parsing fails
-//         let entry_price = position.entry_price.parse::<f64>().unwrap_or(0.0);
-//         let leverage = position.leverage.parse::<f64>().unwrap_or(1.0); // Default to 1x if invalid
-//         let liquidation_price = position.liquidation_price.parse::<f64>().unwrap_or(0.0);
-//         let pnl_after_fees_usd = position.pnl_after_fees_usd.parse::<f64>().unwrap_or(0.0);
-//         let value = position.value.parse::<f64>().unwrap_or(0.0);
-
-//         // For fields not directly in PositionData, set defaults or derive them
-//         let confidence = 0.5; // Default confidence (could be calculated elsewhere)
-//         let suggested_target_price = position
-//             .tpsl_requests
-//             .tp
-//             .as_ref()
-//             .and_then(|tp| tp.some_field.parse::<f64>().ok()); // Placeholder, adjust based on TpslRequest structure
-//         let suggested_stop_loss = position
-//             .tpsl_requests
-//             .sl
-//             .as_ref()
-//             .and_then(|sl| sl.some_field.parse::<f64>().ok()); // Placeholder, adjust based on TpslRequest structure
-//         let suggested_add_value = None; // No direct mapping, so default to None
-
-//         PredictedPosition {
-//             side: position.side,
-//             symbol,
-//             confidence,
-//             entry_price,
-//             leverage,
-//             liquidation_price,
-//             pnl_after_fees_usd,
-//             value,
-//             suggested_target_price,
-//             suggested_stop_loss,
-//             suggested_add_value,
-//         }
-//     }
-// }
 
 // TODO: separated call for price prediction
 // "price_prediction_graph_5m": [

@@ -183,7 +183,7 @@ pub fn build_prompt(
     price_history_4h: &str,
     price_history_1d: &str,
     orderbook: OrderBook,
-    maybe_positions: Option<Vec<PerpsPosition>>,
+    maybe_preps_positions: Option<Vec<PerpsPosition>>,
 ) -> String {
     let current_datetime = Utc::now();
     let current_timestamp = Utc::now().timestamp_millis();
@@ -203,23 +203,43 @@ pub fn build_prompt(
 
     let min_profit = fund_usd * 0.025;
 
-    let maybe_position_schema = if maybe_positions.is_some() {
-        r#",
-"positions": [{{
-    "side": "long", // Position side: long or shot
+    let maybe_position_schema = if let Some(preps_positions) = maybe_preps_positions {
+        let mut positions_string = String::from(
+            r#",
+"positions": ["#,
+        );
+        for preps_position in preps_positions.iter() {
+            let side = preps_position.side.to_string();
+            let symbol = preps_position.symbol.to_string();
+            let entry_price = preps_position.entry_price;
+            let leverage = preps_position.leverage;
+            let liquidation_price = preps_position.liquidation_price;
+            let pnl_after_fees_usd = preps_position.pnl_after_fees_usd;
+            let value = preps_position.value;
+
+            positions_string.push_str(&format!(r#"
+{{
+    "side": "{side}",
     "symbol": "{symbol}",
+    "entry_price": {entry_price},
+    "leverage": {leverage},
+    "liquidation_price": {liquidation_price},
+    "pnl_after_fees_usd": {pnl_after_fees_usd},
+    "value": {value},
     "confidence": number, // 0.0-1.0
-    "entry_price": number,
-    "leverage": number,
-    "liquidation_price: number,
-    "pnl_after_fees_usd: number,
-    "value": number, // Current position value in USD
     "suggested_target_price": Option<number>, // Suggestion for new target_price (optional)
     "suggested_stop_loss": Option<number>, // Suggestion for new stop_loss (optional)
-    "suggested_add_value": Option<number>,  // Suggestion to add more value to position or not (optional)
-}}]"#
+    "suggested_add_value": Option<number>  // Suggestion to add more value to position or not (optional)
+}},
+"#
+            ));
+        }
+        // Remove latest ','
+        positions_string.pop();
+        positions_string.push_str("]\n");
+        positions_string
     } else {
-        ""
+        "[]".to_string()
     };
 
     let schema_instruction = format!(
@@ -231,6 +251,7 @@ pub fn build_prompt(
 - Quantify bid/ask volume in rationale and detail (e.g., "bids at 158 total 15438 SOL vs. asks at 160 total 17671 SOL").
 - Identify recurring price spikes in history and align target_datetime accordingly.
 - Match suggestion to signals; explain discrepancies if no signals.
+- Take a look for each positions and suggest rebalance if need.
 
 **JSON Output:**
 ```json
@@ -249,7 +270,7 @@ pub fn build_prompt(
         "vibe": "string" // E.g., "Bearish 65%", match signal confidence
     }},
     "signals": [{{
-        "type": "long", // Position type: long or shot
+        "side": string, // long or shot
         "symbol": "{symbol}",
         "confidence": number, // Confidence about this signal: 0.0-1.0
         "current_price": {current_price},

@@ -4,8 +4,8 @@ use crate::{
 };
 use chrono_tz::Asia::Tokyo;
 use common::{
-    ClosePriceKline, ConciseKline, PredictionOutput, PredictionOutputWithTimeStampBuilder,
-    RefinedPredictionOutput,
+    ClosePriceKline, ConciseKline, PerpsPosition, PredictionOutput,
+    PredictionOutputWithTimeStampBuilder, RefinedPredictionOutput,
 };
 
 use anyhow::Result;
@@ -15,6 +15,7 @@ pub async fn get_prediction(
     provider: &GeminiProvider,
     model: &GeminiModel,
     limit: i32,
+    maybe_preps_positions: Option<Vec<PerpsPosition>>,
 ) -> Result<RefinedPredictionOutput> {
     // println!("Fetching Kline data (1s)...");
     let kline_data_1s = fetch_binance_kline_data::<ClosePriceKline>(pair_symbol, "1s", 1).await?;
@@ -58,7 +59,7 @@ pub async fn get_prediction(
         &price_history_4h_string,
         &price_history_1d_string,
         orderbook,
-        None,
+        maybe_preps_positions,
     );
 
     println!("{prompt:?}");
