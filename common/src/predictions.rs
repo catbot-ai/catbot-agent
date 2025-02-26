@@ -90,6 +90,7 @@ pub struct PredictedLongShortSignal {
     pub target_price: f64,
     pub stop_loss: f64,
     pub timeframe: String,
+    pub entry_datetime: String,
     pub target_datetime: String,
     pub rationale: String,
 }
@@ -105,8 +106,10 @@ pub struct LongShortSignal {
     pub target_price: f64,
     pub stop_loss: f64,
     pub timeframe: String,
+    pub entry_datetime: String,
     pub target_datetime: String,
-    pub target_local_datetime: String,
+    pub entry_datetime_local: String,
+    pub target_datetime_local: String,
     pub rationale: String,
 }
 
@@ -115,7 +118,12 @@ impl From<PredictedLongShortSignal> for LongShortSignal {
         let utc_datetime = DateTime::parse_from_rfc3339(&signal.target_datetime)
             .expect("Failed to parse datetime");
         let tokyo_datetime: DateTime<Tz> = utc_datetime.with_timezone(&Tokyo);
-        let target_local_datetime = tokyo_datetime.to_rfc3339();
+        let target_datetime_local = tokyo_datetime.to_rfc3339();
+
+        let utc_datetime =
+            DateTime::parse_from_rfc3339(&signal.entry_datetime).expect("Failed to parse datetime");
+        let tokyo_datetime: DateTime<Tz> = utc_datetime.with_timezone(&Tokyo);
+        let entry_datetime_local = tokyo_datetime.to_rfc3339();
 
         LongShortSignal {
             side: signal.side,
@@ -127,7 +135,9 @@ impl From<PredictedLongShortSignal> for LongShortSignal {
             stop_loss: signal.stop_loss,
             timeframe: signal.timeframe,
             target_datetime: signal.target_datetime,
-            target_local_datetime,
+            entry_datetime: signal.entry_datetime,
+            entry_datetime_local,
+            target_datetime_local,
             rationale: signal.rationale,
         }
     }

@@ -282,7 +282,8 @@ pub fn build_prompt(
         "target_price": number, // >2.5% above entry, beyond first resistance
         "stop_loss": number,
         "timeframe": "string", // "1h" or "4h"
-        "target_datetime": "string", // ISO, based on timeframe (5m for 1h, 4h for 4h)
+        "entry_datetime": "string", // ISO time prediction when to trade.
+        "target_datetime": "string", // ISO time prediction when to take profit.
         "rationale": "string" // E.g., "4h momentum up, bids outpace asks", "1h rejection at 170, high ask volume"
     }}]{maybe_position_schema}
 }}
@@ -294,14 +295,14 @@ Be concise, Think step by step.
     format!(
         r#"Analyze {symbol} for price movement in the next 4 hours using:
 
-## Input Data
+## Input Data:
 
 fund_usd={fund_usd}
 current_datetime={current_datetime}
 current_timestamp={current_timestamp}
 current_price={current_price}
 
-## Historical Data
+## Historical Data:
 
 **Price History (1d timeframe):**
 {price_history_1d}
