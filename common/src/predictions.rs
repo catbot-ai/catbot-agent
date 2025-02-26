@@ -19,7 +19,8 @@ pub struct PredictionOutput {
 #[serde(rename_all = "snake_case")]
 pub struct RefinedPredictionOutput {
     pub timestamp: i64,
-    pub local_datetime: String,
+    pub current_datetime: String,
+    pub current_datetime_local: String,
     pub summary: Summary,
     pub signals: Vec<LongShortSignal>,
     pub positions: Option<Vec<PredictedPosition>>,
@@ -44,6 +45,8 @@ impl PredictionOutputWithTimeStampBuilder {
         let now_local = now_utc.with_timezone(&self.timezone);
         let iso_local = now_local.to_rfc3339();
 
+        let iso_utc = now_utc.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+
         let signals = self
             .gemini_response
             .signals
@@ -55,7 +58,8 @@ impl PredictionOutputWithTimeStampBuilder {
 
         RefinedPredictionOutput {
             timestamp: now_utc.timestamp_millis(),
-            local_datetime: iso_local,
+            current_datetime: iso_utc,
+            current_datetime_local: iso_local,
             summary: self.gemini_response.summary,
             signals,
             positions,
