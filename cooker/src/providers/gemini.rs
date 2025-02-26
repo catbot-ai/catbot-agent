@@ -31,7 +31,7 @@ pub struct GeminiResponse {
 pub struct Candidate {
     pub content: Content,
     pub finish_reason: String,
-    pub index: i32,
+    pub avg_logprobs: f64,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -57,10 +57,10 @@ pub struct UsageMetadata {
 
 #[derive(Debug, EnumString, AsRefStr, PartialEq, Eq)] // Use strum_macros
 pub enum GeminiModel {
-    #[strum(serialize = "gemini-2.0-flash-lite-preview-02-05")]
-    FlashLitePreview,
+    #[strum(serialize = "gemini-2.0-flash")]
+    Gemini2Flash,
     #[strum(serialize = "gemini-2.0-flash-thinking-exp-01-21")]
-    FlashThinkingExp,
+    Gemini2FlashThinkingExp,
 }
 
 pub trait AiProvider {
@@ -373,7 +373,7 @@ mod tests {
         // let order_amount_bids = to_json(&top_bids).to_string();
         // let order_amount_asks = to_json(&top_asks).to_string();
 
-        let model = GeminiModel::FlashLitePreview; // Choose a model
+        let model = GeminiModel::Gemini2Flash; // Choose a model
 
         let prompt = build_prompt(
             &model,

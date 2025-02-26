@@ -15,6 +15,12 @@ npx wrangler dev
 npx wrangler deploy
 ```
 
+## Secret
+
+```
+npx wrangler secret put
+```
+
 ## TODO
 
 - Get vibe from x.
