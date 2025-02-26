@@ -75,7 +75,7 @@ pub async fn predict_with_gemini(
     limit: i32,
     maybe_wallet_address: Option<String>,
 ) -> anyhow::Result<String, String> {
-    let gemini_model = GeminiModel::Gemini2Flash;
+    let gemini_model = GeminiModel::default();
     let provider = GeminiProvider::new_v1beta(&gemini_api_key);
 
     // Get position from wallet_address if has

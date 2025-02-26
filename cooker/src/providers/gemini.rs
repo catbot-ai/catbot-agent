@@ -55,8 +55,12 @@ pub struct UsageMetadata {
     pub total_token_count: i32,
 }
 
-#[derive(Debug, EnumString, AsRefStr, PartialEq, Eq)] // Use strum_macros
+#[derive(Default, Debug, EnumString, AsRefStr, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
 pub enum GeminiModel {
+    #[default]
+    #[strum(serialize = "gemini-2.0-flash-lite")]
+    Gemini2FlashLite,
     #[strum(serialize = "gemini-2.0-flash")]
     Gemini2Flash,
     #[strum(serialize = "gemini-2.0-flash-thinking-exp-01-21")]
@@ -373,7 +377,7 @@ mod tests {
         // let order_amount_bids = to_json(&top_bids).to_string();
         // let order_amount_asks = to_json(&top_asks).to_string();
 
-        let model = GeminiModel::Gemini2Flash; // Choose a model
+        let model = GeminiModel::default(); // Choose a model
 
         let prompt = build_prompt(
             &model,
