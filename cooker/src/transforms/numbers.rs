@@ -60,7 +60,11 @@ pub fn group_by_fractional_part(
 
 type PriceAmountVec = Vec<(f64, f64)>;
 
-pub fn top_n_bids_asks(grouped_data: &BTreeMap<String, f64>, n: usize) -> PriceAmountVec {
+pub fn top_n_bids_asks(
+    grouped_data: &BTreeMap<String, f64>,
+    n: usize,
+    is_asks: bool,
+) -> PriceAmountVec {
     let mut price_amount_vec: Vec<PriceAmount> = grouped_data
         .iter()
         .filter_map(|(price_str, amount)| {
@@ -83,11 +87,13 @@ pub fn top_n_bids_asks(grouped_data: &BTreeMap<String, f64>, n: usize) -> PriceA
         })
         .collect();
 
-    // Sort by cumulative_amount in descending order (highest volume first)
+    // Sort by price: ascending for asks, descending for bids
     price_amount_vec.sort_by(|a, b| {
-        b.cumulative_amount
-            .partial_cmp(&a.cumulative_amount)
-            .unwrap()
+        if is_asks {
+            a.price.partial_cmp(&b.price).unwrap() // Ascending for asks
+        } else {
+            b.price.partial_cmp(&a.price).unwrap() // Descending for bids
+        }
     });
 
     let top_n_prices_amounts: PriceAmountVec = price_amount_vec
@@ -129,28 +135,3 @@ struct PriceAmount {
     price: f64,
     cumulative_amount: f64,
 }
-
-// #[cfg(test)]
-// #[tokio::test]
-// async fn test_group_and_top_n() {
-//     // let orderbook_json = r#"{"lastUpdateId":18560646066,"bids":[["170.02000000","204.47900000"],["170.01000000","150.14900000"],["170.00000000","86.51000000"],["169.99000000","104.08900000"],["169.98000000","168.26600000"],["169.97000000","102.02100000"],["169.96000000","189.04000000"],["169.95000000","190.76100000"],["169.94000000","308.73800000"],["169.93000000","224.72800000"]],"asks":[["170.03000000","12.03800000"],["170.04000000","3.84100000"],["170.05000000","34.67200000"],["170.06000000","90.68600000"],["170.07000000","200.38200000"],["170.08000000","98.31900000"],["170.09000000","102.28700000"],["170.10000000","196.39600000"],["170.11000000","191.37100000"],["170.12000000","169.14700000"]]}"#;
-//     // let orderbook: OrderBook = serde_json::from_str(orderbook_json).unwrap();
-
-//     use crate::sources::binance::fetch_orderbook_depth;
-
-//     let orderbook = fetch_orderbook_depth("SOLUSDT", 1000).await.unwrap();
-
-//     let (grouped_bids, grouped_asks) = group_by_fractional_part(&orderbook, FractionalPart::One);
-
-//     let (top_asks, _) = top_n_support_resistance(&grouped_asks, 10);
-//     let (_, top_bids) = top_n_support_resistance(&grouped_bids, 10);
-
-//     let order_amount_bids = to_json(&top_bids).to_string();
-//     let order_amount_asks = to_json(&top_asks).to_string();
-
-//     println!("Asks :\n{:#}", order_amount_bids);
-//     println!("Bids :\n{:#}", order_amount_asks);
-
-//     // assert!(order_amount_bids_csv.contains("169.9,1287.643"));
-//     // assert!(order_amount_asks_csv.contains("170.0,542.225"));
-// }

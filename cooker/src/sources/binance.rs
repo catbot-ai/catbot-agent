@@ -4,16 +4,18 @@ use anyhow::{anyhow, Context, Result};
 use common::{Kline, OrderBook};
 use reqwest::Client;
 
+const BINANCE_API_URL: &str = "https://data-api.binance.vision/api/v3";
+
 pub async fn fetch_binance_kline_data<T>(symbol: &str, interval: &str, limit: i32) -> Result<Vec<T>>
 where
     T: serde::de::DeserializeOwned + Send + std::convert::From<common::Kline>,
 {
     let client = Client::new();
     // let current_time = Utc::now().timestamp_millis();
-    // https://adversely-amazing-wildcat.edgecompute.app/?url=https://api.binance.com/api/v3/uiKlines?limit=1&symbol=SOLUSDT&interval=1s
+    // https://adversely-amazing-wildcat.edgecompute.app/?url=https://data-api.binance.vision/api/v3/uiKlines?limit=1&symbol=SOLUSDT&interval=1s
 
     let url = format!(
-        "https://adversely-amazing-wildcat.edgecompute.app/?url=https://api.binance.com/api/v3/uiKlines?limit={}&symbol={}&interval={}",
+        "https://adversely-amazing-wildcat.edgecompute.app/?url={BINANCE_API_URL}/uiKlines?limit={}&symbol={}&interval={}",
         limit, symbol, interval
     );
 
@@ -44,7 +46,7 @@ pub async fn fetch_orderbook_depth(symbol: &str, limit: i32) -> Result<OrderBook
     let client = Client::new();
     // https://adversely-amazing-wildcat.edgecompute.app/?url=https://api.binance.com/api/v3/depth?symbol=SOLUSDT&limit=1
     let url = format!(
-        "https://adversely-amazing-wildcat.edgecompute.app/?url=https://api.binance.com/api/v3/depth?symbol={}&limit={}",
+        "https://adversely-amazing-wildcat.edgecompute.app/?url={BINANCE_API_URL}/depth?symbol={}&limit={}",
         symbol, limit
     );
     let response = client.get(&url).send().await?;

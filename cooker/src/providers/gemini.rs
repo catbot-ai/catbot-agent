@@ -199,8 +199,8 @@ pub fn build_prompt(
         group_by_fractional_part(&orderbook, FractionalPart::OneTenth);
 
     // Limit 10
-    let top_bids_price_amount = top_n_bids_asks(&grouped_one_bids, 5);
-    let top_asks_price_amount = top_n_bids_asks(&grouped_one_asks, 5);
+    let top_bids_price_amount = top_n_bids_asks(&grouped_one_bids, 5, false);
+    let top_asks_price_amount = top_n_bids_asks(&grouped_one_asks, 5, true);
 
     let grouped_bids_string = btree_map_to_csv(&grouped_one_bids);
     let grouped_asks_string = btree_map_to_csv(&grouped_one_asks);
@@ -243,7 +243,7 @@ pub fn build_prompt(
         positions_string.push_str("]\n");
         positions_string
     } else {
-        "[]".to_string()
+        "]\n".to_string()
     };
 
     let schema_instruction = format!(
@@ -252,10 +252,10 @@ pub fn build_prompt(
 - Perform technical analysis on price histories (5m, 1h, 4h, 1d) and order book volume.
 - Generate trading signals with at least 2.5% profit potential from `entry_price` to `target_price`, ensuring a minimum 2.5% return on `fund_usd`. E.g., for `fund_usd` ${fund_usd}, profit at least $${min_profit}.
 - Use 5m history for 1h signals (target_datetime within 1-2h) and 4h for 4h+ signals.
-- Quantify bid/ask volume in rationale and detail (e.g., "bids at 158 total 15438 SOL vs. asks at 160 total 17671 SOL").
+- Quantify bid/ask volume along with technical analysis in rationale and detail (e.g., "bids at 158 total 15438 SOL vs. asks at 160 total 17671 SOL").
 - Identify recurring price spikes in history and align target_datetime accordingly.
 - Match suggestion to signals; explain discrepancies if no signals.
-- Take a look for each positions and suggest rebalance if need.
+- Take a look for each positions if has and suggest rebalance if need.
 
 **JSON Output:**
 ```json
@@ -279,10 +279,10 @@ pub fn build_prompt(
         "confidence": number, // Confidence about this signal: 0.0-1.0
         "current_price": {current_price},
         "entry_price": number,
-        "target_price": number, // >2.5% above entry, beyond first resistance
-        "stop_loss": number,
+        "target_price": number, // >2.5% above entry, beyond first resistance or support
+        "stop_loss": number, // The value should less than profit.
         "timeframe": "string", // "1h" or "4h"
-        "entry_datetime": "string", // ISO time prediction when to trade.
+        "entry_datetime": "string", // ISO time prediction when to make a trade for this signal, Can be now or in the future date time.
         "target_datetime": "string", // ISO time prediction when to take profit.
         "rationale": "string" // E.g., "4h momentum up, bids outpace asks", "1h rejection at 170, high ask volume"
     }}]{maybe_position_schema}
@@ -348,37 +348,13 @@ mod tests {
             .parse::<f64>()
             .expect("Invalid close price");
 
-        let price_history_5m = "[]"; // Empty price history
+        let price_history_5m = "[]";
         let price_history_1h = "[]";
         let price_history_4h = "[]";
         let price_history_1d = "[]";
 
-        // let orderbook_json = r#"{"lastUpdateId":18560646066,
-        // "bids":[["170.02000000","204.47900000"],["170.01000000","150.14900000"],["170.00000000","86.51000000"],["169.99000000","104.08900000"],["169.98000000","168.26600000"],["169.97000000","102.02100000"],["169.96000000","189.04000000"],["169.95000000","190.76100000"],["168.94000000","308.73800000"],["167.93000000","224.72800000"]],
-        // "asks":[["170.03000000","12.03800000"],["170.04000000","3.84100000"],["170.05000000","34.67200000"],["170.06000000","90.68600000"],["170.07000000","200.38200000"],["170.08000000","98.31900000"],["170.09000000","102.28700000"],["170.10000000","196.39600000"],["171.11000000","191.37100000"],["172.12000000","169.14700000"]]}"#;
-        // let orderbook: OrderBook = serde_json::from_str(orderbook_json).unwrap();
-        // let (grouped_bids, grouped_asks) =
-        //     group_by_fractional_part(&orderbook, FractionalPart::OneTenth);
-
-        // let (_, top_bids) = top_n_support_resistance(&grouped_bids, 10);
-        // let (top_asks, _) = top_n_support_resistance(&grouped_asks, 10);
-
-        // let order_amount_bids_csv = to_csv(&top_bids);
-        // let order_amount_asks_csv = to_csv(&top_asks);
-
-        let orderbook = fetch_orderbook_depth("SOLUSDT", 1000).await.unwrap();
-        // let order_book_depth_string = serde_json::to_string_pretty(&orderbook)?;
-
-        // let (grouped_bids, grouped_asks) =
-        //     group_by_fractional_part(&orderbook, FractionalPart::One);
-
-        // let (_, top_bids) = top_n_support_resistance(&grouped_bids, 10);
-        // let (top_asks, _) = top_n_support_resistance(&grouped_asks, 10);
-
-        // let order_amount_bids = to_json(&top_bids).to_string();
-        // let order_amount_asks = to_json(&top_asks).to_string();
-
-        let model = GeminiModel::default(); // Choose a model
+        let orderbook = fetch_orderbook_depth("SOLUSDT", 100).await.unwrap();
+        let model = GeminiModel::default();
 
         let prompt = build_prompt(
             &model,
