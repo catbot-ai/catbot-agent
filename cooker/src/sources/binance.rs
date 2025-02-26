@@ -29,10 +29,6 @@ where
         return Err(anyhow!("Binance API error: {:?}", response.status()));
     }
 
-    if !response.status().is_success() {
-        return Err(anyhow!("Binance API error: {:?}", response.status()));
-    }
-
     let kline_data: Vec<Kline> = response
         .json()
         .await
