@@ -160,19 +160,20 @@ pub struct PricePredictionPoint5m {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct PredictedPosition {
-    pub side: Side,              // Position side: long or short
-    pub symbol: String,          // Trading pair symbol (e.g., "SOL")
-    pub entry_price: f64,        // Entry price of the position
-    pub leverage: f64,           // Leverage used for the position
-    pub liquidation_price: f64,  // Liquidation price of the position
-    pub pnl_after_fees_usd: f64, // Profit/loss after fees in USD
-    pub value: f64,              // Current position value in USD
-    pub target_price: f64,       // Current target price in USD
-    pub stop_loss: f64,          // Current stop loss in USD
+    pub side: Side,                // Position side: long or short
+    pub symbol: String,            // Trading pair symbol (e.g., "SOL")
+    pub entry_price: f64,          // Entry price of the position
+    pub leverage: f64,             // Leverage used for the position
+    pub liquidation_price: f64,    // Liquidation price of the position
+    pub pnl_after_fees_usd: f64,   // Profit/loss after fees in USD
+    pub value: f64,                // Current position value in USD
+    pub target_price: Option<f64>, // Optional current target price in USD
+    pub stop_loss: Option<f64>,    // Optional current stop loss in USD
     // From ai
-    pub suggested_target_price: Option<f64>, // Optional suggested target price
-    pub suggested_stop_loss: Option<f64>,    // Optional suggested stop loss
-    pub confidence: f64,                     // Confidence score between 0.0 and 1.0
+    pub new_target_price: Option<f64>, //  Optional suggested new target price
+    pub new_stop_loss: Option<f64>,    // Optional suggested new stop loss
+    pub suggestion: String, // Suggestion for this position. e.g. "Hold short position. Consider increasing position at 138.5 with stop loss at 140.5 and taking profit at 135."
+    pub confidence: f64,    // Confidence score between 0.0 and 1.0
 }
 
 impl From<PerpsPosition> for PredictedPosition {
@@ -188,8 +189,9 @@ impl From<PerpsPosition> for PredictedPosition {
             target_price: perps.target_price,
             stop_loss: perps.stop_loss,
             // From ai
-            suggested_target_price: None,
-            suggested_stop_loss: None,
+            new_target_price: None,
+            new_stop_loss: None,
+            suggestion: "n/a".to_string(),
             confidence: perps.confidence,
         }
     }

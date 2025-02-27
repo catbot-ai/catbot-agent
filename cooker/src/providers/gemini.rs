@@ -223,11 +223,12 @@ pub fn build_prompt(
         "liquidation_price": {},
         "pnl_after_fees_usd": {},
         "value": {},
-        "target_price": {},
-        "stop_loss": {},
+        "target_price": {:?},
+        "stop_loss": {:?},
 
-        "suggested_target_price": Option<number>,  // A suggested target price
-        "suggested_stop_loss": Option<number>,  // A suggested stop loss
+        "suggestion": string // Suggestion for this position. e.g. "Hold short position. Consider increasing position at 138.5 with stop loss at 140.5 and taking profit at 135."
+        "new_target_price": Option<number>,  // A suggested target price
+        "new_stop_loss": Option<number>,  // A suggested stop loss
         "confidence": number    // Confidence score between 0.0 and 1.0
     }}"#,
                     pos.side,
@@ -238,7 +239,7 @@ pub fn build_prompt(
                     pos.pnl_after_fees_usd,
                     pos.value,
                     pos.target_price,
-                    pos.stop_loss
+                    pos.stop_loss,
                 )
             })
             .collect();
