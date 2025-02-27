@@ -1,7 +1,6 @@
 use anyhow::bail;
 
-use common::PerpsPosition;
-use jup_sdk::perps::PerpsFetcher;
+use jup_sdk::perps::{PerpsFetcher, PerpsPosition};
 
 pub async fn get_preps_position(
     maybe_wallet_address: Option<String>,

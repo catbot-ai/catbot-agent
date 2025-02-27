@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 
 use chrono::Utc;
 use common::OrderBook;
-use common::PerpsPosition;
+use jup_sdk::perps::PerpsPosition;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
@@ -207,43 +207,48 @@ pub fn build_prompt(
 
     let min_profit = fund_usd * 0.025;
 
-    let maybe_position_schema = if let Some(preps_positions) = maybe_preps_positions {
-        let mut positions_string = String::from(
-            r#",
-"positions": ["#,
-        );
-        for preps_position in preps_positions.iter() {
-            let side = preps_position.side.to_string();
-            let symbol = preps_position.symbol.to_string();
-            let entry_price = preps_position.entry_price;
-            let leverage = preps_position.leverage;
-            let liquidation_price = preps_position.liquidation_price;
-            let pnl_after_fees_usd = preps_position.pnl_after_fees_usd;
-            let value = preps_position.value;
+    let maybe_preps_positions_string = format!("{:?}", maybe_preps_positions);
 
-            positions_string.push_str(&format!(r#"
-{{
-    "side": "{side}",
-    "symbol": "{symbol}",
-    "entry_price": {entry_price},
-    "leverage": {leverage},
-    "liquidation_price": {liquidation_price},
-    "pnl_after_fees_usd": {pnl_after_fees_usd},
-    "value": {value},
-    "confidence": number, // 0.0-1.0
-    "suggested_target_price": Option<number>, // Suggestion for new target_price (optional)
-    "suggested_stop_loss": Option<number>, // Suggestion for new stop_loss (optional)
-    "suggested_add_value": Option<number>  // Suggestion to add more value to position or not (optional)
-}},
-"#
-            ));
+    let maybe_position_schema = if let Some(preps_positions) = maybe_preps_positions {
+        let mut positions_string = String::from(r#","positions": ["#);
+        let positions: Vec<String> = preps_positions
+            .iter()
+            .map(|pos| {
+                format!(
+                    r#"{{
+        "side": "{}",
+        "symbol": "{}",
+        "entry_price": {},
+        "leverage": {},
+        "liquidation_price": {},
+        "pnl_after_fees_usd": {},
+        "value": {},
+        "target_price": {},
+        "stop_loss": {},
+
+        "suggested_target_price": Option<number>,  // A suggested target price
+        "suggested_stop_loss": Option<number>,  // A suggested stop loss
+        "confidence": number    // Confidence score between 0.0 and 1.0
+    }}"#,
+                    pos.side,
+                    pos.symbol,
+                    pos.entry_price,
+                    pos.leverage,
+                    pos.liquidation_price,
+                    pos.pnl_after_fees_usd,
+                    pos.value,
+                    pos.target_price,
+                    pos.stop_loss
+                )
+            })
+            .collect();
+        if !positions.is_empty() {
+            positions_string.push_str(&positions.join(","));
         }
-        // Remove latest ','
-        positions_string.pop();
         positions_string.push_str("]\n");
         positions_string
     } else {
-        "]\n".to_string()
+        String::from(r#","positions": []"#)
     };
 
     let schema_instruction = format!(
@@ -302,6 +307,9 @@ current_datetime={current_datetime}
 current_timestamp={current_timestamp}
 current_price={current_price}
 
+## Open positions:
+{maybe_preps_positions_string}
+
 ## Historical Data:
 
 **Price History (1d timeframe):**
@@ -333,7 +341,10 @@ mod tests {
     use super::*;
     use crate::{
         providers::gemini::GeminiModel,
-        sources::binance::{fetch_binance_kline_data, fetch_orderbook_depth},
+        sources::{
+            binance::{fetch_binance_kline_data, fetch_orderbook_depth},
+            jup::get_preps_position,
+        },
     };
     use anyhow::Result;
     use common::ConciseKline;
@@ -343,10 +354,7 @@ mod tests {
         let pair_symbol = "SOLUSDT";
 
         let kline_data_1s = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1s", 1).await?;
-        let current_price = kline_data_1s[0]
-            .close_price
-            .parse::<f64>()
-            .expect("Invalid close price");
+        let current_price = kline_data_1s[0].close;
 
         let price_history_5m = "[]";
         let price_history_1h = "[]";
@@ -355,6 +363,10 @@ mod tests {
 
         let orderbook = fetch_orderbook_depth("SOLUSDT", 100).await.unwrap();
         let model = GeminiModel::default();
+
+        dotenvy::from_filename(".env").expect("No .env file");
+        let wallet_address = std::env::var("WALLET_ADDRESS").ok();
+        let maybe_preps_positions = get_preps_position(wallet_address).await.unwrap();
 
         let prompt = build_prompt(
             &model,
@@ -366,7 +378,7 @@ mod tests {
             price_history_4h,
             price_history_1d,
             orderbook,
-            None,
+            maybe_preps_positions,
         );
 
         println!("{}", prompt);

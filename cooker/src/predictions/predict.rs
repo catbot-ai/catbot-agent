@@ -4,54 +4,45 @@ use crate::{
 };
 use chrono_tz::Asia::Tokyo;
 use common::{
-    ConciseKline, PerpsPosition, PredictionOutput, PredictionOutputWithTimeStampBuilder,
-    RefinedPredictionOutput,
+    ConciseKline, PredictionOutput, PredictionOutputWithTimeStampBuilder, RefinedPredictionOutput,
 };
 
 use anyhow::Result;
+use jup_sdk::perps::PerpsPosition;
 
 pub async fn get_prediction(
     pair_symbol: &str,
     provider: &GeminiProvider,
     model: &GeminiModel,
-    limit: i32,
+    orderbook_limit: i32,
     maybe_preps_positions: Option<Vec<PerpsPosition>>,
 ) -> Result<RefinedPredictionOutput> {
-    // println!("Fetching Kline data (1s)...");
     let kline_data_1s = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1s", 1).await?;
-    let current_price = kline_data_1s[0]
-        .close_price
-        .parse::<f64>()
-        .expect("Invalid close price");
-    // let price_history_1s_string = serde_json::to_string_pretty(&kline_data_1s)?;
-    // println!("price_history_1s_string:{}", price_history_1s_string);
+    let current_price = kline_data_1s[0].close;
 
-    // println!("Fetching Kline data (5m)...");
-    let kline_data_5m = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "5m", limit).await?;
+    // Fetch 5m kline data: 288 candles = 24h for 1-day short-term analysis
+    let kline_data_5m = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "5m", 288).await?;
     let price_history_5m_string = serde_json::to_string_pretty(&kline_data_5m)?;
-    // println!("price_history_5m_string:{}", price_history_5m_string);
 
-    // println!("Fetching Kline data (1h)...");
-    let kline_data_1h = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1h", limit).await?;
+    // Fetch 1h kline data: 168 candles = 7d for 1h signal context
+    let kline_data_1h = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1h", 168).await?;
     let price_history_1h_string = serde_json::to_string_pretty(&kline_data_1h)?;
 
-    // println!("Fetching Kline data (4h)...");
-    let kline_data_4h = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "4h", limit).await?;
+    // Fetch 4h kline data: 84 candles = 14d for 4h signals
+    let kline_data_4h = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "4h", 84).await?;
     let price_history_4h_string = serde_json::to_string_pretty(&kline_data_4h)?;
 
-    // println!("Fetching Kline data (1d)...");
-    let kline_data_1d = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1d", limit).await?;
+    // Fetch 1d kline data: 100 candles = ~3m for long-term context
+    let kline_data_1d = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1d", 100).await?;
     let price_history_1d_string = serde_json::to_string_pretty(&kline_data_1d)?;
 
-    // println!("Fetching Order Book Depth...");
-    let orderbook = fetch_orderbook_depth(pair_symbol, limit).await?;
-    // let order_book_depth_string = serde_json::to_string_pretty(&orderbook)?;
+    let orderbook = fetch_orderbook_depth(pair_symbol, orderbook_limit).await?;
 
     // --- Build Prompt for Gemini API ---
     println!("Building prompt for Gemini API...");
     let prompt = build_prompt(
         model,
-        100f64,
+        1000f64,
         pair_symbol,
         current_price,
         &price_history_5m_string,

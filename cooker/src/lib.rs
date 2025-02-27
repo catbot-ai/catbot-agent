@@ -20,7 +20,7 @@ struct SuggestQuery {
 async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
     console_error_panic_hook::set_once();
 
-    let limit: i32 = 600;
+    let orderbook_limit: i32 = 600;
     let gemini_api_key = env
         .secret("GEMINI_API_KEY")
         .expect("Expect GEMINI_API_KEY")
@@ -40,7 +40,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                 let output_result = predict_with_gemini(
                     gemini_api_key.to_owned(),
                     pair_symbol.to_owned(),
-                    limit,
+                    orderbook_limit,
                     maybe_wallet_address,
                 )
                 .await;
@@ -72,12 +72,13 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
 pub async fn predict_with_gemini(
     gemini_api_key: String,
     pair_symbol: String,
-    limit: i32,
+    orderbook_limit: i32,
     maybe_wallet_address: Option<String>,
 ) -> anyhow::Result<String, String> {
     let gemini_model = GeminiModel::default();
     let provider = GeminiProvider::new_v1beta(&gemini_api_key);
 
+    // TODO: Over token/timeout for this one
     // Get position from wallet_address if has
     let maybe_preps_positions = match get_preps_position(maybe_wallet_address).await {
         Ok(positions) => positions,
@@ -88,7 +89,7 @@ pub async fn predict_with_gemini(
         &pair_symbol,
         &provider,
         &gemini_model,
-        limit,
+        orderbook_limit,
         maybe_preps_positions,
     )
     .await;
@@ -114,8 +115,7 @@ mod tests {
         let symbol = "SOLUSDT";
         let wallet_address = std::env::var("WALLET_ADDRESS").ok();
 
-        let limit = 1;
-        let result = predict_with_gemini(gemini_api_key, symbol.to_string(), limit, wallet_address)
+        let result = predict_with_gemini(gemini_api_key, symbol.to_string(), 100, wallet_address)
             .await
             .unwrap();
         println!(

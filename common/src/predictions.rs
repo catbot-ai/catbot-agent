@@ -1,10 +1,8 @@
-use jup_sdk::perps::PositionData;
-use strum::Display;
+use jup_sdk::perps::{PerpsPosition, Side};
 
 use chrono::{DateTime, Utc};
 use chrono_tz::{Asia::Tokyo, Tz};
 use serde::{Deserialize, Serialize};
-use strum::EnumString;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -159,76 +157,22 @@ pub struct PricePredictionPoint5m {
     pub second_support: f64,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, EnumString, Display, PartialEq)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum Side {
-    Long,
-    Short,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
-pub struct PerpsPosition {
+pub struct PredictedPosition {
     pub side: Side,              // Position side: long or short
     pub symbol: String,          // Trading pair symbol (e.g., "SOL")
-    pub confidence: f64,         // Confidence score between 0.0 and 1.0
     pub entry_price: f64,        // Entry price of the position
     pub leverage: f64,           // Leverage used for the position
     pub liquidation_price: f64,  // Liquidation price of the position
     pub pnl_after_fees_usd: f64, // Profit/loss after fees in USD
     pub value: f64,              // Current position value in USD
-}
-
-impl From<PositionData> for PerpsPosition {
-    fn from(position: PositionData) -> Self {
-        let side = match position.side {
-            jup_sdk::perps::Side::Long => Side::Long,
-            jup_sdk::perps::Side::Short => Side::Short,
-        };
-        // Extract symbol from market_mint or use a default if parsing fails
-        let symbol = position
-            .market_mint
-            .split("USDT")
-            .next()
-            .unwrap_or("UNKNOWN")
-            .to_string();
-
-        // Parse string fields into f64, defaulting to 0.0 or 1.0 if parsing fails
-        let entry_price = position.entry_price.parse::<f64>().unwrap_or(0.0);
-        let leverage = position.leverage.parse::<f64>().unwrap_or(1.0); // Default to 1x if invalid
-        let liquidation_price = position.liquidation_price.parse::<f64>().unwrap_or(0.0);
-        let confidence = 0.5; // Default value (could be computed elsewhere)
-        let pnl_after_fees_usd = position.pnl_after_fees_usd.parse::<f64>().unwrap_or(0.0);
-        let value = position.value.parse::<f64>().unwrap_or(0.0);
-
-        PerpsPosition {
-            side,
-            symbol,
-            confidence,
-            entry_price,
-            leverage,
-            liquidation_price,
-            pnl_after_fees_usd,
-            value,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "snake_case")]
-pub struct PredictedPosition {
-    pub side: Side,                          // Position side: long or short
-    pub symbol: String,                      // Trading pair symbol (e.g., "SOL")
-    pub confidence: f64,                     // Confidence score between 0.0 and 1.0
-    pub entry_price: f64,                    // Entry price of the position
-    pub leverage: f64,                       // Leverage used for the position
-    pub liquidation_price: f64,              // Liquidation price of the position
-    pub pnl_after_fees_usd: f64,             // Profit/loss after fees in USD
-    pub value: f64,                          // Current position value in USD
+    pub target_price: f64,       // Current target price in USD
+    pub stop_loss: f64,          // Current stop loss in USD
+    // From ai
     pub suggested_target_price: Option<f64>, // Optional suggested target price
     pub suggested_stop_loss: Option<f64>,    // Optional suggested stop loss
-    pub suggested_add_value: Option<f64>,    // Optional suggestion to add value
+    pub confidence: f64,                     // Confidence score between 0.0 and 1.0
 }
 
 impl From<PerpsPosition> for PredictedPosition {
@@ -236,15 +180,17 @@ impl From<PerpsPosition> for PredictedPosition {
         PredictedPosition {
             side: perps.side,
             symbol: perps.symbol,
-            confidence: perps.confidence,
             entry_price: perps.entry_price,
             leverage: perps.leverage,
             liquidation_price: perps.liquidation_price,
             pnl_after_fees_usd: perps.pnl_after_fees_usd,
             value: perps.value,
-            suggested_target_price: None, // No equivalent in PerpsPosition
-            suggested_stop_loss: None,    // No equivalent in PerpsPosition
-            suggested_add_value: None,    // No equivalent in PerpsPosition
+            target_price: perps.target_price,
+            stop_loss: perps.stop_loss,
+            // From ai
+            suggested_target_price: None,
+            suggested_stop_loss: None,
+            confidence: perps.confidence,
         }
     }
 }
