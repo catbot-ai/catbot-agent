@@ -18,7 +18,7 @@ npx wrangler deploy
 ## Secret
 
 ```
-npx wrangler secret put
+npx wrangler secret put GEMINI_API_KEY
 ```
 
 ## TODO
