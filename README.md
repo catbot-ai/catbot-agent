@@ -1,5 +1,7 @@
 # catbot-agent
 
+![image](https://github.com/user-attachments/assets/5349d160-1519-4504-be69-02c0505fe5cc)
+
 Let's llm do the things!
 
 ## Dev
