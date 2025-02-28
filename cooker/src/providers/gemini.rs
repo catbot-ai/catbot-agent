@@ -217,7 +217,8 @@ pub fn build_prompt(
                 format!(
                     r#"{{
         "side": "{}",
-        "symbol": "{}",
+        "market_mint": "{}",
+        "collateral_mint": "{}",
         "entry_price": {},
         "leverage": {},
         "liquidation_price": {},
@@ -232,7 +233,8 @@ pub fn build_prompt(
         "confidence": number    // Confidence score between 0.0 and 1.0
     }}"#,
                     pos.side,
-                    pos.symbol,
+                    pos.market_mint,
+                    pos.collateral_mint,
                     pos.entry_price,
                     pos.leverage,
                     pos.liquidation_price,

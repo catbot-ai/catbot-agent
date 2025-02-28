@@ -161,7 +161,8 @@ pub struct PricePredictionPoint5m {
 #[serde(rename_all = "snake_case")]
 pub struct PredictedPosition {
     pub side: Side,                // Position side: long or short
-    pub symbol: String,            // Trading pair symbol (e.g., "SOL")
+    pub market_mint: String,       // So11111111111111111111111111111111111111112
+    pub collateral_mint: String,   // EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
     pub entry_price: f64,          // Entry price of the position
     pub leverage: f64,             // Leverage used for the position
     pub liquidation_price: f64,    // Liquidation price of the position
@@ -179,8 +180,15 @@ pub struct PredictedPosition {
 impl From<PerpsPosition> for PredictedPosition {
     fn from(perps: PerpsPosition) -> Self {
         PredictedPosition {
+            // From ai
+            new_target_price: None,
+            new_stop_loss: None,
+            suggestion: "n/a".to_string(),
+            confidence: perps.confidence,
+            // Base
             side: perps.side,
-            symbol: perps.symbol,
+            market_mint: perps.market_mint,
+            collateral_mint: perps.collateral_mint,
             entry_price: perps.entry_price,
             leverage: perps.leverage,
             liquidation_price: perps.liquidation_price,
@@ -188,11 +196,6 @@ impl From<PerpsPosition> for PredictedPosition {
             value: perps.value,
             target_price: perps.target_price,
             stop_loss: perps.stop_loss,
-            // From ai
-            new_target_price: None,
-            new_stop_loss: None,
-            suggestion: "n/a".to_string(),
-            confidence: perps.confidence,
         }
     }
 }
