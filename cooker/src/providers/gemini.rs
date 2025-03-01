@@ -176,16 +176,49 @@ impl AiProvider for GeminiProvider {
     }
 }
 
+#[derive(Serialize, Default, Clone)]
+pub struct PriceHistory {
+    pub price_history_1m: Option<String>, // 1-minute candlestick data (optional)
+    pub price_history_5m: Option<String>, // 5-minute candlestick data (optional)
+    pub price_history_1h: Option<String>, // 1-hour candlestick data (optional)
+    pub price_history_4h: Option<String>, // 4-hour candlestick data (optional)
+    pub price_history_1d: Option<String>, // 1-day candlestick data (optional)
+}
+
+impl PriceHistory {
+    /// Generates a formatted string for price history data, including only the timeframes that are present.
+    pub fn to_formatted_string(&self) -> String {
+        let mut price_history_string = String::new();
+
+        macro_rules! push_history_if_some {
+            ($field:ident, $timeframe:expr) => {
+                if let Some(data) = &self.$field {
+                    price_history_string.push_str(&format!(
+                        "**Price History ({} timeframe):**\n{}\n",
+                        $timeframe, data
+                    ));
+                }
+            };
+        }
+
+        // Use the macro to reduce repetition
+        push_history_if_some!(price_history_1m, "1m");
+        push_history_if_some!(price_history_5m, "5m");
+        push_history_if_some!(price_history_1h, "1h");
+        push_history_if_some!(price_history_4h, "4h");
+        push_history_if_some!(price_history_1d, "1d");
+
+        price_history_string
+    }
+}
+
 #[allow(clippy::too_many_arguments, unused)]
 pub fn build_prompt(
     model: &GeminiModel,
     fund_usd: f64,
     pair_symbol: &str,
     current_price: f64,
-    price_history_5m: &str,
-    price_history_1h: &str,
-    price_history_4h: &str,
-    price_history_1d: &str,
+    price_history: Option<PriceHistory>,
     orderbook: OrderBook,
     maybe_preps_positions: Option<Vec<PerpsPosition>>,
 ) -> String {
@@ -207,8 +240,8 @@ pub fn build_prompt(
 
     let min_profit = fund_usd * 0.025;
 
+    // Positions
     let maybe_preps_positions_string = format!("{:?}", maybe_preps_positions);
-
     let maybe_position_schema = if let Some(preps_positions) = maybe_preps_positions {
         let mut positions_string = String::from(r#","positions": ["#);
         let positions: Vec<String> = preps_positions
@@ -254,16 +287,37 @@ pub fn build_prompt(
         String::from(r#","positions": []"#)
     };
 
+    // Instructions
     let schema_instruction = format!(
         r#"**Instructions:**
 
-- Perform technical analysis on price histories (5m, 1h, 4h, 1d) and order book volume.
-- Generate trading signals with at least 2.5% profit potential from `entry_price` to `target_price`, ensuring a minimum 2.5% return on `fund_usd`. E.g., for `fund_usd` ${fund_usd}, profit at least $${min_profit}.
-- Use 5m history for 1h signals (target_datetime within 1-2h) and 4h for 4h+ signals.
-- Quantify bid/ask volume along with technical analysis in rationale and detail (e.g., "bids at 158 total 15438 SOL vs. asks at 160 total 17671 SOL").
-- Identify recurring price spikes in history and align target_datetime accordingly.
-- Match suggestion to signals; explain discrepancies if no signals.
-- Take a look for each positions if has and suggest rebalance if need.
+**Instructions:**
+
+- Perform technical analysis on available price histories (1m, 5m, 1h, 4h, 1d) and order book volume, prioritizing 1m, 5m, and 1h for intraday signals and using 4h/1d for trend context.
+- For 1h signals (target_datetime within 1–2 hours), prioritize 1m, 5m, and 1h price history to detect short-term momentum shifts. Use 4h and 1d data only to confirm long-term trends, never to override short-term bullish or bearish signals unless supported by volume, price action, and order book data.
+- Detect potential reversals and momentum shifts using these indicators, focusing on short-term data (1m, 5m, 1h):
+  - Bullish reversals: Oversold Stochastic RSI (<20), price near lower Bollinger Band, or strong support (e.g., $125.55, $144.5) with rising bid volume and price-volume divergence.
+  - Bearish reversals: Overbought Stochastic RSI (>80), price near upper Bollinger Band, or strong resistance (e.g., $147.5, $148) with rising ask volume and price rejection.
+  - Suggest long positions with high confidence (0.7–1.0) when short-term data shows clear bullish patterns (e.g., uptrend from $125.55 to $147.48), and short positions with high confidence when bearish patterns dominate (e.g., rejection at $148), even if 4h/1d data suggests a different trend.
+- Analyze bid/ask volume dynamically across all timeframes (1m, 5m, 1h, 4h, 1d), order book, and recent price action:
+  - Prioritize short-term bullish spikes (bids > asks, e.g., bids at $147 totaling 18,594.762 SOL) or bullish price-volume divergences for 1h long signals.
+  - Flag bearish signals when asks significantly outpace bids at resistance (e.g., asks at $148 totaling 13,054.754 SOL) or when selling volume spikes on price rejection.
+- Identify recurring price patterns in price history (e.g., spikes from $125.55 to $147.48, support at $144.5, resistance at $148) and align entry_price, target_price, and stop_loss with these patterns to optimize profit potential and minimize risk.
+- Calculate confidence scores (0.0–1.0) based on timeframe alignment:
+  - Suggest longs or shorts with moderate confidence (0.6–0.7) if 1m/5m/1h data conflicts with 4h/1d trends, but always prioritize short-term signals unless long-term trends are strongly confirmed by volume, price action, and order book data.
+  - Lower confidence (e.g., <0.6) if volume contradicts price movement (e.g., bullish price at $147.48 with high ask volume at $148).
+- For existing positions, suggest one of the following actions based on current momentum, price action, and volume, ensuring logical risk management:
+  - 'Hold': If short-term momentum aligns with the position’s side (e.g., bearish for shorts at $147.48, bullish for longs at $144.5).
+  - 'Increase': If short-term signals (1m, 5m, 1h) strongly confirm the position’s direction and volume supports it (e.g., rising asks for shorts, rising bids for longs).
+  - 'Close': If short-term signals contradict the position’s side (e.g., bullish signals for a short at $147.48) or if the position nears its target or stop loss.
+  - 'Reverse': If short-term signals strongly oppose the position’s side and indicate a clear reversal (e.g., bullish reversal at $144.5 for a short, bearish reversal at $148 for a long), suggest closing the current position and opening an opposite position with new entry_price, target_price, and stop_loss.
+  - Ensure stop_loss values are logically set:
+    - For longs, set stop_loss below the entry_price or nearest support (e.g., $144 for a long at $147.48).
+    - For shorts, set stop_loss above the entry_price or nearest resistance (e.g., $148–$149 for a short at $147.48, not above the current price like $150).
+- Generate trading signals with at least 2.5% profit potential from entry_price to target_price, ensuring:
+  - Target_price exceeds the first significant resistance (for longs, e.g., $151 beyond $148) or falls below the first significant support (for shorts, e.g., $143.5 below $147.48).
+  - Stop_loss limits risk to less than the potential profit (e.g., stop_loss of $148.7 for a short at $147.5 targeting $143.5 ensures risk < 2.5% profit).
+- Be concise, think step by step, and explicitly explain any discrepancies between signals, positions, and timeframes in the rationale to prevent confusion (e.g., clarify why a short is maintained at $147.48 despite neutral 4h/1d trends or rising bids).
 
 **JSON Output:**
 ```json
@@ -296,10 +350,14 @@ pub fn build_prompt(
     }}]{maybe_position_schema}
 }}
 ```
-Be concise, Think step by step.
 "#
     );
 
+    let price_history_string = price_history
+        .as_ref()
+        .map_or(String::new(), |history| history.to_formatted_string());
+
+    // Consolidate
     format!(
         r#"Analyze {symbol} for price movement in the next 4 hours using:
 
@@ -314,18 +372,7 @@ current_price={current_price}
 {maybe_preps_positions_string}
 
 ## Historical Data:
-
-**Price History (1d timeframe):**
-{price_history_1d}
-
-**Price History (4h timeframe):**
-{price_history_4h}
-
-**Price History (1h timeframe):**
-{price_history_1h}
-
-**Price History (5m timeframe):**
-{price_history_5m}
+{price_history_string}
 
 ## Consolidated Data:
 
@@ -351,39 +398,55 @@ mod tests {
     };
     use anyhow::Result;
     use common::ConciseKline;
+    use std::env;
+    use tokio;
 
     #[tokio::test]
-    async fn test_build_prompt_stage1_empty_price_history() -> Result<()> {
+    async fn test_build_prompt_stage1_empty_price_history() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // Define pair symbol
         let pair_symbol = "SOLUSDT";
 
+        // Fetch 1-second kline data to get current price
         let kline_data_1s = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1s", 1).await?;
         let current_price = kline_data_1s[0].close;
 
-        let price_history_5m = "[]";
-        let price_history_1h = "[]";
-        let price_history_4h = "[]";
-        let price_history_1d = "[]";
+        let kline_data_1h =
+            fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1h", 168).await?;
+        let price_history_1h_string = serde_json::to_string_pretty(&kline_data_1h)?;
 
-        let orderbook = fetch_orderbook_depth("SOLUSDT", 100).await.unwrap();
+        // Create an empty PriceHistory struct (all fields None)
+        let price_history = PriceHistory {
+            price_history_1m: None,
+            price_history_5m: Some("[]".to_string()),
+            price_history_1h: Some(price_history_1h_string),
+            price_history_4h: Some("[]".to_string()),
+            price_history_1d: Some("[]".to_string()),
+        };
+
+        // Fetch orderbook (assuming fetch_orderbook_depth returns OrderBook)
+        let orderbook = fetch_orderbook_depth("SOLUSDT", 100).await?;
+
+        // Create a default GeminiModel
         let model = GeminiModel::default();
 
-        dotenvy::from_filename(".env").expect("No .env file");
-        let wallet_address = std::env::var("WALLET_ADDRESS").ok();
-        let maybe_preps_positions = get_preps_position(wallet_address).await.unwrap();
+        // Load environment variables from .env file (optional, handle errors gracefully)
+        dotenvy::from_filename(".env").ok(); // Use .ok() to avoid panic if .env is missing
+        let wallet_address = env::var("WALLET_ADDRESS").ok(); // Use .ok() to handle missing env var
+        let maybe_preps_positions = get_preps_position(wallet_address).await?;
 
+        // Call the refactored build_prompt with Option<PriceHistory>
         let prompt = build_prompt(
-            &model,
-            1000f64,
-            pair_symbol,
-            current_price,
-            price_history_5m,
-            price_history_1h,
-            price_history_4h,
-            price_history_1d,
-            orderbook,
-            maybe_preps_positions,
+            &model,                // Reference to GeminiModel
+            1000f64,               // fund_usd
+            pair_symbol,           // pair_symbol (e.g., "SOLUSDT")
+            current_price,         // current_price
+            Some(price_history),   // Option<PriceHistory> with empty data
+            orderbook,             // OrderBook
+            maybe_preps_positions, // Option<Vec<PerpsPosition>>
         );
 
+        // Print the prompt for verification
         println!("{}", prompt);
 
         Ok(())

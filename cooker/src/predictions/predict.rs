@@ -1,5 +1,5 @@
 use crate::{
-    providers::gemini::{build_prompt, AiProvider, GeminiModel, GeminiProvider},
+    providers::gemini::{build_prompt, AiProvider, GeminiModel, GeminiProvider, PriceHistory},
     sources::binance::{fetch_binance_kline_data, fetch_orderbook_depth},
 };
 use chrono_tz::Asia::Tokyo;
@@ -20,6 +20,10 @@ pub async fn get_prediction(
     let kline_data_1s = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1s", 1).await?;
     let current_price = kline_data_1s[0].close;
 
+    // Fetch 1m kline data: 500 candles = ~8.3 hours
+    let kline_data_1m = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1m", 500).await?;
+    let price_history_1m_string = serde_json::to_string_pretty(&kline_data_1m)?;
+
     // Fetch 5m kline data: 288 candles = 24h for 1-day short-term analysis
     let kline_data_5m = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "5m", 288).await?;
     let price_history_5m_string = serde_json::to_string_pretty(&kline_data_5m)?;
@@ -36,6 +40,14 @@ pub async fn get_prediction(
     let kline_data_1d = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1d", 100).await?;
     let price_history_1d_string = serde_json::to_string_pretty(&kline_data_1d)?;
 
+    let price_history = PriceHistory {
+        price_history_1m: Some(price_history_1m_string),
+        price_history_5m: Some(price_history_5m_string),
+        price_history_1h: Some(price_history_1h_string),
+        price_history_4h: Some(price_history_4h_string),
+        price_history_1d: Some(price_history_1d_string),
+    };
+
     let orderbook = fetch_orderbook_depth(pair_symbol, orderbook_limit).await?;
 
     // --- Build Prompt for Gemini API ---
@@ -45,10 +57,7 @@ pub async fn get_prediction(
         1000f64,
         pair_symbol,
         current_price,
-        &price_history_5m_string,
-        &price_history_1h_string,
-        &price_history_4h_string,
-        &price_history_1d_string,
+        Some(price_history),
         orderbook,
         maybe_preps_positions,
     );
