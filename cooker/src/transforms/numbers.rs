@@ -1,6 +1,4 @@
 use common::OrderBook;
-use currency_rs::{Currency, CurrencyOpts};
-use serde::Serialize;
 use std::collections::BTreeMap;
 use strum::{Display, EnumString};
 
@@ -58,28 +56,29 @@ pub fn group_by_fractional_part(
     (grouped_bids, grouped_asks)
 }
 
-type PriceAmountVec = Vec<(f64, f64)>;
+struct PriceAmount {
+    price: f64,
+    cumulative_amount: f64,
+}
 
 pub fn top_n_bids_asks(
     grouped_data: &BTreeMap<String, f64>,
     n: usize,
     is_asks: bool,
-) -> PriceAmountVec {
+) -> Vec<Vec<f64>> {
     let mut price_amount_vec: Vec<PriceAmount> = grouped_data
         .iter()
         .filter_map(|(price_str, amount)| {
             if let Ok(price) = price_str.parse::<f64>() {
-                Some(PriceAmount {
-                    price,
-                    cumulative_amount: Currency::new_string(
-                        &amount.to_string(),
-                        Some(CurrencyOpts::new().set_symbol("").set_precision(3)),
-                    )
-                    .unwrap()
-                    .to_string()
-                    .parse::<f64>()
-                    .unwrap(),
-                })
+                if let Ok(amount_f64) = amount.to_string().parse::<f64>() {
+                    Some(PriceAmount {
+                        price,
+                        cumulative_amount: amount_f64,
+                    })
+                } else {
+                    eprintln!("Error parsing amount: {}", amount);
+                    None
+                }
             } else {
                 eprintln!("Error parsing price: {}", price_str);
                 None
@@ -96,23 +95,13 @@ pub fn top_n_bids_asks(
         }
     });
 
-    let top_n_prices_amounts: PriceAmountVec = price_amount_vec
+    let top_n_prices_amounts: Vec<Vec<f64>> = price_amount_vec
         .iter()
         .take(n)
-        .map(|pa| (pa.price, pa.cumulative_amount))
+        .map(|pa| vec![pa.price, pa.cumulative_amount])
         .collect();
 
     top_n_prices_amounts
-}
-
-#[allow(unused)]
-pub fn extract_prices_f64(price_amount_vec: &PriceAmountVec, n: usize) -> [f64; 3] {
-    let mut prices_array = [0.0; 3];
-
-    for (i, price_amount) in price_amount_vec.iter().take(n).enumerate() {
-        prices_array[i] = price_amount.0;
-    }
-    prices_array
 }
 
 pub fn btree_map_to_csv(grouped_data: &BTreeMap<String, f64>) -> String {
@@ -128,10 +117,4 @@ pub fn btree_map_to_csv(grouped_data: &BTreeMap<String, f64>) -> String {
         }
     }
     csv_string
-}
-
-#[derive(Serialize)]
-struct PriceAmount {
-    price: f64,
-    cumulative_amount: f64,
 }

@@ -222,8 +222,10 @@ pub fn build_prompt(
     orderbook: OrderBook,
     maybe_preps_positions: Option<Vec<PerpsPosition>>,
 ) -> String {
-    let current_datetime = Utc::now();
-    let current_timestamp = Utc::now().timestamp_millis();
+    let now_utc = Utc::now();
+    let current_datetime = now_utc.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let current_timestamp = now_utc.timestamp_millis();
+
     let symbol = pair_symbol.split("USDT").next().unwrap_or(pair_symbol);
 
     let (grouped_one_bids, grouped_one_asks) =
@@ -411,8 +413,7 @@ mod tests {
         let kline_data_1s = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1s", 1).await?;
         let current_price = kline_data_1s[0].close;
 
-        let kline_data_1h =
-            fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1h", 168).await?;
+        let kline_data_1h = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1h", 1).await?;
         let price_history_1h_string = serde_json::to_string_pretty(&kline_data_1h)?;
 
         // Create an empty PriceHistory struct (all fields None)

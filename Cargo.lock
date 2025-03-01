@@ -320,7 +320,6 @@ dependencies = [
  "chrono-tz",
  "common",
  "console_error_panic_hook",
- "currency_rs",
  "dotenvy",
  "env_logger",
  "jup-sdk",
@@ -919,6 +918,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "currency_rs",
+ "once_cell",
  "reqwest",
  "serde",
  "serde_json",

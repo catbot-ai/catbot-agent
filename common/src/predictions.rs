@@ -2,7 +2,7 @@ use jup_sdk::perps::{PerpsPosition, Side};
 
 use chrono::{DateTime, Utc};
 use chrono_tz::{Asia::Tokyo, Tz};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -39,7 +39,7 @@ impl PredictionOutputWithTimeStampBuilder {
     }
 
     pub fn build(self) -> RefinedPredictionOutput {
-        let now_utc: DateTime<Utc> = Utc::now();
+        let now_utc = Utc::now();
         let now_local = now_utc.with_timezone(&self.timezone);
         let iso_local = now_local.to_rfc3339();
 
@@ -74,11 +74,21 @@ pub struct Summary {
     pub lower_bound: f64,
     pub technical_resistance_4h: f64,
     pub technical_support_4h: f64,
-    pub top_bids_price_amount: Vec<(f64, f64)>,
-    pub top_asks_price_amount: Vec<(f64, f64)>,
+    #[serde(deserialize_with = "deserialize_vec_tuples")]
+    pub top_bids_price_amount: Vec<Vec<f64>>,
+    #[serde(deserialize_with = "deserialize_vec_tuples")]
+    pub top_asks_price_amount: Vec<Vec<f64>>,
     pub detail: String,
     pub suggestion: String,
     pub vibe: Option<String>,
+}
+
+fn deserialize_vec_tuples<'de, D>(deserializer: D) -> Result<Vec<Vec<f64>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let tuples: Vec<(f64, f64)> = Deserialize::deserialize(deserializer)?;
+    Ok(tuples.into_iter().map(|(a, b)| vec![a, b]).collect())
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -117,6 +127,7 @@ pub struct LongShortSignal {
 
 impl From<PredictedLongShortSignal> for LongShortSignal {
     fn from(signal: PredictedLongShortSignal) -> Self {
+        println!("{signal:#?}");
         let utc_datetime = DateTime::parse_from_rfc3339(&signal.target_datetime)
             .expect("Failed to parse datetime");
         let tokyo_datetime: DateTime<Tz> = utc_datetime.with_timezone(&Tokyo);
