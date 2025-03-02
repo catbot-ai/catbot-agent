@@ -28,6 +28,27 @@ npx wrangler secret put GEMINI_API_KEY
 - Get vibe from x.
 - Post to discord
 - Post to x
+- Get graph with indicator
+
+  ```
+  curl -X 'POST' 'https://api.cloudflare.com/client/v4/accounts/7e11517c4dd4f6e9cede7da9b60d66eb/browser-rendering/screenshot' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer KEY' \
+  -d '{
+  "url": "https://www.binance.com/en/trade/SOL_USDT",
+      "viewport": {
+      "width": 1640,
+      "height": 960
+      },
+      "gotoOptions": {
+      "waitUntil": "networkidle2",
+      "timeout": 30000
+      }
+  }' \
+  --output "screenshot.webp"
+  ```
+
+```
 
 ## Features
 
@@ -53,3 +74,4 @@ npx wrangler secret put GEMINI_API_KEY
 - Unstake took 7 days.
 - Staker get role in Discord.
 - Gold member get access to the bot.
+```
