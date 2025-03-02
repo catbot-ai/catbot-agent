@@ -320,6 +320,7 @@ pub fn build_prompt(
   - Target_price exceeds the first significant resistance (for longs, e.g., $151 beyond $148) or falls below the first significant support (for shorts, e.g., $143.5 below $147.48).
   - Stop_loss limits risk to less than the potential profit (e.g., stop_loss of $148.7 for a short at $147.5 targeting $143.5 ensures risk < 2.5% profit).
 - Be concise, think step by step, and explicitly explain any discrepancies between signals, positions, and timeframes in the rationale to prevent confusion (e.g., clarify why a short is maintained at $147.48 despite neutral 4h/1d trends or rising bids).
+- Output as JSON below, do ensure it's a valid JSON.
 
 **JSON Output:**
 ```json
