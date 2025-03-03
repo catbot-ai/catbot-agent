@@ -1,4 +1,5 @@
 use anyhow::{Result, *};
+use regex::Regex;
 use serde::de::DeserializeOwned;
 use std::result::Result::Ok;
 
@@ -8,34 +9,24 @@ pub fn try_parse_json_with_trailing_comma_removal<T: DeserializeOwned>(
     match serde_json::from_str(json_string) {
         Ok(parsed) => Ok(parsed),
         Err(original_error) => {
-            // Attempt to remove trailing commas and try parsing again
-            let cleaned_json_string = fix_trailing_comma(json_string);
-            match serde_json::from_str(&cleaned_json_string) {
-                Ok(parsed) => Ok(parsed),
-                Err(_) => Err(anyhow!(original_error)),
-            }
+            let cleaned_json_string = fix_trailing_commas(json_string);
+            serde_json::from_str(&cleaned_json_string).map_err(|e| {
+                anyhow!(
+                    "Failed to parse cleaned JSON: {}. Original error: {}",
+                    e,
+                    original_error
+                )
+            })
         }
     }
 }
 
-fn fix_trailing_comma(json_str: &str) -> String {
-    let mut fixed_json = json_str.to_string();
-    let positions_start = fixed_json.find("\"positions\": [");
+fn fix_trailing_commas(json_str: &str) -> String {
+    // Regex pattern to match a comma followed by optional whitespace and a closing bracket/brace
+    let re = Regex::new(r#",(\s*[\]}])"#).unwrap();
 
-    if let Some(start) = positions_start {
-        let positions_end = fixed_json[start..].find("]");
-
-        if let Some(end_offset) = positions_end {
-            let end = start + end_offset;
-            let last_comma = fixed_json[start..end].rfind(",");
-
-            if let Some(comma_index) = last_comma {
-                let absolute_comma_index = start + comma_index;
-                fixed_json.replace_range(absolute_comma_index..absolute_comma_index + 1, "");
-            }
-        }
-    }
-    fixed_json
+    // Replace ",]" or ",}" (with optional whitespace) with just "]" or "}"
+    re.replace_all(json_str, "$1").to_string()
 }
 
 #[test]
@@ -80,7 +71,7 @@ fn test_fix_trailing_comma_and_deserialize() {
                 "timeframe": "1h",
                 "entry_datetime": "2025-03-03T13:16:33Z",
                 "target_datetime": "2025-03-03T16:16:33Z",
-                "rationale": "1m and 5m price is moving down after breaking support. The 1h chart volume has been increasing."
+                "rationale": "1m and 5m price is moving down after breaking support. The 1h chart volume has been increasing.",
             }
         ],
         "positions": [
@@ -103,7 +94,7 @@ fn test_fix_trailing_comma_and_deserialize() {
         ]
     }"#;
 
-    let fixed_json = fix_trailing_comma(raw_json);
+    let fixed_json = fix_trailing_commas(raw_json);
 
     let result = serde_json::from_str::<PredictionOutput>(&fixed_json);
     assert!(result.is_ok());

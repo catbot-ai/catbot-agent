@@ -324,6 +324,7 @@ dependencies = [
  "env_logger",
  "jup-sdk",
  "log",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
