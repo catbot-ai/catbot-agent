@@ -16,6 +16,8 @@ use crate::transforms::numbers::group_by_fractional_part;
 use crate::transforms::numbers::top_n_bids_asks;
 use crate::transforms::numbers::FractionalPart;
 
+use super::cleaner::try_parse_json_with_trailing_comma_removal;
+
 // --- Gemini Model Enum ---
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -158,13 +160,15 @@ impl AiProvider for GeminiProvider {
                 .and_then(|candidate| candidate.content.parts.first())
                 .map(|part| part.text.clone())
                 .ok_or_else(|| anyhow!("No text output found in Gemini response"))?;
-            let parsed_output: T = serde_json::from_str(&output_string).map_err(|error| {
-                anyhow!(
-                    "Raw Gemini API Response: {}, error: {}",
-                    &raw_text_response,
-                    error
-                )
-            })?;
+
+            let parsed_output: T = try_parse_json_with_trailing_comma_removal(&output_string)
+                .map_err(|error| {
+                    anyhow!(
+                        "Raw Gemini API Response: {}, error: {}",
+                        &raw_text_response,
+                        error
+                    )
+                })?;
 
             Ok(parsed_output)
         } else {
@@ -320,7 +324,7 @@ pub fn build_prompt(
   - Target_price exceeds the first significant resistance (for longs, e.g., $151 beyond $148) or falls below the first significant support (for shorts, e.g., $143.5 below $147.48).
   - Stop_loss limits risk to less than the potential profit (e.g., stop_loss of $148.7 for a short at $147.5 targeting $143.5 ensures risk < 2.5% profit).
 - Be concise, think step by step, and explicitly explain any discrepancies between signals, positions, and timeframes in the rationale to prevent confusion (e.g., clarify why a short is maintained at $147.48 despite neutral 4h/1d trends or rising bids).
-- Output as JSON below, do ensure it's a valid JSON.
+- Be concise about valid JSON output.
 
 **JSON Output:**
 ```json
