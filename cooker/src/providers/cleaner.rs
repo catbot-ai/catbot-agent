@@ -12,9 +12,10 @@ pub fn try_parse_json_with_trailing_comma_removal<T: DeserializeOwned>(
             let cleaned_json_string = fix_trailing_commas(json_string);
             serde_json::from_str(&cleaned_json_string).map_err(|e| {
                 anyhow!(
-                    "Failed to parse cleaned JSON: {}. Original error: {}",
+                    "Failed to parse cleaned JSON: {}. Original error: {}\njson_string: {}",
                     e,
-                    original_error
+                    original_error,
+                    json_string
                 )
             })
         }
