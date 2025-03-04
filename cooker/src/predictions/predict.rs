@@ -1,5 +1,8 @@
 use crate::{
-    providers::gemini::{build_prompt, AiProvider, GeminiModel, GeminiProvider, PriceHistory},
+    providers::{
+        gemini::{AiProvider, GeminiModel, GeminiProvider, PriceHistory},
+        prompter::build_prompt,
+    },
     sources::binance::{fetch_binance_kline_data, fetch_orderbook_depth},
 };
 use chrono_tz::Asia::Tokyo;
