@@ -20,7 +20,7 @@ struct SuggestQuery {
 async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
     console_error_panic_hook::set_once();
 
-    let orderbook_limit: i32 = 600;
+    let orderbook_limit: i32 = 1000;
     let gemini_api_key = env
         .secret("GEMINI_API_KEY")
         .expect("Expect GEMINI_API_KEY")

@@ -238,8 +238,8 @@ pub fn build_prompt(
         group_by_fractional_part(&orderbook, FractionalPart::OneTenth);
 
     // Limit 10
-    let top_bids_price_amount = top_n_bids_asks(&grouped_one_bids, 5, false);
-    let top_asks_price_amount = top_n_bids_asks(&grouped_one_asks, 5, true);
+    let top_bids_price_amount = top_n_bids_asks(&grouped_one_bids, 10, false);
+    let top_asks_price_amount = top_n_bids_asks(&grouped_one_asks, 10, true);
 
     let grouped_bids_string = btree_map_to_csv(&grouped_one_bids);
     let grouped_asks_string = btree_map_to_csv(&grouped_one_asks);
