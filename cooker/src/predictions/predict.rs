@@ -1,6 +1,7 @@
 use crate::{
     providers::{
-        gemini::{AiProvider, GeminiModel, GeminiProvider, PriceHistory},
+        core::{AiProvider, PriceHistory},
+        gemini::{GeminiModel, GeminiProvider},
         prompter::build_prompt,
     },
     sources::binance::{fetch_binance_kline_data, fetch_orderbook_depth},

@@ -94,9 +94,9 @@ pub async fn predict_with_gemini(
     )
     .await;
 
-    // TODO: return as json
+    // TODO: return as proper versioned json
     match prediction_result {
-        Ok(prediction_output) => Ok(serde_json::to_string(&prediction_output)
+        Ok(prediction_output) => Ok(serde_json::to_string_pretty(&prediction_output)
             .map_err(|e| format!("Failed to serialize prediction output to JSON: {}", e))?),
         Err(error) => Err(format!("Error getting prediction: {:?}", error)),
     }

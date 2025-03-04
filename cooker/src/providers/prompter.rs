@@ -7,7 +7,7 @@ use crate::transforms::numbers::group_by_fractional_part;
 use crate::transforms::numbers::top_n_bids_asks;
 use crate::transforms::numbers::FractionalPart;
 
-use super::gemini::PriceHistory;
+use super::core::PriceHistory;
 
 #[allow(clippy::too_many_arguments, unused)]
 pub fn build_prompt<T>(
