@@ -302,28 +302,39 @@ pub fn build_prompt(
 - Perform technical analysis on available price histories (1m, 5m, 1h, 4h, 1d) and order book volume, prioritizing 1m, 5m, and 1h for intraday signals and using 4h/1d for trend context.
 - For 1h signals (target_datetime within 1–2 hours), prioritize 1m, 5m, and 1h price history to detect short-term momentum shifts. Use 4h and 1d data only to confirm long-term trends, never to override short-term bullish or bearish signals unless supported by volume, price action, and order book data.
 - Detect potential reversals and momentum shifts using these indicators, focusing on short-term data (1m, 5m, 1h):
-  - Bullish reversals: Oversold Stochastic RSI (<20), price near lower Bollinger Band, or strong support (e.g., $125.55, $144.5) with rising bid volume and price-volume divergence.
-  - Bearish reversals: Overbought Stochastic RSI (>80), price near upper Bollinger Band, or strong resistance (e.g., $147.5, $148) with rising ask volume and price rejection.
-  - Suggest long positions with high confidence (0.7–1.0) when short-term data shows clear bullish patterns (e.g., uptrend from $125.55 to $147.48), and short positions with high confidence when bearish patterns dominate (e.g., rejection at $148), even if 4h/1d data suggests a different trend.
+  - Bullish reversals: Oversold Stochastic RSI (<20), price near lower Bollinger Band, or strong support with rising bid volume and price-volume divergence.
+  - Bearish reversals: Overbought Stochastic RSI (>80), price near upper Bollinger Band, or strong resistance with rising ask volume and price rejection.
+  - Suggest long positions with high confidence (0.7–1.0) when short-term data shows clear bullish patterns (e.g., uptrend with rising Stochastic RSI), and short positions with high confidence when bearish patterns dominate (e.g., rejection at resistance), even if 4h/1d data suggests a different trend.
 - Analyze bid/ask volume dynamically across all timeframes (1m, 5m, 1h, 4h, 1d), order book, and recent price action:
-  - Prioritize short-term bullish spikes (bids > asks, e.g., bids at $147 totaling 18,594.762 SOL) or bullish price-volume divergences for 1h long signals.
-  - Flag bearish signals when asks significantly outpace bids at resistance (e.g., asks at $148 totaling 13,054.754 SOL) or when selling volume spikes on price rejection.
-- Identify recurring price patterns in price history (e.g., spikes from $125.55 to $147.48, support at $144.5, resistance at $148) and align entry_price, target_price, and stop_loss with these patterns to optimize profit potential and minimize risk.
+  - Prioritize short-term bullish spikes (bids > asks, e.g., bids at current price totaling high volume) or bullish price-volume divergences for 1h long signals.
+  - Flag bearish signals when asks significantly outpace bids at resistance or when selling volume spikes on price rejection.
+- Identify recurring price patterns in price history (e.g., spikes, support levels, resistance levels) and align entry_price, target_price, and stop_loss with these patterns to optimize profit potential and minimize risk, using relative indicators (e.g., percentage changes, Bollinger Band z-scores) rather than absolute price levels.
 - Calculate confidence scores (0.0–1.0) based on timeframe alignment:
   - Suggest longs or shorts with moderate confidence (0.6–0.7) if 1m/5m/1h data conflicts with 4h/1d trends, but always prioritize short-term signals unless long-term trends are strongly confirmed by volume, price action, and order book data.
-  - Lower confidence (e.g., <0.6) if volume contradicts price movement (e.g., bullish price at $147.48 with high ask volume at $148).
+  - Lower confidence (e.g., <0.6) if volume contradicts price movement (e.g., bullish price with high ask volume) or if signals are ambiguous, and suggest monitoring instead of trading.
 - For existing positions, suggest one of the following actions based on current momentum, price action, and volume, ensuring logical risk management:
-  - 'Hold': If short-term momentum aligns with the position’s side (e.g., bearish for shorts at $147.48, bullish for longs at $144.5).
+  - 'Hold': If short-term momentum aligns with the position’s side (e.g., bearish for shorts, bullish for longs).
   - 'Increase': If short-term signals (1m, 5m, 1h) strongly confirm the position’s direction and volume supports it (e.g., rising asks for shorts, rising bids for longs).
-  - 'Close': If short-term signals contradict the position’s side (e.g., bullish signals for a short at $147.48) or if the position nears its target or stop loss.
-  - 'Reverse': If short-term signals strongly oppose the position’s side and indicate a clear reversal (e.g., bullish reversal at $144.5 for a short, bearish reversal at $148 for a long), suggest closing the current position and opening an opposite position with new entry_price, target_price, and stop_loss.
+  - 'Close': If short-term signals contradict the position’s side (e.g., bullish signals for a short) or if the position nears its target or stop loss.
+  - 'Reverse': If short-term signals strongly oppose the position’s side and indicate a clear reversal (e.g., bullish reversal for a short, bearish reversal for a long), suggest closing the current position and opening an opposite position with new entry_price, target_price, and stop_loss.
   - Ensure stop_loss values are logically set:
-    - For longs, set stop_loss below the entry_price or nearest support (e.g., $144 for a long at $147.48).
-    - For shorts, set stop_loss above the entry_price or nearest resistance (e.g., $148–$149 for a short at $147.48, not above the current price like $150).
+    - For longs, set stop_loss 1-2% below the entry_price or nearest support (e.g., below the lower Bollinger Band or 9-day SMA if price is volatile).
+    - For shorts, set stop_loss 1-2% above the entry_price or nearest resistance (e.g., above the upper Bollinger Band or 9-day SMA, not above the current price like a higher arbitrary value).
 - Generate trading signals with at least 2.5% profit potential from entry_price to target_price, ensuring:
-  - Target_price exceeds the first significant resistance (for longs, e.g., $151 beyond $148) or falls below the first significant support (for shorts, e.g., $143.5 below $147.48).
-  - Stop_loss limits risk to less than the potential profit (e.g., stop_loss of $148.7 for a short at $147.5 targeting $143.5 ensures risk < 2.5% profit).
-- Be concise, think step by step, and explicitly explain any discrepancies between signals, positions, and timeframes in the rationale to prevent confusion (e.g., clarify why a short is maintained at $147.48 despite neutral 4h/1d trends or rising bids).
+  - Target_price exceeds the first significant resistance (for longs, e.g., beyond the upper Bollinger Band or recent high) or falls below the first significant support (for shorts, e.g., below the lower Bollinger Band or recent low).
+  - Stop_loss limits risk to less than the potential profit (e.g., stop_loss risk < 2.5% profit).
+- Predict the next price top (e.g., resistance at upper Bollinger Band or recent high) or bottom (e.g., support at lower Bollinger Band or recent low) using:
+  - Bollinger Bands for overbought/oversold conditions.
+  - Moving Average crossovers or price rejection at MAs.
+  - Recent price spikes (e.g., last high, last low) with confirmation from volume and order book data.
+  - Suggest entering positions only when short-term signals (1m, 5m, 1h) align with potential tops/bottoms, even if long-term trends (4h, 1d) differ.
+- When taking profit from a short position at a specific value, suggest opening a long position at that take-profit value if short-term indicators (1m, 5m, 1h) indicate a bullish reversal (e.g., oversold Stochastic RSI, rising bid volume). Provide `new_target_price`, `new_stop_loss`, and `confidence` for the reverse position, ensuring at least 2.5% profit potential and logical risk management.
+- In volatile markets, prioritize short-term signals (1m, 5m, 1h) to detect rapid momentum shifts. Adjust stop_loss dynamically:
+  - For longs, set stop_loss 1-2% below the nearest support or below the 9-day SMA if price is volatile.
+  - For shorts, set stop_loss 1-2% above the nearest resistance or above the 9-day SMA.
+  - Avoid suggesting shorts during clear bullish momentum (e.g., rising Stochastic RSI, high bid volume) or longs during clear bearish momentum (e.g., falling Stochastic RSI, high ask volume).
+- Avoid overfitting by focusing on relative indicators (e.g., percentage changes, Bollinger Band z-scores) rather than absolute price levels. Lower confidence (<0.6) if volume, price action, or order book data conflicts with the predicted signal, and suggest monitoring instead of trading.
+- Be concise, think step by step, and explicitly explain any discrepancies between signals, positions, and timeframes in the rationale to prevent confusion (e.g., clarify why a short is maintained despite rising bids or neutral long-term trends).
 - Be concise about valid JSON output.
 
 **JSON Output:**
