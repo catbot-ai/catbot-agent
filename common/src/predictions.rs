@@ -22,6 +22,9 @@ pub struct RefinedPredictionOutput {
     pub summary: Summary,
     pub signals: Vec<LongShortSignal>,
     pub positions: Option<Vec<PredictedPosition>>,
+    // Stats
+    pub model_name: String,
+    pub prompt_hash: String,
     // pub price_prediction_graph_5m: Vec<PricePredictionPoint5m>,
 }
 
@@ -38,7 +41,10 @@ impl PredictionOutputWithTimeStampBuilder {
         }
     }
 
-    pub fn build(self) -> RefinedPredictionOutput {
+    pub fn build(self, model_name: &str, prompt_hash: &str) -> RefinedPredictionOutput {
+        let model_name = model_name.to_owned();
+        let prompt_hash = prompt_hash.to_owned();
+
         let now_utc = Utc::now();
         let now_local = now_utc.with_timezone(&self.timezone);
         let iso_local = now_local.to_rfc3339();
@@ -53,14 +59,17 @@ impl PredictionOutputWithTimeStampBuilder {
             .collect();
 
         let positions = self.gemini_response.positions.or(Some(vec![]));
+        let timestamp = now_utc.timestamp_millis();
 
         RefinedPredictionOutput {
-            timestamp: now_utc.timestamp_millis(),
+            timestamp,
             current_datetime: iso_utc,
             current_datetime_local: iso_local,
             summary: self.gemini_response.summary,
             signals,
             positions,
+            model_name,
+            prompt_hash,
         }
     }
 }

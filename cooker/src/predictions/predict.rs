@@ -13,6 +13,7 @@ use common::{
 
 use anyhow::Result;
 use jup_sdk::perps::PerpsPosition;
+use md5;
 
 pub async fn get_prediction(
     pair_symbol: &str,
@@ -74,8 +75,11 @@ pub async fn get_prediction(
         .call_api::<PredictionOutput>(model, &prompt, None)
         .await?;
 
+    let model_name = model.as_ref().to_string();
+    let prompt_hash = format!("{:x}", md5::compute(prompt));
     let prediction_output_with_timestamp =
-        PredictionOutputWithTimeStampBuilder::new(gemini_response, Tokyo).build();
+        PredictionOutputWithTimeStampBuilder::new(gemini_response, Tokyo)
+            .build(&model_name, &prompt_hash);
 
     Ok(prediction_output_with_timestamp)
 }
