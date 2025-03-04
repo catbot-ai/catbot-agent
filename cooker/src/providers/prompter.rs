@@ -127,8 +127,9 @@ pub fn build_prompt<T>(
   - For shorts, set stop_loss 1-2% above the nearest resistance or above the 9-day SMA.
   - Avoid suggesting shorts during clear bullish momentum (e.g., rising Stochastic RSI, high bid volume) or longs during clear bearish momentum (e.g., falling Stochastic RSI, high ask volume).
 - Avoid overfitting by focusing on relative indicators (e.g., percentage changes, Bollinger Band z-scores) rather than absolute price levels. Lower confidence (<0.6) if volume, price action, or order book data conflicts with the predicted signal, and suggest monitoring instead of trading.
+- Don't take current positions to the signals's account.
 - Be concise, think step by step, and explicitly explain any discrepancies between signals, positions, and timeframes in the rationale to prevent confusion (e.g., clarify why a short is maintained despite rising bids or neutral long-term trends).
-- Be concise about valid JSON output.
+- Must generate valid JSON output.
 
 **JSON Output:**
 ```json
@@ -147,14 +148,14 @@ pub fn build_prompt<T>(
         "vibe": "string" // E.g., "Bearish 65%", match signal confidence
     }},
     "signals": [{{
-        "side": string, // long or shot
+        "side": string, // Predicted side, long or shot
         "symbol": "{symbol}",
         "confidence": number, // Confidence about this signal: 0.0-1.0
         "current_price": {current_price},
-        "entry_price": number,
+        "entry_price": number, // Can be future price.
         "target_price": number, // >2.5% above entry, beyond first resistance or support
         "stop_loss": number, // The value should less than profit.
-        "timeframe": "string", // "1h" or "4h"
+        "timeframe": "string", // Time in minutes or hours e.g. 5m,15m,1h,2h,3h,...
         "entry_datetime": "string", // ISO time prediction when to make a trade for this signal, Can be now or in the future date time.
         "target_datetime": "string", // ISO time prediction when to take profit.
         "rationale": "string" // E.g., "4h momentum up, bids outpace asks", "1h rejection at 170, high ask volume"
