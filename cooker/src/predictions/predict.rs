@@ -26,11 +26,13 @@ pub async fn get_prediction(
     let current_price = kline_data_1s[0].close;
 
     // Fetch 1m kline data: 500 candles = ~8.3 hours
-    let kline_data_1m = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1m", 500).await?;
+    let kline_data_1m =
+        fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1m", 500 * 3 * 2).await?;
     let price_history_1m_string = serde_json::to_string_pretty(&kline_data_1m)?;
 
     // Fetch 5m kline data: 288 candles = 24h for 1-day short-term analysis
-    let kline_data_5m = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "5m", 288).await?;
+    let kline_data_5m =
+        fetch_binance_kline_data::<ConciseKline>(pair_symbol, "5m", 288 * 3).await?;
     let price_history_5m_string = serde_json::to_string_pretty(&kline_data_5m)?;
 
     // Fetch 1h kline data: 168 candles = 7d for 1h signal context
