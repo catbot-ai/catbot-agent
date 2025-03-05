@@ -27,8 +27,6 @@ pub fn build_prompt<T>(
 
     let (grouped_one_bids, grouped_one_asks) =
         group_by_fractional_part(&orderbook, FractionalPart::One);
-    let (grouped_one_tenth_bids, grouped_one_tenth_asks) =
-        group_by_fractional_part(&orderbook, FractionalPart::OneTenth);
 
     // Limit 10
     let top_bids_price_amount = top_n_bids_asks(&grouped_one_bids, 10, false);
