@@ -44,6 +44,16 @@ pub fn build_prompt<T>(
         let positions: Vec<String> = preps_positions
             .iter()
             .map(|pos| {
+                // Handle target_price: Some(f64) -> number, None -> "null"
+                let target_price_str = match pos.target_price {
+                    Some(tp) => tp.to_string(),
+                    None => "null".to_string(),
+                };
+                // Handle stop_loss: Some(f64) -> number, None -> "null"
+                let stop_loss_str = match pos.stop_loss {
+                    Some(sl) => sl.to_string(),
+                    None => "null".to_string(),
+                };
                 format!(
                     r#"{{
         "side": "{}",
@@ -54,13 +64,13 @@ pub fn build_prompt<T>(
         "liquidation_price": {},
         "pnl_after_fees_usd": {},
         "value": {},
-        "target_price": {:?}, // Current target_price, Suggest new value at new_target_price if None
-        "stop_loss": {:?}, // Current stop_loss, Suggest new value at new_stop_loss if None
+        "target_price": {}, // Current target_price, null if not set
+        "stop_loss": {}, // Current stop_loss, null if not set
         "new_target_price": Option<number>,  // Suggested target price if adjusting position
         "new_stop_loss": Option<number>,     // Suggested stop loss if adjusting position
-        "suggestion": "string", // A concise action (e.g., "Hold", "Increase", "Close", "Reverse") based on momentum, price action, and volume
-        "rationale": "string", // A brief explanation for the suggestion (e.g., "Short-term momentum aligns with the position")
-        "confidence": number                 // Confidence score between 0.0 and 1.0
+        "suggestion": "string", // A concise action (e.g., "Hold", "Increase", "Close", "Reverse")
+        "rationale": "string", // A brief explanation for the suggestion
+        "confidence": number   // Confidence score between 0.0 and 1.0
     }}"#,
                     pos.side,
                     pos.market_mint,
@@ -70,8 +80,8 @@ pub fn build_prompt<T>(
                     pos.liquidation_price,
                     pos.pnl_after_fees_usd,
                     pos.value,
-                    pos.target_price,
-                    pos.stop_loss,
+                    target_price_str, // Use processed target_price
+                    stop_loss_str,    // Use processed stop_loss
                 )
             })
             .collect();
@@ -128,7 +138,7 @@ pub fn build_prompt<T>(
   - For shorts: Set stop_loss 2-3% above the nearest resistance or above the 21-day SMA if wider.
   - Avoid suggesting shorts during clear bullish momentum (e.g., rising Stochastic RSI, high bid volume) or longs during clear bearish momentum (e.g., falling Stochastic RSI, high ask volume).
 - Avoid overfitting by focusing on relative indicators (e.g., percentage changes, Bollinger Band z-scores). Lower confidence (<0.6) if volume, price action, or order book data conflicts with the predicted signal, and suggest monitoring instead of trading.
-- Generate suggestions for positions and signals dynamically using only the provided price history, order book data, and technical analysis rules. Do not replicate or adapt examples from the prompt; instead, base all recommendations on current market conditions and calculated indicators (e.g., Stochastic RSI, Bollinger Bands, volume trends).
+- Generate summary suggestion for positions and signals dynamically using only the provided price history, order book data, and technical analysis rules. Do not replicate or adapt examples from the prompt; instead, base all recommendations on current market conditions and calculated indicators (e.g., Stochastic RSI, Bollinger Bands, volume trends).
 - Be concise, think step by step, and explicitly explain any discrepancies between signals, positions, and timeframes in the rationale to prevent confusion (e.g., clarify why a short is maintained despite rising bids or neutral long-term trends).
 - Must generate valid JSON output, don't mixed up signals and positions schema.
 
@@ -136,7 +146,7 @@ pub fn build_prompt<T>(
 ```json
 {{
     "summary": {{
-        "vibe": "string", // e.g., "{symbol} Short-term 65% Bearish"
+        "vibe": "string", // Current market vibe e.g., "{symbol} Short-term 65% Bearish"
         "price": {current_price},
         "upper_bound": number, // Highest top_3_resistance
         "lower_bound": number, // Lowest top_3_support
@@ -145,7 +155,7 @@ pub fn build_prompt<T>(
         "top_bids_price_amount": {top_bids_price_amount:?},
         "top_asks_price_amount": {top_asks_price_amount:?},
         "detail": "string", // <500 chars, include volume and momentum insights
-        "suggestion": "string" // e.g., "Short {symbol} at 170.1 if volume confirms resistance"
+        "suggestion": "string" // Summary suggestion e.g., "Short {symbol} at xxx if volume confirms resistance"
     }},
     "signals": [{{
         "direction": string, // Predicted direction, long or shot
@@ -158,7 +168,7 @@ pub fn build_prompt<T>(
         "timeframe": "string", // Time in minutes or hours e.g. 5m,15m,1h,2h,3h,...
         "entry_datetime": "string", // ISO time prediction when to make a trade for this signal, Can be now or in the future date time.
         "target_datetime": "string", // ISO time prediction when to take profit.
-        "rationale": "string" // e.g., "4h momentum up, bids outpace asks", "1h rejection at 170, high ask volume"
+        "rationale": "string" // Rationale about this signal e.g., "4h momentum up, bids outpace asks", "1h rejection at xxx, high ask volume"
     }}]{maybe_position_schema}
 }}
 ```
