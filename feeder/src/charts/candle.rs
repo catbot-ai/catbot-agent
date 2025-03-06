@@ -1,6 +1,7 @@
 use ab_glyph::{FontRef, PxScale};
-use chrono::offset::Local;
-use chrono::{DateTime, Duration, NaiveDate};
+use chrono::{DateTime, Duration};
+use chrono_tz::Tz;
+use common::Kline;
 use image::ImageEncoder;
 use image::Rgb;
 use image::{codecs::png::PngEncoder, ImageBuffer, ImageError, Pixel};
@@ -13,20 +14,18 @@ pub struct ChartMetaData {
     pub title: String,
 }
 
-fn parse_time(t: &str) -> DateTime<Local> {
-    let values: Vec<u32> = t.split("-").map(|s| s.parse().unwrap()).collect();
-    NaiveDate::from_ymd_opt(values[0] as i32, values[1], values[2])
+// Convert Kline timestamp (i64) to DateTime<Tz>
+fn parse_kline_time(timestamp: i64, tz: &Tz) -> DateTime<Tz> {
+    DateTime::from_timestamp(timestamp / 1000, 0)
         .unwrap()
-        .and_hms_opt(0, 0, 0)
-        .unwrap()
-        .and_local_timezone(Local)
-        .unwrap()
+        .with_timezone(tz)
 }
 
-pub(crate) fn draw_candle(
+pub fn draw_candle(
     font_data: Vec<u8>,
     metadata: ChartMetaData,
-    candle_data: Vec<(&'static str, f32, f32, f32, f32)>,
+    candle_data: Vec<Kline>,
+    timezone: &Tz,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let font = FontRef::try_from_slice(&font_data)?;
 
@@ -43,29 +42,51 @@ pub(crate) fn draw_candle(
         root.fill(&BLACK)?;
 
         let (to_date, from_date) = (
-            parse_time(candle_data[0].0) + Duration::days(1),
-            parse_time(candle_data[candle_data.len() - 1].0) - Duration::days(1),
+            parse_kline_time(candle_data[0].open_time, timezone) + Duration::days(1),
+            parse_kline_time(candle_data[candle_data.len() - 1].open_time, timezone)
+                - Duration::days(1),
         );
 
-        let mut chart =
-            ChartBuilder::on(&root).build_cartesian_2d(from_date..to_date, 110f32..135f32)?;
+        // Determine min and max prices for the Y-axis range
+        let prices: Vec<f32> = candle_data
+            .iter()
+            .flat_map(|k| {
+                vec![
+                    k.open_price.parse::<f32>().unwrap(),
+                    k.high_price.parse::<f32>().unwrap(),
+                    k.low_price.parse::<f32>().unwrap(),
+                    k.close_price.parse::<f32>().unwrap(),
+                ]
+            })
+            .collect();
+        let min_price = prices.iter().fold(f32::INFINITY, |a, &b| a.min(b));
+        let max_price = prices.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+
+        let mut chart = ChartBuilder::on(&root).build_cartesian_2d(
+            from_date..to_date,
+            min_price * 0.95..max_price * 1.05, // Add some padding to the Y-axis
+        )?;
 
         chart
             .configure_mesh()
             .light_line_style(RGBColor(48, 48, 48))
             .draw()?;
 
-        chart.draw_series(candle_data.iter().map(|x| {
-            let color = if x.4 >= x.1 { GREEN } else { RED };
+        chart.draw_series(candle_data.iter().map(|k| {
+            let open = k.open_price.parse::<f32>().unwrap();
+            let high = k.high_price.parse::<f32>().unwrap();
+            let low = k.low_price.parse::<f32>().unwrap();
+            let close = k.close_price.parse::<f32>().unwrap();
+            let color = if close >= open { GREEN } else { RED };
             CandleStick::new(
-                parse_time(x.0),
-                x.1,
-                x.2,
-                x.3,
-                x.4,
+                parse_kline_time(k.open_time, timezone),
+                open,
+                high,
+                low,
+                close,
                 ShapeStyle::from(&color).filled(),
                 ShapeStyle::from(&color).filled(),
-                15,
+                10,
             )
         }))?;
     }
@@ -77,7 +98,7 @@ pub(crate) fn draw_candle(
     // Colors
     let white = Rgb([255u8, 255u8, 255u8]);
 
-    // Draw points and lines
+    // Draw points and lines (example, adjust as needed)
     {
         let root = BitMapBackend::with_buffer(&mut imgbuf, BAR).into_drawing_area();
         let root = root.apply_coord_spec(Cartesian2d::<RangedCoordf32, RangedCoordf32>::new(
@@ -149,9 +170,37 @@ where
 
 #[test]
 fn entry_point() {
+    use chrono_tz::Asia::Tokyo;
+
     let candle_data = vec![
-        ("2019-04-25", 130.06, 131.37, 128.83, 129.15),
-        ("2019-04-24", 125.79, 125.85, 124.52, 125.01),
+        Kline {
+            open_time: 1556150400000, // 2019-04-25 00:00:00 UTC in milliseconds
+            open_price: "130.06".to_string(),
+            high_price: "131.37".to_string(),
+            low_price: "128.83".to_string(),
+            close_price: "129.15".to_string(),
+            volume: "1000".to_string(),
+            close_time: 1556236799999,
+            quote_asset_volume: "10000".to_string(),
+            number_of_trades: 500,
+            taker_buy_base_asset_volume: "500".to_string(),
+            taker_buy_quote_asset_volume: "5000".to_string(),
+            ignore: "0".to_string(),
+        },
+        Kline {
+            open_time: 1556064000000, // 2019-04-24 00:00:00 UTC in milliseconds
+            open_price: "125.79".to_string(),
+            high_price: "125.85".to_string(),
+            low_price: "124.52".to_string(),
+            close_price: "125.01".to_string(),
+            volume: "800".to_string(),
+            close_time: 1556150399999,
+            quote_asset_volume: "8000".to_string(),
+            number_of_trades: 400,
+            taker_buy_base_asset_volume: "400".to_string(),
+            taker_buy_quote_asset_volume: "4000".to_string(),
+            ignore: "0".to_string(),
+        },
     ];
     let font_data = include_bytes!("../../Roboto-Light.ttf").to_vec();
     let png = draw_candle(
@@ -160,6 +209,7 @@ fn entry_point() {
             title: "Hello World!".to_string(),
         },
         candle_data,
+        &Tokyo,
     )
     .unwrap();
     std::fs::write("test.png", png).unwrap();

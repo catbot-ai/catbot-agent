@@ -1,27 +1,25 @@
 mod charts;
 
 use charts::candle::{draw_candle, ChartMetaData};
+use chrono_tz::Asia::Tokyo;
+use common::sources::binance::fetch_binance_kline_data;
+use common::Kline;
 use std::ops::Deref;
 use worker::*;
 
 // TODO: call service binding
-async fn gen_candle(
-    _pair_symbol: String,
-    _timeframe: String,
-) -> Vec<(&'static str, f32, f32, f32, f32)> {
-    vec![
-        ("2019-04-25", 130.06, 131.37, 128.83, 129.15),
-        ("2019-04-24", 125.79, 125.85, 124.52, 125.01),
-    ]
+async fn gen_candle(pair_symbol: String, timeframe: String) -> anyhow::Result<Vec<Kline>> {
+    let kline_data_1m = fetch_binance_kline_data::<Kline>(&pair_symbol, &timeframe, 60).await?;
+    Ok(kline_data_1m)
 }
 
 // TODO: pixel font
 const DEFAULT_FONT_NAME: &str = "Roboto-Light.ttf";
 
 pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<Response> {
-    if let Some(pair_symbol) = ctx.param("token") {
+    if let Some(pair_symbol) = ctx.param("pair_symbol") {
         // Get timeframe
-        let binding = "5m".to_string();
+        let binding = "1m".to_string();
         let timeframe = ctx.param("timeframe").unwrap_or(&binding);
 
         // Get font
@@ -40,13 +38,20 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
         )
         .await;
 
+        let candle_data = match candle_data {
+            Ok(candle_data) => candle_data,
+            Err(error) => {
+                return Response::error(format!("Bad Request - Missing Data: {error}"), 400)
+            }
+        };
+
         // Get chart metadata
         let chart_metadata = ChartMetaData {
             title: format!("{pair_symbol} {timeframe}"),
         };
 
         // Get image
-        let buffer = draw_candle(font, chart_metadata, candle_data).unwrap();
+        let buffer = draw_candle(font, chart_metadata, candle_data, &Tokyo).unwrap();
 
         let mut headers = Headers::new();
         headers.set("content-type", "image/png")?;
@@ -59,7 +64,7 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
 }
 
 pub async fn handle_root(_req: Request, _ctx: RouteContext<()>) -> worker::Result<Response> {
-    Response::from_html(r#"<a href="/api/v1/chart/SOL_USDT/1h">GET</a>"#)
+    Response::from_html(r#"<a href="/api/v1/chart/SOL_USDT/5m">GET</a>"#)
 }
 
 #[event(fetch)]
@@ -69,7 +74,7 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
 
     router
         .get_async("/", handle_root)
-        .get_async("/api/v1/chart/:token/:timeframe", handle_chart)
+        .get_async("/api/v1/chart/:pair_symbol/:timeframe", handle_chart)
         .run(req, env)
         .await
 }

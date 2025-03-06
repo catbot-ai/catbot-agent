@@ -23,7 +23,8 @@ pub fn build_prompt<T>(
     let current_datetime = now_utc.format("%Y-%m-%dT%H:%M:%SZ").to_string();
     let current_timestamp = now_utc.timestamp_millis();
 
-    let symbol = pair_symbol.split("USDT").next().unwrap_or(pair_symbol);
+    let pair_symbol = pair_symbol.replace("_", "");
+    let symbol = pair_symbol.split("USDT").next().unwrap_or(&pair_symbol);
 
     let (grouped_one_bids, grouped_one_asks) =
         group_by_fractional_part(&orderbook, FractionalPart::One);
@@ -211,15 +212,13 @@ current_price={current_price}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        providers::gemini::GeminiModel,
-        sources::{
-            binance::{fetch_binance_kline_data, fetch_orderbook_depth},
-            jup::get_preps_position,
-        },
-    };
+    use crate::providers::gemini::GeminiModel;
     use anyhow::Result;
-    use common::ConciseKline;
+    use common::{
+        binance::{fetch_binance_kline_data, fetch_orderbook_depth},
+        jup::get_preps_position,
+        ConciseKline,
+    };
     use std::env;
     use tokio;
 

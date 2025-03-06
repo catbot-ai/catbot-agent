@@ -29,8 +29,13 @@ plotters = "0.3.7"
 bytes = "1.10.0"
 ab_glyph = "0.2.29"
 serde.workspace = true
+chrono-tz.workspace = true
+anyhow.workspace = true
 
 [profile.release]
 lto = true
 strip = true
 codegen-units = 1
+
+[dev-dependencies]
+tokio = { workspace = true }

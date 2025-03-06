@@ -10,3 +10,8 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 strum = { workspace = true }
 jup-sdk = { workspace = true }
+reqwest.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }

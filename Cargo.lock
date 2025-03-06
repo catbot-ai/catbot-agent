@@ -424,12 +424,15 @@ checksum = "5b63caa9aa9397e2d9480a9b13673856c78d8ac123288526c37d7839f2a86990"
 name = "common"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "chrono-tz",
  "jup-sdk",
+ "reqwest",
  "serde",
  "serde_json",
  "strum",
+ "tokio",
 ]
 
 [[package]]
@@ -726,9 +729,11 @@ name = "feeder"
 version = "0.1.0"
 dependencies = [
  "ab_glyph",
+ "anyhow",
  "bytes",
  "cfg-if",
  "chrono",
+ "chrono-tz",
  "common",
  "console_error_panic_hook",
  "image 0.25.5",
@@ -736,6 +741,7 @@ dependencies = [
  "plotters",
  "serde",
  "serde_json",
+ "tokio",
  "worker",
  "worker-macros",
 ]

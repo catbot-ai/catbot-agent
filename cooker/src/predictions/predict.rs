@@ -1,13 +1,11 @@
-use crate::{
-    providers::{
-        core::{AiProvider, PriceHistory},
-        gemini::{GeminiModel, GeminiProvider},
-        prompter::build_prompt,
-    },
-    sources::binance::{fetch_binance_kline_data, fetch_orderbook_depth},
+use crate::providers::{
+    core::{AiProvider, PriceHistory},
+    gemini::{GeminiModel, GeminiProvider},
+    prompter::build_prompt,
 };
 use chrono_tz::Asia::Tokyo;
 use common::{
+    binance::{fetch_binance_kline_data, fetch_orderbook_depth},
     ConciseKline, PredictionOutput, PredictionOutputWithTimeStampBuilder, RefinedPredictionOutput,
 };
 

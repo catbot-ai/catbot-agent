@@ -26,3 +26,6 @@ chrono-tz = "0.10"
 log = "0.4"
 env_logger = "0.11"
 jup-sdk ={ path = "../jup-sdk-rs" }
+
+[workspace.dev-dependencies]
+tokio = { version = "1", features = ["full"] }

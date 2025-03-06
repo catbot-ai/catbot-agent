@@ -3,10 +3,9 @@ use providers::gemini::{GeminiModel, GeminiProvider};
 
 mod predictions;
 mod providers;
-mod sources;
 mod transforms;
 
-use sources::jup::get_preps_position;
+use common::jup::get_preps_position;
 use worker::*;
 
 #[event(fetch)]
@@ -22,41 +21,60 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
     let gemini_api_key = gemini_api_key.as_str();
 
     let router = Router::new();
+
+    // Shared handler logic
+    async fn handle_prediction_request(
+        gemini_api_key: &str,
+        orderbook_limit: i32,
+        pair_symbol: String,
+        maybe_wallet_address: Option<String>,
+    ) -> Result<Response> {
+        let output_result = predict_with_gemini(
+            gemini_api_key.to_owned(),
+            pair_symbol,
+            orderbook_limit,
+            maybe_wallet_address,
+        )
+        .await;
+
+        match output_result {
+            Ok(output) => match serde_json::from_str::<serde_json::Value>(&output) {
+                Ok(output_json) => Response::from_json(&output_json),
+                Err(e) => Response::error(format!("Failed to parse prediction JSON: {}", e), 500),
+            },
+            Err(error_message) => {
+                Response::error(format!("Prediction failed: {}", error_message), 500)
+            }
+        }
+    }
+
     router
+        // Endpoint: /api/v1/suggest/:token/:wallet_address
         .get_async(
             "/api/v1/suggest/:token/:wallet_address",
             |_req, ctx| async move {
-                if let Some(pair_symbol) = ctx.param("token") {
-                    let maybe_wallet_address = ctx.param("wallet_address");
-                    let output_result = predict_with_gemini(
-                        gemini_api_key.to_owned(),
-                        pair_symbol.to_owned(),
-                        orderbook_limit,
-                        maybe_wallet_address.cloned(),
-                    )
-                    .await;
-
-                    match output_result {
-                        Ok(output) => {
-                            let output_json_result: anyhow::Result<serde_json::Value, _> =
-                                serde_json::from_str(&output);
-                            match output_json_result {
-                                Ok(output_json) => Response::from_json(&output_json),
-                                Err(e) => Response::error(
-                                    format!("Failed to parse prediction JSON: {}", e),
-                                    500,
-                                ),
-                            }
-                        }
-                        Err(error_message) => {
-                            Response::error(format!("Prediction failed: {}", error_message), 500)
-                        }
-                    }
-                } else {
-                    Response::error("Bad Request - Missing Token", 400)
-                }
+                let pair_symbol = match ctx.param("token") {
+                    Some(token) => token.to_owned(),
+                    None => return Response::error("Bad Request - Missing Token", 400),
+                };
+                let maybe_wallet_address = ctx.param("wallet_address").cloned();
+                handle_prediction_request(
+                    gemini_api_key,
+                    orderbook_limit,
+                    pair_symbol,
+                    maybe_wallet_address,
+                )
+                .await
             },
         )
+        // Endpoint: /api/v1/suggest/:token
+        .get_async("/api/v1/suggest/:token", |_req, ctx| async move {
+            let pair_symbol = match ctx.param("token") {
+                Some(token) => token.to_owned(),
+                None => return Response::error("Bad Request - Missing Token", 400),
+            };
+            handle_prediction_request(gemini_api_key, orderbook_limit, pair_symbol, None).await
+        })
         .run(req, env)
         .await
 }
@@ -70,11 +88,16 @@ pub async fn predict_with_gemini(
     let gemini_model = GeminiModel::default();
     let provider = GeminiProvider::new_v1beta(&gemini_api_key);
 
-    // TODO: Over token/timeout for this one
-    // Get position from wallet_address if has
-    let maybe_preps_positions = match get_preps_position(maybe_wallet_address).await {
-        Ok(positions) => positions,
-        Err(error) => return Err(format!("Error getting position: {:?}", error)),
+    // Get position from wallet_address if provided
+    let maybe_preps_positions = match maybe_wallet_address {
+        Some(wallet_address) => match get_preps_position(Some(wallet_address)).await {
+            Ok(positions) => positions,
+            Err(error) => return Err(format!("Error getting position: {:?}", error)),
+        },
+        None => match get_preps_position(None).await {
+            Ok(positions) => positions,
+            Err(error) => return Err(format!("Error getting position: {:?}", error)),
+        },
     };
 
     let prediction_result = get_prediction(
@@ -86,7 +109,6 @@ pub async fn predict_with_gemini(
     )
     .await;
 
-    // TODO: return as proper versioned json
     match prediction_result {
         Ok(prediction_output) => Ok(serde_json::to_string_pretty(&prediction_output)
             .map_err(|e| format!("Failed to serialize prediction output to JSON: {}", e))?),
@@ -98,9 +120,8 @@ pub async fn predict_with_gemini(
 mod tests {
     use crate::predict_with_gemini;
 
-    // #[ignore]
     #[tokio::test]
-    async fn test() {
+    async fn test_with_wallet() {
         dotenvy::from_filename(".env").expect("No .env file");
 
         let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
@@ -108,6 +129,22 @@ mod tests {
         let wallet_address = std::env::var("WALLET_ADDRESS").ok();
 
         let result = predict_with_gemini(gemini_api_key, symbol.to_string(), 100, wallet_address)
+            .await
+            .unwrap();
+        println!(
+            "{:#?}",
+            serde_json::from_str::<serde_json::Value>(&result).unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_without_wallet() {
+        dotenvy::from_filename(".env").expect("No .env file");
+
+        let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
+        let symbol = "SOLUSDT";
+
+        let result = predict_with_gemini(gemini_api_key, symbol.to_string(), 100, None)
             .await
             .unwrap();
         println!(
