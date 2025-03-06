@@ -61,7 +61,7 @@ fn test_fix_trailing_comma_and_deserialize() {
         },
         "signals": [
             {
-                "side": "short",
+                "direction": "short",
                 "symbol": "SOL",
                 "confidence": 0.7,
                 "current_price": 164.62,
@@ -86,7 +86,8 @@ fn test_fix_trailing_comma_and_deserialize() {
                 "value": 470.34,
                 "target_price": 162.0,
                 "stop_loss": 167.82,
-                "suggestion": "Hold short position. Consider increasing position at 164.0 with stop loss at 167.82 and taking profit at 159.72.",
+                "suggestion": "Hold",
+                "rationale": "1m and 5m price is moving down after breaking support. The 1h chart volume has been increasing.",
                 "new_target_price": 159.72,
                 "new_stop_loss": 167.82,
                 "confidence": 0.7,

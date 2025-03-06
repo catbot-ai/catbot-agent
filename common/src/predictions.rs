@@ -102,7 +102,7 @@ where
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct PredictedLongShortSignal {
-    pub side: String,
+    pub direction: String,
     pub symbol: String,
     pub confidence: f64,
     pub current_price: f64,
@@ -118,7 +118,7 @@ pub struct PredictedLongShortSignal {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct LongShortSignal {
-    pub side: String,
+    pub direction: String,
     pub symbol: String,
     pub confidence: f64,
     pub current_price: f64,
@@ -147,7 +147,7 @@ impl From<PredictedLongShortSignal> for LongShortSignal {
         let entry_datetime_local = tokyo_datetime.to_rfc3339();
 
         LongShortSignal {
-            side: signal.side,
+            direction: signal.direction,
             symbol: signal.symbol,
             confidence: signal.confidence,
             current_price: signal.current_price,
@@ -193,7 +193,8 @@ pub struct PredictedPosition {
     pub new_target_price: Option<f64>, //  Optional suggested new target price
     pub new_stop_loss: Option<f64>,    // Optional suggested new stop loss
     pub suggestion: String, // Suggestion for this position. e.g. "Hold short position. Consider increasing position at 138.5 with stop loss at 140.5 and taking profit at 135."
-    pub confidence: f64,    // Confidence score between 0.0 and 1.0
+    pub rationale: String,
+    pub confidence: f64, // Confidence score between 0.0 and 1.0
 }
 
 impl From<PerpsPosition> for PredictedPosition {
@@ -203,18 +204,10 @@ impl From<PerpsPosition> for PredictedPosition {
             new_target_price: None,
             new_stop_loss: None,
             suggestion: "n/a".to_string(),
+            rationale: "n/a".to_string(),
             confidence: perps.confidence,
             // Base
-            side: perps.side,
-            market_mint: perps.market_mint,
-            collateral_mint: perps.collateral_mint,
-            entry_price: perps.entry_price,
-            leverage: perps.leverage,
-            liquidation_price: perps.liquidation_price,
-            pnl_after_fees_usd: perps.pnl_after_fees_usd,
-            value: perps.value,
-            target_price: perps.target_price,
-            stop_loss: perps.stop_loss,
+            ..perps.into()
         }
     }
 }
