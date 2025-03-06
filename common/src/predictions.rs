@@ -10,7 +10,6 @@ pub struct PredictionOutput {
     pub summary: Summary,
     pub signals: Vec<PredictedLongShortSignal>,
     pub positions: Option<Vec<PredictedPosition>>,
-    // pub price_prediction_graph_5m: Vec<PricePredictionPoint5m>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -25,7 +24,6 @@ pub struct RefinedPredictionOutput {
     // Stats
     pub model_name: String,
     pub prompt_hash: String,
-    // pub price_prediction_graph_5m: Vec<PricePredictionPoint5m>,
 }
 
 pub struct PredictionOutputWithTimeStampBuilder {
@@ -164,18 +162,6 @@ impl From<PredictedLongShortSignal> for LongShortSignal {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "snake_case")]
-pub struct PricePredictionPoint5m {
-    pub price: f64,
-    pub upper_bound: f64,
-    pub lower_bound: f64,
-    pub first_resistance: f64,
-    pub first_support: f64,
-    pub second_resistance: f64,
-    pub second_support: f64,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct PredictedPosition {
@@ -211,19 +197,3 @@ impl From<PerpsPosition> for PredictedPosition {
         }
     }
 }
-
-// TODO: separated call for price prediction
-// "price_prediction_graph_5m": [
-//     {{
-//       "price": "number",            // Start with current {symbol} price and so on.
-//       "upper_bound": "number",      // Start with current {symbol} upper bound and so on.
-//       "lower_bound": "number"       // Start with current {symbol} lower bound and so on.
-//       "first_resistance": "number"  // Start with current {symbol} first significant amount of resistance and so on.
-//       "first_support": "number"     // Start with current {symbol} first significant amount of support and so on.
-//       "second_resistance": "number" // Start with current {symbol} second significant amount of resistance and so on.
-//       "second_support": "number"    // Start with current {symbol} second significant amount of support and so on.
-//     }}
-//   ]
-
-// Provide a price prediction graph with 5-minute intervals for the next 4 hours.
-// Include upper and lower bounds. Format this in the price_prediction_graph_5m field.
