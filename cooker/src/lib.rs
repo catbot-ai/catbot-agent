@@ -7,14 +7,7 @@ mod sources;
 mod transforms;
 
 use sources::jup::get_preps_position;
-
-use serde::Deserialize;
 use worker::*;
-
-#[derive(Deserialize)]
-struct SuggestQuery {
-    wallet_address: String,
-}
 
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
@@ -30,41 +23,40 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
 
     let router = Router::new();
     router
-        .get_async("/suggest/:token", |req, ctx| async move {
-            if let Some(pair_symbol) = ctx.param("token") {
-                let maybe_wallet_address = match req.query::<SuggestQuery>() {
-                    Ok(q) => Some(q.wallet_address),
-                    Err(_e) => None,
-                };
+        .get_async(
+            "/api/v1/suggest/:token/:wallet_address",
+            |_req, ctx| async move {
+                if let Some(pair_symbol) = ctx.param("token") {
+                    let maybe_wallet_address = ctx.param("wallet_address");
+                    let output_result = predict_with_gemini(
+                        gemini_api_key.to_owned(),
+                        pair_symbol.to_owned(),
+                        orderbook_limit,
+                        maybe_wallet_address.cloned(),
+                    )
+                    .await;
 
-                let output_result = predict_with_gemini(
-                    gemini_api_key.to_owned(),
-                    pair_symbol.to_owned(),
-                    orderbook_limit,
-                    maybe_wallet_address,
-                )
-                .await;
-
-                match output_result {
-                    Ok(output) => {
-                        let output_json_result: anyhow::Result<serde_json::Value, _> =
-                            serde_json::from_str(&output);
-                        match output_json_result {
-                            Ok(output_json) => Response::from_json(&output_json),
-                            Err(e) => Response::error(
-                                format!("Failed to parse prediction JSON: {}", e),
-                                500,
-                            ),
+                    match output_result {
+                        Ok(output) => {
+                            let output_json_result: anyhow::Result<serde_json::Value, _> =
+                                serde_json::from_str(&output);
+                            match output_json_result {
+                                Ok(output_json) => Response::from_json(&output_json),
+                                Err(e) => Response::error(
+                                    format!("Failed to parse prediction JSON: {}", e),
+                                    500,
+                                ),
+                            }
+                        }
+                        Err(error_message) => {
+                            Response::error(format!("Prediction failed: {}", error_message), 500)
                         }
                     }
-                    Err(error_message) => {
-                        Response::error(format!("Prediction failed: {}", error_message), 500)
-                    }
+                } else {
+                    Response::error("Bad Request - Missing Token", 400)
                 }
-            } else {
-                Response::error("Bad Request - Missing Token", 400)
-            }
-        })
+            },
+        )
         .run(req, env)
         .await
 }
