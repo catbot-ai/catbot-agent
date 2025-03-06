@@ -54,8 +54,8 @@ pub fn build_prompt<T>(
         "liquidation_price": {},
         "pnl_after_fees_usd": {},
         "value": {},
-        "target_price": {:?}, // Use as is, Suggest new value at new_target_price if null
-        "stop_loss": {:?}, // Use as is, Suggest new value at new_stop_loss if null
+        "target_price": {:?}, // Current target_price, Suggest new value at new_target_price if None
+        "stop_loss": {:?}, // Current stop_loss, Suggest new value at new_stop_loss if None
         "new_target_price": Option<number>,  // Suggested target price if adjusting position
         "new_stop_loss": Option<number>,     // Suggested stop loss if adjusting position
         "suggestion": "string", // A concise action (e.g., "Hold", "Increase", "Close", "Reverse") based on momentum, price action, and volume
@@ -87,10 +87,6 @@ pub fn build_prompt<T>(
     // Instructions
     let schema_instruction = format!(
         r#"**Instructions:**
-
-**Instructions:**
-
-**Instructions:**
 
 - Perform technical analysis on available price histories (1m, 5m, 1h, 4h, 1d) and order book volume. Weight 1m, 5m, and 1h equally for intraday signals unless rapid momentum shifts are detected, in which case prioritize 1m for entry timing. Use 4h and 1d data only to confirm long-term trends, never to override short-term bullish or bearish signals unless long-term volume exceeds 2x the 10-period average.
 - For 1h signals (target_datetime within 1–2 hours), prioritize 1m, 5m, and 1h price history to detect short-term momentum shifts. Use 4h and 1d data only if long-term volume is extreme (as defined above).
