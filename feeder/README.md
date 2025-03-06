@@ -3,18 +3,23 @@
 ## Setup (DONE)
 
 ```
-npx wrangler kv:namespace create binance
+npx wrangler kv namespace create ASSETS --preview
+npx wrangler kv namespace create ASSETS
+
+npx wrangler kv key put --binding=ASSETS "Roboto-Light.ttf" --path=Roboto-Light.ttf --local --preview
+npx wrangler kv key put --binding=ASSETS "Roboto-Light.ttf" --path=Roboto-Light.ttf --local --preview false
 ```
 
-## Rust
+## Develop (local)
 
 ```
-rustup target add wasm32-unknown-unknown
-cargo install cargo-generate
+# local
+npx wrangler dev --live-reload
 ```
 
-## Develop
+## Develop (remote)
 
 ```
-npx wrangler dev
+# remote
+npx wrangler dev --remote
 ```

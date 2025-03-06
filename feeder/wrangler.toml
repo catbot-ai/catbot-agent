@@ -2,5 +2,10 @@ name = "catbot-feeder"
 main = "build/worker/shim.mjs"
 compatibility_date = "2025-02-13"
 
+[[kv_namespaces]]
+binding = "ASSETS"
+id = "ee79d2ee444f4d32b1a88e6ef0ad9c41"
+preview_id = "3d2b480dd6f64cd1adb4cc0a80693da7"
+
 [build]
 command = "cargo install -q worker-build && worker-build --release"

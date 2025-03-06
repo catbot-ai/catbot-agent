@@ -2,8 +2,9 @@
 members = [
      "common",
     # "consumer",
-    # "feeder",
+    "feeder",
     # "fetcher",
+    # "freezer",
     "cooker", 
     # "agent",
     # "executor",
