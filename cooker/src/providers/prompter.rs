@@ -127,13 +127,13 @@ pub fn build_prompt<T>(
 - Avoid overfitting by focusing on relative indicators (e.g., percentage changes, Bollinger Band z-scores) rather than absolute price levels. Lower confidence (<0.6) if volume, price action, or order book data conflicts with the predicted signal, and suggest monitoring instead of trading.
 - Don't take current positions to the signals's account.
 - Be concise, think step by step, and explicitly explain any discrepancies between signals, positions, and timeframes in the rationale to prevent confusion (e.g., clarify why a short is maintained despite rising bids or neutral long-term trends).
-- Must generate valid JSON output.
+- Must generate valid JSON output, don't mixed up signals and positions schema.
 
 **JSON Output:**
 ```json
 {{
     "summary": {{
-        "title": "string", // E.g., "{symbol} Short-term Bearish"
+        "vibe": "string", // E.g., "{symbol} Short-term 65% Bearish"
         "price": {current_price},
         "upper_bound": number, // Highest top_3_resistance
         "lower_bound": number, // Lowest top_3_support
@@ -143,7 +143,6 @@ pub fn build_prompt<T>(
         "top_asks_price_amount": {top_asks_price_amount:?},
         "detail": "string", // <500 chars, include volume and momentum insights
         "suggestion": "string", // E.g., "Short {symbol} at 170.1 if volume confirms resistance"
-        "vibe": "string" // E.g., "Bearish 65%", match signal confidence
     }},
     "signals": [{{
         "side": string, // Predicted side, long or shot

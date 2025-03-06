@@ -77,7 +77,6 @@ impl PredictionOutputWithTimeStampBuilder {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct Summary {
-    pub title: String,
     pub price: f64,
     pub upper_bound: f64,
     pub lower_bound: f64,
@@ -87,9 +86,9 @@ pub struct Summary {
     pub top_bids_price_amount: Vec<Vec<f64>>,
     #[serde(deserialize_with = "deserialize_vec_tuples")]
     pub top_asks_price_amount: Vec<Vec<f64>>,
+    pub vibe: String,
     pub detail: String,
     pub suggestion: String,
-    pub vibe: Option<String>,
 }
 
 fn deserialize_vec_tuples<'de, D>(deserializer: D) -> Result<Vec<Vec<f64>>, D::Error>

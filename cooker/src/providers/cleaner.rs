@@ -36,7 +36,6 @@ fn test_fix_trailing_comma_and_deserialize() {
 
     let raw_json = r#"{
         "summary": {
-            "title": "SOL Short-term Bearish",
             "price": 164.62,
             "upper_bound": 171.36,
             "lower_bound": 163.9,
@@ -58,7 +57,7 @@ fn test_fix_trailing_comma_and_deserialize() {
             ],
             "detail": "1m and 5m chart shows some bearish momentum. The 1h chart has broken support at 169.5. Selling volume has been increasing over last 1h. Order book ask volume is higher than bid volume.",
             "suggestion": "Hold short position. Consider reversing the position if price breaks above 170.",
-            "vibe": "Bearish 70%"
+            "vibe": "SOL Short-term 60% Bearish"
         },
         "signals": [
             {
@@ -101,7 +100,7 @@ fn test_fix_trailing_comma_and_deserialize() {
     assert!(result.is_ok());
 
     if let Ok(response) = result {
-        assert_eq!(response.summary.title, "SOL Short-term Bearish");
+        assert_eq!(response.summary.vibe, "SOL Short-term 60% Bearish");
         assert_eq!(response.positions.unwrap().len(), 1);
     }
 }
