@@ -738,6 +738,7 @@ dependencies = [
  "console_error_panic_hook",
  "image 0.25.5",
  "imageproc",
+ "m4rs",
  "plotters",
  "rand 0.9.0",
  "serde",
@@ -1539,6 +1540,12 @@ checksum = "0fae87c125b03c1d2c0150c90365d7d6bcc53fb73a9acaef207d2d065860f062"
 dependencies = [
  "imgref",
 ]
+
+[[package]]
+name = "m4rs"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6e3f23944174807855e1933b88cf84850fee7ee68f3ba0b606e1b830a01cbed"
 
 [[package]]
 name = "matchit"
