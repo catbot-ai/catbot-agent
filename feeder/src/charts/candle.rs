@@ -7,18 +7,14 @@ use common::Kline;
 use image::{ImageBuffer, Rgb};
 use imageproc::drawing::{draw_filled_rect_mut, draw_text_mut};
 use imageproc::rect::Rect;
-use m4rs::BollingerBandEntry;
 use m4rs::{bolinger_band, macd, Candlestick as M4rsCandlestick};
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::full_palette::PURPLE;
 use plotters::prelude::*;
 
 use plotters::coord::Shift;
-use plotters::style::full_palette::{
-    GREEN_100, GREEN_50, GREEN_500, GREEN_900, GREEN_A100, GREY, ORANGE, RED_50, RED_500, RED_900,
-    RED_A100,
-};
-use rand::Rng;
+use plotters::style::full_palette::{GREEN_900, ORANGE, RED_900};
+
 use std::error::Error;
 
 // Styling structures
@@ -145,47 +141,56 @@ impl Chart {
     }
 
     // Builder methods
+    #[allow(unused)]
     pub fn with_past_candle(mut self, past_candle_data: Vec<Kline>) -> Self {
         self.past_candle_data = Some(past_candle_data);
         self
     }
 
+    #[allow(unused)]
     pub fn with_predicted_candle(mut self, predicted_candle_data: Vec<Kline>) -> Self {
         self.predicted_candle_data = Some(predicted_candle_data);
         self
     }
 
+    #[allow(unused)]
     pub fn with_title(mut self, title: &str) -> Self {
         self.metadata.title = title.to_string();
         self
     }
 
+    #[allow(unused)]
     pub fn with_font_data(mut self, font_data: Vec<u8>) -> Self {
         self.font_data = Some(font_data);
         self
     }
 
+    #[allow(unused)]
     pub fn with_candle_dimensions(mut self, width: u32, height: u32) -> Self {
         self.candle_width = width;
         self.candle_height = height;
         self
     }
 
+    #[allow(unused)]
     pub fn with_points(mut self, points: Vec<(f32, f32)>) -> Self {
         self.points = points;
         self
     }
 
+    #[allow(unused)]
     pub fn with_point_style(mut self, radius: i32, color: RGBColor) -> Self {
         self.point_style = Some(PointStyle { radius, color });
         self
     }
 
+    #[allow(unused)]
     pub fn with_lines(mut self, lines: Vec<[(f32, f32); 2]>) -> Self {
         self.lines = lines;
         self
     }
 
+    #[allow(unused)]
     pub fn with_line_style(mut self, stroke_width: i32, color: RGBColor) -> Self {
         self.line_style = Some(LineStyle {
             stroke_width,
@@ -194,11 +199,13 @@ impl Chart {
         self
     }
 
+    #[allow(unused)]
     pub fn with_labels(mut self, labels: Vec<(f32, f32, String)>) -> Self {
         self.labels = labels;
         self
     }
 
+    #[allow(unused)]
     pub fn with_label_style(
         mut self,
         scale_x: f32,
@@ -222,16 +229,19 @@ impl Chart {
     }
 
     // Technical analysis methods
+    #[allow(unused)]
     pub fn with_macd(mut self) -> Self {
         self.macd_enabled = true;
         self
     }
 
+    #[allow(unused)]
     pub fn with_bollinger_band(mut self) -> Self {
         self.bollinger_enabled = true;
         self
     }
 
+    #[allow(unused)]
     pub fn with_volume(mut self) -> Self {
         self.volume_enabled = true;
         self
@@ -591,12 +601,6 @@ fn draw_volume_bars(
     timezone: &Tz,
 ) -> Result<(), Box<dyn Error>> {
     if let Some(past_data) = past_candle_data {
-        let volumes: Vec<f32> = past_data
-            .iter()
-            .map(|k| k.volume.parse::<f32>().unwrap())
-            .collect();
-        let max_volume = volumes.iter().fold(0.0f32, |a, &b| a.max(b));
-
         chart
             .configure_mesh()
             .light_line_style(RGBColor(48, 48, 48))
@@ -682,21 +686,21 @@ mod test {
     use rand::Rng;
 
     fn tweak_candle_data(candle: &Kline) -> Kline {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let tweak_factor = 0.005; // Reduced from 0.01 to 0.005 for less randomness
         Kline {
             open_time: candle.open_time,
             open_price: (candle.open_price.parse::<f32>().unwrap()
-                * (1.0 + rng.gen_range(-tweak_factor..tweak_factor)))
+                * (1.0 + rng.random_range(-tweak_factor..tweak_factor)))
             .to_string(),
             high_price: (candle.high_price.parse::<f32>().unwrap()
-                * (1.0 + rng.gen_range(-tweak_factor..tweak_factor)))
+                * (1.0 + rng.random_range(-tweak_factor..tweak_factor)))
             .to_string(),
             low_price: (candle.low_price.parse::<f32>().unwrap()
-                * (1.0 + rng.gen_range(-tweak_factor..tweak_factor)))
+                * (1.0 + rng.random_range(-tweak_factor..tweak_factor)))
             .to_string(),
             close_price: (candle.close_price.parse::<f32>().unwrap()
-                * (1.0 + rng.gen_range(-tweak_factor..tweak_factor)))
+                * (1.0 + rng.random_range(-tweak_factor..tweak_factor)))
             .to_string(),
             volume: candle.volume.clone(),
             close_time: candle.close_time,
