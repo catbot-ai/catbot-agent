@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize, Serializer};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Kline {
     pub open_time: i64,
     pub open_price: String,
