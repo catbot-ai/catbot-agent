@@ -13,7 +13,7 @@ use plotters::prelude::full_palette::PURPLE;
 use plotters::prelude::*;
 
 use plotters::coord::Shift;
-use plotters::style::full_palette::{GREEN_100, GREEN_500, ORANGE, RED_100, RED_500};
+use plotters::style::full_palette::{GREEN_100, GREEN_500, ORANGE, PINK, RED_100, RED_500};
 
 use std::cmp::min;
 use std::error::Error;
@@ -666,21 +666,24 @@ fn draw_macd(
             .collect();
 
         // Draw MACD line series
+        let m_style = ShapeStyle::from(&MAGENTA).stroke_width(2);
+        let s_style = ShapeStyle::from(&CYAN).stroke_width(2);
         chart.draw_series(LineSeries::new(
             macd_lines.iter().map(|(t, m, _, _)| (*t, *m)),
-            &YELLOW,
+            m_style,
         ))?;
 
         // Draw Signal line series
         chart.draw_series(LineSeries::new(
             macd_lines.iter().map(|(t, _, s, _)| (*t, *s)),
-            &ORANGE,
+            s_style,
         ))?;
 
         // Draw histogram bars with conditional styling
         let plotting_area = chart.plotting_area();
         let mut previous_h: Option<f32> = None; // Track the previous histogram value
         let delta = chrono::Duration::seconds(150); // 5-minute timeframe / 2 = 150 seconds
+        let limit = 0.02f32;
 
         for (t, _, _, h) in macd_lines.iter() {
             // Check if the current value is lower than the previous one
@@ -689,7 +692,8 @@ fn draw_macd(
             } else {
                 false // First bar has no previous value, so it’s not lower
             };
-            let limit = 0.02f32;
+
+            // Prevent invisible small value
             let h = if h.abs() > limit {
                 h
             } else {
@@ -787,10 +791,9 @@ mod test {
 
         let total_candles = candle_data.len();
         let past_candles = (total_candles as f32 * 0.5).ceil() as usize;
-        let overlap_candles = (total_candles as f32 * 0.1).ceil() as usize;
         let predicted_start = total_candles - (total_candles as f32 * 0.5).ceil() as usize;
 
-        let past_data = candle_data[..past_candles + overlap_candles].to_vec();
+        let past_data = candle_data[..past_candles].to_vec();
         let predicted_candle_data: Vec<Kline> = candle_data[predicted_start..]
             .iter()
             .map(tweak_candle_data)
