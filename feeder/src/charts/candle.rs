@@ -15,7 +15,6 @@ use plotters::prelude::*;
 use plotters::coord::Shift;
 use plotters::style::full_palette::{GREEN_100, GREEN_500, ORANGE, PINK, RED_100, RED_500};
 
-use std::cmp::min;
 use std::error::Error;
 use std::ops::Div;
 
@@ -259,13 +258,14 @@ impl Chart {
         let font_data = self.font_data.ok_or("Font data is required")?;
         let font = FontRef::try_from_slice(&font_data)?;
         let timezone = &self.timezone;
-
         let all_candle_data = match (&self.past_candle_data, &self.predicted_candle_data) {
             (Some(past), Some(pred)) => [past.clone(), pred.clone()].concat(),
             (Some(past), None) => past.clone(),
             (None, Some(pred)) => pred.clone(),
             (None, None) => unreachable!(),
         };
+
+        let all_candle_data = &all_candle_data[40..];
 
         let num_candles = all_candle_data.len() as u32;
         let calculated_width = num_candles * self.candle_width;
@@ -308,11 +308,6 @@ impl Chart {
             let mut top_chart = ChartBuilder::on(&top)
                 .margin(20)
                 .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
-
-            top_chart
-                .configure_mesh()
-                .light_line_style(RGBColor(48, 48, 48))
-                .draw()?;
 
             // Draw past candlesticks
             if let Some(past_candle_data) = &self.past_candle_data {
@@ -784,8 +779,10 @@ mod test {
     #[tokio::test]
     async fn entry_point() {
         let pair_symbol = "SOL_USDT";
-        let timeframe = "5m";
-        let candle_data = fetch_binance_kline_data::<Kline>(pair_symbol, timeframe, 200)
+        let timeframe = "1h";
+        let font_data = include_bytes!("../../Roboto-Light.ttf").to_vec();
+
+        let candle_data = fetch_binance_kline_data::<Kline>(pair_symbol, timeframe, 300)
             .await
             .unwrap();
 
@@ -793,13 +790,11 @@ mod test {
         let past_candles = (total_candles as f32 * 0.5).ceil() as usize;
         let predicted_start = total_candles - (total_candles as f32 * 0.5).ceil() as usize;
 
-        let past_data = candle_data[..past_candles].to_vec();
+        let past_data = candle_data[..past_candles + 40].to_vec();
         let predicted_candle_data: Vec<Kline> = candle_data[predicted_start..]
             .iter()
             .map(tweak_candle_data)
             .collect();
-
-        let font_data = include_bytes!("../../Roboto-Light.ttf").to_vec();
 
         let png = Chart::new(Tokyo)
             .with_past_candle(past_data)
