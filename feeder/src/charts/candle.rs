@@ -64,6 +64,7 @@ fn kline_to_m4rs_candlestick(k: &Kline) -> M4rsCandlestick {
 fn setup_macd_chart<'a>(
     area: &DrawingArea<BitMapBackend, Shift>,
     past_data: &[Kline],
+    predicted_data: &[Kline],
     timezone: &Tz,
     first_time: DateTime<Tz>,
     last_time: DateTime<Tz>,
@@ -93,6 +94,8 @@ fn setup_macd_chart<'a>(
         .margin(20)
         .build_cartesian_2d(first_time..last_time, min_macd..max_macd)?;
     draw_macd(&mut macd_chart, &Some(past_data.to_vec()), timezone)?;
+
+    draw_macd(&mut macd_chart, &Some(predicted_data.to_vec()), timezone)?;
     Ok(())
 }
 
@@ -346,6 +349,7 @@ impl Chart {
             // Bottom row: Volume bars and MACD
             if self.volume_enabled || self.macd_enabled {
                 let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
+                let predicted_data = self.predicted_candle_data.as_deref().unwrap_or(&[]);
                 if self.volume_enabled && self.macd_enabled {
                     // Split bottom into two equal parts: volume on top, MACD on bottom
                     let (volume_area, macd_area) = bottom.split_vertically((50).percent());
@@ -362,7 +366,14 @@ impl Chart {
                     draw_volume_bars(&mut volume_chart, &Some(past_data.to_vec()), timezone)?;
 
                     // MACD chart
-                    setup_macd_chart(&macd_area, past_data, timezone, first_time, last_time)?;
+                    setup_macd_chart(
+                        &macd_area,
+                        past_data,
+                        predicted_data,
+                        timezone,
+                        first_time,
+                        last_time,
+                    )?;
                 } else if self.volume_enabled {
                     // Use entire bottom for volume
                     let volumes: Vec<f32> = past_data
@@ -376,7 +387,14 @@ impl Chart {
                     draw_volume_bars(&mut volume_chart, &Some(past_data.to_vec()), timezone)?;
                 } else if self.macd_enabled {
                     // Use entire bottom for MACD
-                    setup_macd_chart(&bottom, past_data, timezone, first_time, last_time)?;
+                    setup_macd_chart(
+                        &bottom,
+                        past_data,
+                        predicted_data,
+                        timezone,
+                        first_time,
+                        last_time,
+                    )?;
                 }
             }
         }
@@ -645,11 +663,11 @@ fn draw_macd(
             })
             .collect();
 
-        // Draw the chart mesh (grid lines)
-        chart
-            .configure_mesh()
-            .light_line_style(RGBColor(48, 48, 48))
-            .draw()?;
+        // // Draw the chart mesh (grid lines)
+        // chart
+        //     .configure_mesh()
+        //     .light_line_style(RGBColor(48, 48, 48))
+        //     .draw()?;
 
         // Draw MACD line series
         chart.draw_series(LineSeries::new(
