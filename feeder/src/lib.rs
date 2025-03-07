@@ -1,6 +1,6 @@
 mod charts;
 
-use charts::candle::{draw_candle, ChartMetaData};
+use charts::candle::{Chart, ChartMetaData};
 use chrono_tz::Asia::Tokyo;
 use common::sources::binance::fetch_binance_kline_data;
 use common::Kline;
@@ -24,7 +24,7 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
 
         // Get font
         let kv_store = ctx.kv("ASSETS").unwrap();
-        let font = kv_store
+        let font_data = kv_store
             .get(DEFAULT_FONT_NAME)
             .bytes()
             .await
@@ -51,7 +51,19 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
         };
 
         // Get image
-        let buffer = draw_candle(font, chart_metadata, candle_data, &Tokyo).unwrap();
+        let buffer_result = Chart::new(Tokyo)
+            .with_candle(candle_data)
+            .with_title(&chart_metadata.title)
+            .with_font_data(font_data)
+            .build();
+
+        // Handle
+        let buffer = match buffer_result {
+            Ok(buffer) => buffer,
+            Err(error) => {
+                return Response::error(format!("Bad Request - Missing Data: {error}"), 400)
+            }
+        };
 
         let mut headers = Headers::new();
         headers.set("content-type", "image/png")?;
