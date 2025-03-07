@@ -15,7 +15,9 @@ use plotters::prelude::*;
 use plotters::coord::Shift;
 use plotters::style::full_palette::{GREEN_100, GREEN_500, ORANGE, RED_100, RED_500};
 
+use std::cmp::min;
 use std::error::Error;
+use std::ops::Div;
 
 // Styling structures
 #[derive(Clone)]
@@ -686,6 +688,12 @@ fn draw_macd(
                 *h < prev
             } else {
                 false // First bar has no previous value, so it’s not lower
+            };
+            let limit = 0.02f32;
+            let h = if h.abs() > limit {
+                h
+            } else {
+                &((h.div(h)) * limit)
             };
 
             // Determine the fill color based on value and whether it’s lower
