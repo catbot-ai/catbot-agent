@@ -9,7 +9,7 @@ use worker::*;
 
 // TODO: call service binding
 async fn gen_candle(pair_symbol: String, timeframe: String) -> anyhow::Result<Vec<Kline>> {
-    let kline_data_1m = fetch_binance_kline_data::<Kline>(&pair_symbol, &timeframe, 60).await?;
+    let kline_data_1m = fetch_binance_kline_data::<Kline>(&pair_symbol, &timeframe, 300).await?;
     Ok(kline_data_1m)
 }
 
@@ -19,7 +19,7 @@ const DEFAULT_FONT_NAME: &str = "Roboto-Light.ttf";
 pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<Response> {
     if let Some(pair_symbol) = ctx.param("pair_symbol") {
         // Get timeframe
-        let binding = "1m".to_string();
+        let binding = "5m".to_string();
         let timeframe = ctx.param("timeframe").unwrap_or(&binding);
 
         // Get font
@@ -55,6 +55,8 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
             .with_past_candle(candle_data)
             .with_title(&chart_metadata.title)
             .with_font_data(font_data)
+            .with_macd()
+            .with_bollinger_band()
             .build();
 
         // Handle

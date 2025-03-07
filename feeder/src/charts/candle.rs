@@ -13,7 +13,7 @@ use plotters::prelude::full_palette::PURPLE;
 use plotters::prelude::*;
 
 use plotters::coord::Shift;
-use plotters::style::full_palette::{GREEN_900, ORANGE, RED_900};
+use plotters::style::full_palette::{GREEN_500, ORANGE, RED_500};
 
 use std::error::Error;
 
@@ -663,15 +663,33 @@ fn draw_macd(
             &ORANGE,
         ))?;
 
-        // Draw histogram bars using plotting_area
+        // Draw histogram bars with conditional styling
         let plotting_area = chart.plotting_area();
-        for (t, _, _, h) in &macd_lines {
-            let color = if *h > 0.0 { GREEN_900 } else { RED_900 };
-            let delta = chrono::Duration::seconds(30);
+        let mut previous_h: Option<f32> = None; // Track the previous histogram value
+        let delta = chrono::Duration::seconds(150); // 5-minute timeframe / 2 = 150 seconds
+
+        for (t, _, _, h) in macd_lines.iter() {
+            let color = if *h > 0.0 { GREEN_500 } else { RED_500 };
+            let style = if let Some(prev) = previous_h {
+                // If current value is less than previous, use hollow style
+                if *h < prev {
+                    ShapeStyle::from(&color).stroke_width(2) // Hollow (border only)
+                } else {
+                    ShapeStyle::from(&color).filled() // Filled
+                }
+            } else {
+                // First bar is always filled (no previous value to compare)
+                ShapeStyle::from(&color).filled()
+            };
+
+            // Draw the histogram bar
             plotting_area.draw(&Rectangle::new(
                 [(*t - delta, 0.0), (*t + delta, *h)],
-                ShapeStyle::from(&color).filled(),
+                style,
             ))?;
+
+            // Update previous value
+            previous_h = Some(*h);
         }
     }
     Ok(())
