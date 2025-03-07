@@ -1,11 +1,12 @@
 use crate::charts::png::encode_png;
-use ab_glyph::{FontRef, PxScale};
+use ab_glyph::ScaleFont;
+use ab_glyph::{Font, FontRef, PxScale};
 use chrono::{DateTime, Duration};
 use chrono_tz::Tz;
 use common::Kline;
-use image::ImageBuffer;
-use image::Rgb;
-use imageproc::drawing::draw_text_mut;
+use image::{ImageBuffer, Rgb};
+use imageproc::drawing::{draw_filled_rect_mut, draw_text_mut};
+use imageproc::rect::Rect;
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
 use std::error::Error;
@@ -27,6 +28,7 @@ pub struct LineStyle {
 pub struct LabelStyle {
     pub scale: PxScale,
     pub color: Rgb<u8>,
+    pub background_color: Rgb<u8>,
     pub offset_x: i32,
     pub offset_y: i32,
 }
@@ -67,7 +69,7 @@ impl Chart {
                 title: String::new(),
             },
             font_data: None,
-            candle_width: 5,
+            candle_width: 10,
             candle_height: 5,
             points: Vec::new(),
             point_style: None,
@@ -132,6 +134,7 @@ impl Chart {
         scale_x: f32,
         scale_y: f32,
         color: Rgb<u8>,
+        background_color: Rgb<u8>,
         offset_x: i32,
         offset_y: i32,
     ) -> Self {
@@ -141,6 +144,7 @@ impl Chart {
                 y: scale_y,
             },
             color,
+            background_color,
             offset_x,
             offset_y,
         });
@@ -201,8 +205,6 @@ impl Chart {
 
             chart
                 .configure_mesh()
-                .x_labels(10) // Show up to 10 labels
-                .x_label_formatter(&|x| x.format("%Y-%m-%d %H:%M").to_string()) // Format x-axis labels
                 .light_line_style(RGBColor(48, 48, 48))
                 .draw()?;
 
@@ -244,6 +246,20 @@ impl Chart {
                 (0..width as i32, 0..height as i32),
             ));
 
+            // Draw lines
+            if !self.lines.is_empty() {
+                let style = self.line_style.clone().unwrap_or(LineStyle {
+                    stroke_width: 2,
+                    color: YELLOW,
+                });
+                for &[p1, p2] in self.lines.iter() {
+                    root.draw(&PathElement::new(
+                        vec![p1, p2],
+                        ShapeStyle::from(&style.color).stroke_width(style.stroke_width as u32),
+                    ))?;
+                }
+            }
+
             // Draw points
             if !self.points.is_empty() {
                 let style = self.point_style.clone().unwrap_or(PointStyle {
@@ -258,36 +274,50 @@ impl Chart {
                     ))?;
                 }
             }
-
-            // Draw lines
-            if !self.lines.is_empty() {
-                let style = self.line_style.clone().unwrap_or(LineStyle {
-                    stroke_width: 2,
-                    color: YELLOW,
-                });
-                for &[p1, p2] in self.lines.iter() {
-                    root.draw(&PathElement::new(
-                        vec![p1, p2],
-                        ShapeStyle::from(&style.color).stroke_width(style.stroke_width as u32),
-                    ))?;
-                }
-            }
         }
 
-        // Draw labels
+        // Draw labels with background color using draw_text_mut
         if !self.labels.is_empty() {
             let style = self.label_style.clone().unwrap_or(LabelStyle {
                 scale: PxScale { x: 15.0, y: 15.0 },
                 color: white,
+                background_color: Rgb([0, 0, 0]), // Default black background
                 offset_x: 5,
                 offset_y: 0,
             });
+            let font_metrics = font.as_scaled(style.scale);
             for (x, y, text) in self.labels.iter() {
+                // Calculate exact text bounds
+                let mut total_width = 0.0f32;
+                for c in text.chars() {
+                    let glyph_id = font_metrics.glyph_id(c);
+                    let glyph = ab_glyph::Glyph {
+                        id: glyph_id,
+                        scale: style.scale,
+                        position: ab_glyph::Point { x: 0.0, y: 0.0 },
+                    };
+                    let bounds = font_metrics.glyph_bounds(&glyph);
+                    total_width += bounds.width()
+                }
+                let text_width = total_width.ceil() as i32;
+                let text_height = (font_metrics.ascent() - font_metrics.descent()).ceil() as i32;
+                let x_pos = (*x * width as f32) as i32 + style.offset_x;
+                let y_pos = (*y * height as f32) as i32 + style.offset_y - text_height; // Adjust for baseline
+
+                // Draw background rectangle
+                draw_filled_rect_mut(
+                    &mut imgbuf,
+                    Rect::at(x_pos - 4, y_pos - 4)
+                        .of_size((text_width + 6) as u32, (text_height + 1) as u32),
+                    style.background_color,
+                );
+
+                // Draw text on top of background
                 draw_text_mut(
                     &mut imgbuf,
                     style.color,
-                    (*x * width as f32) as i32 + style.offset_x,
-                    (*y * height as f32) as i32 + style.offset_y,
+                    x_pos,
+                    y_pos + (font_metrics.descent() as i32), // Align text baseline
                     style.scale,
                     &font,
                     text,
@@ -295,7 +325,7 @@ impl Chart {
             }
         }
 
-        // Draw title
+        // Draw title using draw_text_mut
         draw_text_mut(
             &mut imgbuf,
             white,
@@ -326,16 +356,16 @@ async fn entry_point() {
         .with_title("SOL/USDT")
         .with_font_data(font_data)
         .with_candle_dimensions(10, 5)
-        .with_points(vec![(0.5, 0.6), (0.25, 0.33), (0.8, 0.8)])
-        .with_point_style(5, RGBColor(255, 0, 0)) // Red points with radius 5
         .with_lines(vec![[(0.5, 0.6), (0.25, 0.33)], [(0.8, 0.8), (0.5, 0.6)]])
-        .with_line_style(3, RGBColor(0, 255, 0)) // Green lines with width 3
+        .with_line_style(3, RGBColor(0, 128, 0))
+        .with_points(vec![(0.5, 0.6), (0.25, 0.33), (0.8, 0.8)])
+        .with_point_style(5, RGBColor(0, 255, 0))
         .with_labels(vec![
             (0.5, 0.6, "A".to_string()),
             (0.25, 0.33, "B".to_string()),
             (0.8, 0.8, "C".to_string()),
         ])
-        .with_label_style(20.0, 20.0, Rgb([0, 0, 255]), 10, 5) // Blue labels, larger scale, offset
+        .with_label_style(20.0, 20.0, Rgb([0, 0, 255]), Rgb([0, 255, 255]), 10, 5)
         .build()
         .unwrap();
 
