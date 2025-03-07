@@ -13,7 +13,7 @@ use plotters::prelude::full_palette::PURPLE;
 use plotters::prelude::*;
 
 use plotters::coord::Shift;
-use plotters::style::full_palette::{GREEN_500, ORANGE, RED_500};
+use plotters::style::full_palette::{GREEN_100, GREEN_500, ORANGE, RED_100, RED_500};
 
 use std::error::Error;
 
@@ -663,12 +663,6 @@ fn draw_macd(
             })
             .collect();
 
-        // // Draw the chart mesh (grid lines)
-        // chart
-        //     .configure_mesh()
-        //     .light_line_style(RGBColor(48, 48, 48))
-        //     .draw()?;
-
         // Draw MACD line series
         chart.draw_series(LineSeries::new(
             macd_lines.iter().map(|(t, m, _, _)| (*t, *m)),
@@ -687,26 +681,53 @@ fn draw_macd(
         let delta = chrono::Duration::seconds(150); // 5-minute timeframe / 2 = 150 seconds
 
         for (t, _, _, h) in macd_lines.iter() {
-            let color = if *h > 0.0 { GREEN_500 } else { RED_500 };
-            let style = if let Some(prev) = previous_h {
-                // If current value is less than previous, use hollow style
-                if *h < prev {
-                    ShapeStyle::from(&color).stroke_width(2) // Hollow (border only)
-                } else {
-                    ShapeStyle::from(&color).filled() // Filled
-                }
+            // Check if the current value is lower than the previous one
+            let is_lower = if let Some(prev) = previous_h {
+                *h < prev
             } else {
-                // First bar is always filled (no previous value to compare)
-                ShapeStyle::from(&color).filled()
+                false // First bar has no previous value, so it’s not lower
             };
 
-            // Draw the histogram bar
+            // Determine the fill color based on value and whether it’s lower
+            let fill_color = if *h > 0.0 {
+                if is_lower {
+                    GREEN_100 // Lighter green for decreasing positive values
+                } else {
+                    GREEN_500 // Standard green for non-decreasing positive values
+                }
+            } else if is_lower {
+                RED_100 // Lighter red for decreasing negative values
+            } else {
+                RED_500 // Standard red for non-decreasing negative values
+            };
+
+            // Define the fill style: filled with the chosen color, no stroke
+            let fill_style = ShapeStyle {
+                color: fill_color.into(),
+                filled: true,
+                stroke_width: 0,
+            };
+
+            // Define the stroke style: 1px black outline, no fill
+            let stroke_style = ShapeStyle {
+                color: BLACK.into(),
+                filled: false,
+                stroke_width: 1,
+            };
+
+            // Draw the filled rectangle
             plotting_area.draw(&Rectangle::new(
                 [(*t - delta, 0.0), (*t + delta, *h)],
-                style,
+                fill_style,
             ))?;
 
-            // Update previous value
+            // Draw the stroked rectangle for the black outline
+            plotting_area.draw(&Rectangle::new(
+                [(*t - delta, 0.0), (*t + delta, *h)],
+                stroke_style,
+            ))?;
+
+            // Update the previous value for the next iteration
             previous_h = Some(*h);
         }
     }
