@@ -106,6 +106,11 @@ fn setup_macd_chart<'a>(
         .margin(20)
         .build_cartesian_2d(first_time..last_time, min_macd..max_macd)?;
 
+    macd_chart
+        .configure_mesh()
+        .light_line_style(RGBColor(48, 48, 48))
+        .draw()?;
+
     draw_macd(
         &mut macd_chart,
         &Some(past_data.to_vec()),
@@ -290,20 +295,27 @@ impl Chart {
             (None, None) => unreachable!(),
         };
 
-        let width = 768;
+        // Calculate the total width needed for all candles
+        let total_candles = all_candle_data.len();
+        let candle_width = self.candle_width as u32; // 10px per candle
+        let total_width = total_candles as u32 * candle_width; // Full width for all candles
         let margin = 20;
-        let plotting_width = (width - 2 * margin) as u32;
-        let max_candles = (plotting_width / self.candle_width) as usize;
-        let num_candles = all_candle_data.len().min(max_candles);
-        let visible_candles = &all_candle_data[all_candle_data.len() - num_candles..];
+        let final_width = 768; // Desired output width
+        let height = 1024;
 
-        let first_time = parse_kline_time(visible_candles[0].open_time, timezone);
+        // Ensure the total width is at least the final width
+        let plot_width = total_width.max(final_width);
+        let bar: (u32, u32) = (plot_width, height);
+        let mut buffer = vec![0; (plot_width * height * 3) as usize];
+
+        // Determine the full time range for plotting
+        let first_time = parse_kline_time(all_candle_data[0].open_time, timezone);
         let last_time = parse_kline_time(
-            visible_candles[visible_candles.len() - 1].open_time,
+            all_candle_data[all_candle_data.len() - 1].open_time,
             timezone,
         );
 
-        let prices: Vec<f32> = visible_candles
+        let prices: Vec<f32> = all_candle_data
             .iter()
             .flat_map(|k| {
                 vec![
@@ -317,10 +329,6 @@ impl Chart {
         let min_price = prices.iter().fold(f32::INFINITY, |a, &b| a.min(b));
         let max_price = prices.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
 
-        let height = 1024;
-        let bar: (u32, u32) = (width, height);
-        let mut buffer = vec![0; (width * height * 3) as usize];
-
         {
             let root = BitMapBackend::with_buffer(&mut buffer, bar).into_drawing_area();
             root.fill(&B_BLACK)?;
@@ -328,19 +336,11 @@ impl Chart {
             let (top, bottom) = root.split_vertically((75).percent());
 
             let mut top_chart = ChartBuilder::on(&top)
-                .margin(20)
+                .margin(margin)
                 .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
 
             if let Some(past_candle_data) = &self.past_candle_data {
-                let past_visible = past_candle_data
-                    .iter()
-                    .filter(|k| {
-                        let t = parse_kline_time(k.open_time, timezone);
-                        t >= first_time && t <= last_time
-                    })
-                    .cloned()
-                    .collect::<Vec<_>>();
-                draw_candlesticks(&mut top_chart, &past_visible, timezone, |is_bullish| {
+                draw_candlesticks(&mut top_chart, past_candle_data, timezone, |is_bullish| {
                     if is_bullish {
                         B_GREEN.into()
                     } else {
@@ -350,21 +350,18 @@ impl Chart {
             }
 
             if let Some(predicted_candle_data) = &self.predicted_candle_data {
-                let pred_visible = predicted_candle_data
-                    .iter()
-                    .filter(|k| {
-                        let t = parse_kline_time(k.open_time, timezone);
-                        t >= first_time && t <= last_time
-                    })
-                    .cloned()
-                    .collect::<Vec<_>>();
-                draw_candlesticks(&mut top_chart, &pred_visible, timezone, |is_bullish| {
-                    if is_bullish {
-                        RGBAColor(0, 255, 0, 0.25)
-                    } else {
-                        RGBAColor(255, 0, 0, 0.25)
-                    }
-                })?;
+                draw_candlesticks(
+                    &mut top_chart,
+                    predicted_candle_data,
+                    timezone,
+                    |is_bullish| {
+                        if is_bullish {
+                            RGBAColor(0, 255, 0, 0.25)
+                        } else {
+                            RGBAColor(255, 0, 0, 0.25)
+                        }
+                    },
+                )?;
             }
 
             if self.bollinger_enabled {
@@ -379,15 +376,11 @@ impl Chart {
                     let (volume_area, macd_area) = bottom.split_vertically((50).percent());
                     let volumes: Vec<f32> = past_data
                         .iter()
-                        .filter(|k| {
-                            let t = parse_kline_time(k.open_time, timezone);
-                            t >= first_time && t <= last_time
-                        })
                         .map(|k| k.volume.parse::<f32>().unwrap())
                         .collect();
                     let max_volume = volumes.iter().fold(0.0f32, |a, &b| a.max(b));
                     let mut volume_chart = ChartBuilder::on(&volume_area)
-                        .margin(20)
+                        .margin(margin)
                         .build_cartesian_2d(first_time..last_time, 0.0f32..max_volume * 1.1)?;
                     draw_volume_bars(&mut volume_chart, &Some(past_data.to_vec()), timezone)?;
 
@@ -402,15 +395,11 @@ impl Chart {
                 } else if self.volume_enabled {
                     let volumes: Vec<f32> = past_data
                         .iter()
-                        .filter(|k| {
-                            let t = parse_kline_time(k.open_time, timezone);
-                            t >= first_time && t <= last_time
-                        })
                         .map(|k| k.volume.parse::<f32>().unwrap())
                         .collect();
                     let max_volume = volumes.iter().fold(0.0f32, |a, &b| a.max(b));
                     let mut volume_chart = ChartBuilder::on(&bottom)
-                        .margin(20)
+                        .margin(margin)
                         .build_cartesian_2d(first_time..last_time, 0.0f32..max_volume * 1.1)?;
                     draw_volume_bars(&mut volume_chart, &Some(past_data.to_vec()), timezone)?;
                 } else if self.macd_enabled {
@@ -426,16 +415,27 @@ impl Chart {
             }
         }
 
-        let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(width, height);
+        // Crop the image to the rightmost 768 pixels
+        let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(plot_width, height);
         imgbuf.copy_from_slice(buffer.as_slice());
+
+        // Calculate the starting x-coordinate for cropping (rightmost 768 pixels)
+        let crop_x = if plot_width > final_width {
+            plot_width - final_width
+        } else {
+            0
+        };
+        let mut cropped_img: ImageBuffer<Rgb<u8>, Vec<u8>> =
+            image::imageops::crop_imm(&imgbuf, crop_x, 0, final_width, height).to_image();
 
         let white = Rgb([255u8, 255u8, 255u8]);
         {
-            let root = BitMapBackend::with_buffer(&mut imgbuf, bar).into_drawing_area();
+            let root = BitMapBackend::with_buffer(&mut cropped_img, (final_width, height))
+                .into_drawing_area();
             let root = root.apply_coord_spec(Cartesian2d::<RangedCoordf32, RangedCoordf32>::new(
                 0f32..1f32,
                 0f32..1f32,
-                (0..width as i32, 0..height as i32),
+                (0..final_width as i32, 0..height as i32),
             ));
 
             if !self.lines.is_empty() {
@@ -488,18 +488,18 @@ impl Chart {
                 }
                 let text_width = total_width.ceil() as i32;
                 let text_height = (font_metrics.ascent() - font_metrics.descent()).ceil() as i32;
-                let x_pos = (*x * width as f32) as i32 + style.offset_x;
+                let x_pos = (*x * final_width as f32) as i32 + style.offset_x;
                 let y_pos = (*y * height as f32) as i32 + style.offset_y - text_height;
 
                 draw_filled_rect_mut(
-                    &mut imgbuf,
+                    &mut cropped_img,
                     Rect::at(x_pos - 4, y_pos - 4)
                         .of_size((text_width + 6) as u32, (text_height + 1) as u32),
                     style.background_color,
                 );
 
                 draw_text_mut(
-                    &mut imgbuf,
+                    &mut cropped_img,
                     style.color,
                     x_pos,
                     y_pos + (font_metrics.descent() as i32),
@@ -511,7 +511,7 @@ impl Chart {
         }
 
         draw_text_mut(
-            &mut imgbuf,
+            &mut cropped_img,
             white,
             10,
             10,
@@ -520,7 +520,7 @@ impl Chart {
             &self.metadata.title,
         );
 
-        Ok(encode_png(&imgbuf)?)
+        Ok(encode_png(&cropped_img)?)
     }
 }
 
@@ -719,34 +719,6 @@ mod test {
     use chrono_tz::Asia::Tokyo;
     use common::binance::fetch_binance_kline_data;
     use image::Rgb;
-    use rand::Rng;
-
-    fn tweak_candle_data(candle: &Kline) -> Kline {
-        let mut rng = rand::rng();
-        let tweak_factor = 0.005; // Reduced from 0.01 to 0.005 for less randomness
-        Kline {
-            open_time: candle.open_time,
-            open_price: (candle.open_price.parse::<f32>().unwrap()
-                * (1.0 + rng.random_range(-tweak_factor..tweak_factor)))
-            .to_string(),
-            high_price: (candle.high_price.parse::<f32>().unwrap()
-                * (1.0 + rng.random_range(-tweak_factor..tweak_factor)))
-            .to_string(),
-            low_price: (candle.low_price.parse::<f32>().unwrap()
-                * (1.0 + rng.random_range(-tweak_factor..tweak_factor)))
-            .to_string(),
-            close_price: (candle.close_price.parse::<f32>().unwrap()
-                * (1.0 + rng.random_range(-tweak_factor..tweak_factor)))
-            .to_string(),
-            volume: candle.volume.clone(),
-            close_time: candle.close_time,
-            quote_asset_volume: candle.quote_asset_volume.clone(),
-            number_of_trades: candle.number_of_trades,
-            taker_buy_base_asset_volume: candle.taker_buy_base_asset_volume.clone(),
-            taker_buy_quote_asset_volume: candle.taker_buy_quote_asset_volume.clone(),
-            ignore: candle.ignore.clone(),
-        }
-    }
 
     #[tokio::test]
     async fn entry_point() {
