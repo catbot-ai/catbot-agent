@@ -51,7 +51,7 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
         };
 
         // Get image
-        let buffer_result = Chart::new(Tokyo)
+        let buffer_result = Chart::new(timeframe, Tokyo)
             .with_past_candle(candle_data)
             .with_title(&chart_metadata.title)
             .with_font_data(font_data)

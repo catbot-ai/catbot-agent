@@ -1,7 +1,7 @@
 use crate::charts::png::encode_png;
 use ab_glyph::ScaleFont;
 use ab_glyph::{Font, FontRef, PxScale};
-use chrono::DateTime;
+use chrono::{DateTime, Duration};
 use chrono_tz::Tz;
 use common::Kline;
 use image::{ImageBuffer, Rgb};
@@ -13,10 +13,13 @@ use plotters::prelude::full_palette::PURPLE;
 use plotters::prelude::*;
 
 use plotters::coord::Shift;
-use plotters::style::full_palette::{GREEN_100, GREEN_500, ORANGE, PINK, RED_100, RED_500};
+use plotters::style::full_palette::{GREEN_100, RED_100};
 
 use std::error::Error;
-use std::ops::Div;
+
+const B_RED: RGBColor = RGBColor(245, 71, 95);
+const B_GREEN: RGBColor = RGBColor(17, 203, 129);
+const B_BLACK: RGBColor = RGBColor(22, 26, 30);
 
 // Styling structures
 #[derive(Clone)]
@@ -65,18 +68,22 @@ fn kline_to_m4rs_candlestick(k: &Kline) -> M4rsCandlestick {
 fn setup_macd_chart<'a>(
     area: &DrawingArea<BitMapBackend, Shift>,
     past_data: &[Kline],
-    predicted_data: &[Kline],
     timezone: &Tz,
     first_time: DateTime<Tz>,
     last_time: DateTime<Tz>,
+    timeframe: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let past_m4rs_candles: Vec<M4rsCandlestick> =
+    let past_data_m4rs_candles: Vec<M4rsCandlestick> =
         past_data.iter().map(kline_to_m4rs_candlestick).collect();
-    let macd_result = if !past_m4rs_candles.is_empty() {
-        macd(&past_m4rs_candles, 12, 26, 9)?
+
+    // Calculate MACD for the combined dataset
+    let macd_result = if !past_data_m4rs_candles.is_empty() {
+        macd(&past_data_m4rs_candles, 12, 26, 9)?
     } else {
         vec![]
     };
+
+    // Extract MACD values to determine the y-axis range
     let macd_values: Vec<f32> = macd_result
         .iter()
         .flat_map(|entry| {
@@ -87,22 +94,53 @@ fn setup_macd_chart<'a>(
             ]
         })
         .collect();
+
     let min_macd = macd_values.iter().fold(f32::INFINITY, |a, &b| a.min(b));
     let max_macd = macd_values.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
-    let min_macd = min_macd.min(-0.1);
-    let max_macd = max_macd.max(0.1);
+    let min_macd = min_macd.min(-0.1); // Ensure visibility of small negative values
+    let max_macd = max_macd.max(0.1); // Ensure visibility of small positive values
+
+    // Build the MACD chart with the combined range
     let mut macd_chart = ChartBuilder::on(area)
         .margin(20)
         .build_cartesian_2d(first_time..last_time, min_macd..max_macd)?;
-    draw_macd(&mut macd_chart, &Some(past_data.to_vec()), timezone)?;
 
-    draw_macd(&mut macd_chart, &Some(predicted_data.to_vec()), timezone)?;
+    // Draw MACD for the combined data in a single pass
+    draw_macd(
+        &mut macd_chart,
+        &Some(past_data.to_vec()),
+        timezone,
+        timeframe,
+    )?;
+
     Ok(())
+}
+
+fn parse_timeframe_duration(timeframe: &str) -> Duration {
+    let (value, unit) = timeframe.split_at(timeframe.len() - 1);
+    let value = value.parse::<i64>().unwrap();
+    match unit {
+        "m" => Duration::minutes(value),
+        "h" => Duration::hours(value),
+        "d" => Duration::days(value),
+        _ => panic!("Unsupported timeframe unit"),
+    }
+}
+
+fn calculate_delta(timeframe: &str) -> Duration {
+    let timeframe_duration = parse_timeframe_duration(timeframe);
+    let divisor = match timeframe {
+        "1m" | "5m" => 2, // Smaller bars for 1m and 5m
+        "1h" => 2,        // Larger bars for 1h
+        _ => 3,           // Default for other timeframes
+    };
+    timeframe_duration / divisor
 }
 
 // Chart struct with technical analysis methods
 pub struct Chart {
     timezone: Tz,
+    timeframe: String,
     past_candle_data: Option<Vec<Kline>>,
     predicted_candle_data: Option<Vec<Kline>>,
     metadata: ChartMetaData,
@@ -121,9 +159,10 @@ pub struct Chart {
 }
 
 impl Chart {
-    pub fn new(timezone: Tz) -> Self {
+    pub fn new(timeframe: &str, timezone: Tz) -> Self {
         Chart {
             timezone,
+            timeframe: timeframe.to_string(),
             past_candle_data: None,
             predicted_candle_data: None,
             metadata: ChartMetaData {
@@ -265,6 +304,7 @@ impl Chart {
             (None, None) => unreachable!(),
         };
 
+        // Don't remove this line!
         let all_candle_data = &all_candle_data[40..];
 
         let num_candles = all_candle_data.len() as u32;
@@ -279,12 +319,10 @@ impl Chart {
 
         {
             let root = BitMapBackend::with_buffer(&mut buffer, bar).into_drawing_area();
-            root.fill(&BLACK)?;
+            root.fill(&B_BLACK)?;
 
-            // Split into two rows: top (75%), bottom (25%)
             let (top, bottom) = root.split_vertically((75).percent());
 
-            // Top row: Candlesticks
             let prices: Vec<f32> = all_candle_data
                 .iter()
                 .flat_map(|k| {
@@ -309,18 +347,16 @@ impl Chart {
                 .margin(20)
                 .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
 
-            // Draw past candlesticks
             if let Some(past_candle_data) = &self.past_candle_data {
                 draw_candlesticks(&mut top_chart, past_candle_data, timezone, |is_bullish| {
                     if is_bullish {
-                        GREEN.into()
+                        B_GREEN.into()
                     } else {
-                        RED.into()
+                        B_RED.into()
                     }
                 })?;
             }
 
-            // Draw predicted candlesticks (25% transparent)
             if let Some(predicted_candle_data) = &self.predicted_candle_data {
                 draw_candlesticks(
                     &mut top_chart,
@@ -336,22 +372,15 @@ impl Chart {
                 )?;
             }
 
-            // Draw Bollinger Bands if enabled
             if self.bollinger_enabled {
                 let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
-                let predicted_data = self.predicted_candle_data.as_deref().unwrap_or(&[]);
-                draw_bollinger_bands(&mut top_chart, past_data, predicted_data, timezone)?;
+                draw_bollinger_bands(&mut top_chart, past_data, timezone)?;
             }
 
-            // Bottom row: Volume bars and MACD
             if self.volume_enabled || self.macd_enabled {
                 let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
-                let predicted_data = self.predicted_candle_data.as_deref().unwrap_or(&[]);
                 if self.volume_enabled && self.macd_enabled {
-                    // Split bottom into two equal parts: volume on top, MACD on bottom
                     let (volume_area, macd_area) = bottom.split_vertically((50).percent());
-
-                    // Volume chart
                     let volumes: Vec<f32> = past_data
                         .iter()
                         .map(|k| k.volume.parse::<f32>().unwrap())
@@ -362,17 +391,15 @@ impl Chart {
                         .build_cartesian_2d(first_time..last_time, 0.0f32..max_volume * 1.1)?;
                     draw_volume_bars(&mut volume_chart, &Some(past_data.to_vec()), timezone)?;
 
-                    // MACD chart
                     setup_macd_chart(
                         &macd_area,
                         past_data,
-                        predicted_data,
                         timezone,
                         first_time,
                         last_time,
+                        &self.timeframe,
                     )?;
                 } else if self.volume_enabled {
-                    // Use entire bottom for volume
                     let volumes: Vec<f32> = past_data
                         .iter()
                         .map(|k| k.volume.parse::<f32>().unwrap())
@@ -383,20 +410,18 @@ impl Chart {
                         .build_cartesian_2d(first_time..last_time, 0.0f32..max_volume * 1.1)?;
                     draw_volume_bars(&mut volume_chart, &Some(past_data.to_vec()), timezone)?;
                 } else if self.macd_enabled {
-                    // Use entire bottom for MACD
                     setup_macd_chart(
                         &bottom,
                         past_data,
-                        predicted_data,
                         timezone,
                         first_time,
                         last_time,
+                        &self.timeframe,
                     )?;
                 }
             }
         }
 
-        // Image buffer and additional drawings (points, lines, labels, title)
         let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(width, height);
         imgbuf.copy_from_slice(buffer.as_slice());
 
@@ -524,7 +549,7 @@ where
             close,
             ShapeStyle::from(&color).filled(),
             ShapeStyle::from(&color).filled(),
-            10,
+            8,
         )
     }))?;
     Ok(())
@@ -537,7 +562,6 @@ fn draw_bollinger_bands(
         Cartesian2d<RangedDateTime<DateTime<Tz>>, RangedCoordf32>,
     >,
     past_data: &[Kline],
-    predicted_data: &[Kline],
     timezone: &Tz,
 ) -> Result<(), Box<dyn Error>> {
     // Draw Bollinger Bands for past data
@@ -571,38 +595,6 @@ fn draw_bollinger_bands(
         ))?;
     }
 
-    // Draw Bollinger Bands for predicted data
-    if !predicted_data.is_empty() {
-        let pred_m4rs_candles: Vec<M4rsCandlestick> = predicted_data
-            .iter()
-            .map(kline_to_m4rs_candlestick)
-            .collect();
-        let pred_bb_result = bolinger_band(&pred_m4rs_candles, 20)?;
-        let pred_bb_lines: Vec<(DateTime<Tz>, f32, f32, f32)> = pred_bb_result
-            .iter()
-            .map(|entry| {
-                let t = parse_kline_time(entry.at as i64, timezone);
-                let avg = entry.avg as f32;
-                let upper = (entry.avg + 2.0 * entry.sigma) as f32;
-                let lower = (entry.avg - 2.0 * entry.sigma) as f32;
-                (t, avg, upper, lower)
-            })
-            .collect();
-
-        let predicted_style = ShapeStyle::from(&BLUE).stroke_width(2);
-        chart.draw_series(LineSeries::new(
-            pred_bb_lines.iter().map(|(t, avg, _, _)| (*t, *avg)),
-            predicted_style,
-        ))?;
-        chart.draw_series(LineSeries::new(
-            pred_bb_lines.iter().map(|(t, _, upper, _)| (*t, *upper)),
-            predicted_style,
-        ))?;
-        chart.draw_series(LineSeries::new(
-            pred_bb_lines.iter().map(|(t, _, _, lower)| (*t, *lower)),
-            predicted_style,
-        ))?;
-    }
     Ok(())
 }
 
@@ -627,7 +619,7 @@ fn draw_volume_bars(
             let bar_width = chrono::Duration::minutes(1);
             Rectangle::new(
                 [(time, 0.0), (time + bar_width, volume)],
-                ShapeStyle::from(&GREEN).filled(),
+                ShapeStyle::from(&B_GREEN).filled(),
             )
         }))?;
     }
@@ -642,6 +634,7 @@ fn draw_macd(
     >,
     past_candle_data: &Option<Vec<Kline>>,
     timezone: &Tz,
+    timeframe: &str,
 ) -> Result<(), Box<dyn Error>> {
     if let Some(past_data) = past_candle_data {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
@@ -660,7 +653,6 @@ fn draw_macd(
             })
             .collect();
 
-        // Draw MACD line series
         let m_style = ShapeStyle::from(&MAGENTA).stroke_width(2);
         let s_style = ShapeStyle::from(&CYAN).stroke_width(2);
         chart.draw_series(LineSeries::new(
@@ -668,73 +660,63 @@ fn draw_macd(
             m_style,
         ))?;
 
-        // Draw Signal line series
         chart.draw_series(LineSeries::new(
             macd_lines.iter().map(|(t, _, s, _)| (*t, *s)),
             s_style,
         ))?;
 
-        // Draw histogram bars with conditional styling
         let plotting_area = chart.plotting_area();
-        let mut previous_h: Option<f32> = None; // Track the previous histogram value
-        let delta = chrono::Duration::seconds(150); // 5-minute timeframe / 2 = 150 seconds
+        let mut previous_h: Option<f32> = None;
+        let delta = calculate_delta(timeframe);
         let limit = 0.02f32;
 
         for (t, _, _, h) in macd_lines.iter() {
-            // Check if the current value is lower than the previous one
             let is_lower = if let Some(prev) = previous_h {
                 *h < prev
             } else {
-                false // First bar has no previous value, so it’s not lower
+                false
             };
 
-            // Prevent invisible small value
             let h = if h.abs() > limit {
                 h
             } else {
-                &((h.div(h)) * limit)
+                &(h.signum() * limit)
             };
 
-            // Determine the fill color based on value and whether it’s lower
             let fill_color = if *h > 0.0 {
                 if is_lower {
-                    GREEN_100 // Lighter green for decreasing positive values
+                    GREEN_100
                 } else {
-                    GREEN_500 // Standard green for non-decreasing positive values
+                    B_GREEN
                 }
             } else if is_lower {
-                RED_100 // Lighter red for decreasing negative values
+                RED_100
             } else {
-                RED_500 // Standard red for non-decreasing negative values
+                B_RED
             };
 
-            // Define the fill style: filled with the chosen color, no stroke
             let fill_style = ShapeStyle {
                 color: fill_color.into(),
                 filled: true,
                 stroke_width: 0,
             };
 
-            // Define the stroke style: 1px black outline, no fill
             let stroke_style = ShapeStyle {
-                color: BLACK.into(),
+                color: B_BLACK.into(),
                 filled: false,
                 stroke_width: 1,
             };
 
-            // Draw the filled rectangle
             plotting_area.draw(&Rectangle::new(
                 [(*t - delta, 0.0), (*t + delta, *h)],
                 fill_style,
             ))?;
 
-            // Draw the stroked rectangle for the black outline
             plotting_area.draw(&Rectangle::new(
                 [(*t - delta, 0.0), (*t + delta, *h)],
                 stroke_style,
             ))?;
 
-            // Update the previous value for the next iteration
             previous_h = Some(*h);
         }
     }
@@ -782,23 +764,13 @@ mod test {
         let timeframe = "1h";
         let font_data = include_bytes!("../../Roboto-Light.ttf").to_vec();
 
-        let candle_data = fetch_binance_kline_data::<Kline>(pair_symbol, timeframe, 300)
+        let limit = 240;
+        let candle_data = fetch_binance_kline_data::<Kline>(pair_symbol, timeframe, limit)
             .await
             .unwrap();
 
-        let total_candles = candle_data.len();
-        let past_candles = (total_candles as f32 * 0.5).ceil() as usize;
-        let predicted_start = total_candles - (total_candles as f32 * 0.5).ceil() as usize;
-
-        let past_data = candle_data[..past_candles + 40].to_vec();
-        let predicted_candle_data: Vec<Kline> = candle_data[predicted_start..]
-            .iter()
-            .map(tweak_candle_data)
-            .collect();
-
-        let png = Chart::new(Tokyo)
-            .with_past_candle(past_data)
-            .with_predicted_candle(predicted_candle_data)
+        let png = Chart::new(timeframe, Tokyo)
+            .with_past_candle(candle_data)
             .with_title(&format!("{pair_symbol} {timeframe}"))
             .with_font_data(font_data)
             .with_candle_dimensions(10, 5)
