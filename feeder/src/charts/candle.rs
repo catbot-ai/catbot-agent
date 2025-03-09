@@ -65,13 +65,14 @@ fn kline_to_m4rs_candlestick(k: &Kline) -> M4rsCandlestick {
     )
 }
 
-fn setup_macd_chart<'a>(
+fn setup_macd_chart(
     area: &DrawingArea<BitMapBackend, Shift>,
     past_data: &[Kline],
     timezone: &Tz,
     first_time: DateTime<Tz>,
     last_time: DateTime<Tz>,
     timeframe: &str,
+    margin: u32,
 ) -> Result<(), Box<dyn Error>> {
     let past_data_m4rs_candles: Vec<M4rsCandlestick> =
         past_data.iter().map(kline_to_m4rs_candlestick).collect();
@@ -96,14 +97,14 @@ fn setup_macd_chart<'a>(
     let min_macd = macd_values
         .iter()
         .fold(f32::INFINITY, |a, &b| a.min(b))
-        .min(-0.1);
+        .min(-0.2); // Adjusted to -0.2
     let max_macd = macd_values
         .iter()
         .fold(f32::NEG_INFINITY, |a, &b| a.max(b))
-        .max(0.1);
+        .max(0.2); // Adjusted to 0.2
 
     let mut macd_chart = ChartBuilder::on(area)
-        .margin(20)
+        .margin(margin)
         .build_cartesian_2d(first_time..last_time, min_macd..max_macd)?;
 
     macd_chart
@@ -161,6 +162,7 @@ pub struct Chart {
     macd_enabled: bool,
     bollinger_enabled: bool,
     volume_enabled: bool,
+    stoch_rsi_enabled: bool, // New field
 }
 
 impl Chart {
@@ -185,10 +187,10 @@ impl Chart {
             macd_enabled: false,
             bollinger_enabled: false,
             volume_enabled: false,
+            stoch_rsi_enabled: false,
         }
     }
 
-    // Builder methods
     pub fn with_past_candle(mut self, past_candle_data: Vec<Kline>) -> Self {
         self.past_candle_data = Some(past_candle_data);
         self
@@ -280,6 +282,11 @@ impl Chart {
         self
     }
 
+    pub fn with_stoch_rsi(mut self) -> Self {
+        self.stoch_rsi_enabled = true;
+        self
+    }
+
     pub fn build(self) -> Result<Vec<u8>, Box<dyn Error>> {
         if self.past_candle_data.is_none() && self.predicted_candle_data.is_none() {
             return Err("At least one candle data set is required".into());
@@ -297,9 +304,9 @@ impl Chart {
 
         // Calculate the total width needed for all candles
         let total_candles = all_candle_data.len();
-        let candle_width = self.candle_width as u32; // 10px per candle
+        let candle_width = self.candle_width; // 10px per candle
         let total_width = total_candles as u32 * candle_width; // Full width for all candles
-        let margin = 20;
+        let margin = 100;
         let final_width = 768; // Desired output width
         let height = 1024;
 
@@ -333,20 +340,26 @@ impl Chart {
             let root = BitMapBackend::with_buffer(&mut buffer, bar).into_drawing_area();
             root.fill(&B_BLACK)?;
 
-            let (top, bottom) = root.split_vertically((75).percent());
+            let (top, bottom) = root.split_vertically((50).percent());
 
             let mut top_chart = ChartBuilder::on(&top)
                 .margin(margin)
                 .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
 
             if let Some(past_candle_data) = &self.past_candle_data {
-                draw_candlesticks(&mut top_chart, past_candle_data, timezone, |is_bullish| {
-                    if is_bullish {
-                        B_GREEN.into()
-                    } else {
-                        B_RED.into()
-                    }
-                })?;
+                draw_candlesticks(
+                    &mut top_chart,
+                    past_candle_data,
+                    timezone,
+                    |is_bullish| {
+                        if is_bullish {
+                            B_GREEN.into()
+                        } else {
+                            B_RED.into()
+                        }
+                    },
+                    self.candle_width,
+                )?;
             }
 
             if let Some(predicted_candle_data) = &self.predicted_candle_data {
@@ -361,6 +374,7 @@ impl Chart {
                             RGBAColor(255, 0, 0, 0.25)
                         }
                     },
+                    self.candle_width,
                 )?;
             }
 
@@ -369,11 +383,42 @@ impl Chart {
                 draw_bollinger_bands(&mut top_chart, past_data, timezone)?;
             }
 
-            if self.volume_enabled || self.macd_enabled {
+            if self.volume_enabled || self.macd_enabled || self.stoch_rsi_enabled {
                 let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
 
-                if self.volume_enabled && self.macd_enabled {
-                    let (volume_area, macd_area) = bottom.split_vertically((50).percent());
+                // Divide bottom area based on enabled indicators
+                let num_indicators = [
+                    self.volume_enabled,
+                    self.macd_enabled,
+                    self.stoch_rsi_enabled,
+                ]
+                .iter()
+                .filter(|&&enabled| enabled)
+                .count() as f32;
+                let section_height_percent = (100.0 / num_indicators).round() as u32;
+
+                let mut remaining_area = bottom;
+                let mut areas = Vec::new();
+
+                if self.volume_enabled {
+                    let (volume_area, rest) =
+                        remaining_area.split_vertically((section_height_percent).percent());
+                    areas.push(volume_area);
+                    remaining_area = rest;
+                }
+                if self.macd_enabled {
+                    let (macd_area, rest) =
+                        remaining_area.split_vertically((section_height_percent).percent());
+                    areas.push(macd_area);
+                    remaining_area = rest;
+                }
+                if self.stoch_rsi_enabled {
+                    areas.push(remaining_area);
+                }
+
+                let mut area_iter = areas.into_iter().enumerate();
+                if self.volume_enabled {
+                    let (_idx, volume_area) = area_iter.next().unwrap();
                     let volumes: Vec<f32> = past_data
                         .iter()
                         .map(|k| k.volume.parse::<f32>().unwrap())
@@ -383,7 +428,10 @@ impl Chart {
                         .margin(margin)
                         .build_cartesian_2d(first_time..last_time, 0.0f32..max_volume * 1.1)?;
                     draw_volume_bars(&mut volume_chart, &Some(past_data.to_vec()), timezone)?;
+                }
 
+                if self.macd_enabled {
+                    let (_idx, macd_area) = area_iter.next().unwrap();
                     setup_macd_chart(
                         &macd_area,
                         past_data,
@@ -391,26 +439,49 @@ impl Chart {
                         first_time,
                         last_time,
                         &self.timeframe,
+                        margin,
                     )?;
-                } else if self.volume_enabled {
-                    let volumes: Vec<f32> = past_data
-                        .iter()
-                        .map(|k| k.volume.parse::<f32>().unwrap())
-                        .collect();
-                    let max_volume = volumes.iter().fold(0.0f32, |a, &b| a.max(b));
-                    let mut volume_chart = ChartBuilder::on(&bottom)
+                }
+
+                if self.stoch_rsi_enabled {
+                    let (_idx, stoch_rsi_area) = area_iter.next().unwrap();
+                    let mut stoch_rsi_chart = ChartBuilder::on(&stoch_rsi_area)
                         .margin(margin)
-                        .build_cartesian_2d(first_time..last_time, 0.0f32..max_volume * 1.1)?;
-                    draw_volume_bars(&mut volume_chart, &Some(past_data.to_vec()), timezone)?;
-                } else if self.macd_enabled {
-                    setup_macd_chart(
-                        &bottom,
-                        past_data,
-                        timezone,
-                        first_time,
-                        last_time,
-                        &self.timeframe,
-                    )?;
+                        .build_cartesian_2d(first_time..last_time, 0.0f32..100.0f32)?;
+
+                    let past_m4rs_candles: Vec<M4rsCandlestick> =
+                        past_data.iter().map(kline_to_m4rs_candlestick).collect();
+                    let stoch_rsi_result = m4rs::stochastics(&past_m4rs_candles, 14, 3)?;
+                    let stoch_rsi_lines: Vec<(DateTime<Tz>, f32, f32)> = stoch_rsi_result
+                        .iter()
+                        .map(|entry| {
+                            let t = parse_kline_time(entry.at as i64, timezone);
+                            (t, entry.k as f32, entry.d as f32)
+                        })
+                        .collect();
+
+                    let k_style = ShapeStyle::from(&CYAN).stroke_width(1);
+                    let d_style = ShapeStyle::from(&MAGENTA).stroke_width(1);
+                    stoch_rsi_chart.draw_series(LineSeries::new(
+                        stoch_rsi_lines.iter().map(|(t, k, _)| (*t, *k)),
+                        k_style,
+                    ))?;
+                    stoch_rsi_chart.draw_series(LineSeries::new(
+                        stoch_rsi_lines.iter().map(|(t, _, d)| (*t, *d)),
+                        d_style,
+                    ))?;
+
+                    // Draw upper (80) and lower (20) lines for Stochastic RSI
+                    let upper_line = 80.0f32;
+                    let lower_line = 20.0f32;
+                    stoch_rsi_chart.draw_series(LineSeries::new(
+                        vec![(first_time, upper_line), (last_time, upper_line)],
+                        ShapeStyle::from(&WHITE).stroke_width(1),
+                    ))?;
+                    stoch_rsi_chart.draw_series(LineSeries::new(
+                        vec![(first_time, lower_line), (last_time, lower_line)],
+                        ShapeStyle::from(&WHITE).stroke_width(1),
+                    ))?;
                 }
             }
         }
@@ -420,11 +491,7 @@ impl Chart {
         imgbuf.copy_from_slice(buffer.as_slice());
 
         // Calculate the starting x-coordinate for cropping (rightmost 768 pixels)
-        let crop_x = if plot_width > final_width {
-            plot_width - final_width
-        } else {
-            0
-        };
+        let crop_x = plot_width.saturating_sub(final_width);
         let mut cropped_img: ImageBuffer<Rgb<u8>, Vec<u8>> =
             image::imageops::crop_imm(&imgbuf, crop_x, 0, final_width, height).to_image();
 
@@ -534,6 +601,7 @@ fn draw_candlesticks<F>(
     candle_data: &[Kline],
     timezone: &Tz,
     color_selector: F,
+    candle_width: u32,
 ) -> Result<(), Box<dyn Error>>
 where
     F: Fn(bool) -> RGBAColor,
@@ -553,7 +621,7 @@ where
             close,
             ShapeStyle::from(&color).filled(),
             ShapeStyle::from(&color).filled(),
-            8,
+            candle_width,
         )
     }))?;
     Ok(())
@@ -614,14 +682,33 @@ fn draw_volume_bars(
             .configure_mesh()
             .light_line_style(RGBColor(48, 48, 48))
             .draw()?;
-        chart.draw_series(past_data.iter().map(|k| {
+        chart.draw_series(past_data.iter().flat_map(|k| {
             let time = parse_kline_time(k.open_time, timezone);
             let volume = k.volume.parse::<f32>().unwrap();
-            let bar_width = chrono::Duration::minutes(1);
-            Rectangle::new(
-                [(time, 0.0), (time + bar_width, volume)],
-                ShapeStyle::from(&B_GREEN).filled(),
-            )
+            let bar_width = parse_timeframe_duration("1h"); // Match the 1h timeframe
+            let open = k.open_price.parse::<f32>().unwrap();
+            let close = k.close_price.parse::<f32>().unwrap();
+            let is_bullish = close >= open;
+            let fill_color = if is_bullish { B_GREEN } else { B_RED };
+            let fill_style = ShapeStyle {
+                color: fill_color.into(),
+                filled: true,
+                stroke_width: 0,
+            };
+            let stroke_style = ShapeStyle {
+                color: B_BLACK.into(), // 1px black stroke
+                filled: false,
+                stroke_width: 1,
+            };
+
+            // Create filled rectangle
+            let filled_rect = Rectangle::new([(time, 0.0), (time + bar_width, volume)], fill_style);
+            // Create stroked rectangle
+            let stroked_rect =
+                Rectangle::new([(time, 0.0), (time + bar_width, volume)], stroke_style);
+
+            // Return both rectangles as a vector
+            vec![filled_rect, stroked_rect]
         }))?;
     }
     Ok(())
@@ -654,8 +741,8 @@ fn draw_macd(
             })
             .collect();
 
-        let m_style = ShapeStyle::from(&MAGENTA).stroke_width(2);
-        let s_style = ShapeStyle::from(&CYAN).stroke_width(2);
+        let m_style = ShapeStyle::from(&MAGENTA).stroke_width(1);
+        let s_style = ShapeStyle::from(&CYAN).stroke_width(1);
         chart.draw_series(LineSeries::new(
             macd_lines.iter().map(|(t, m, _, _)| (*t, *m)),
             m_style,
@@ -668,7 +755,7 @@ fn draw_macd(
         let plotting_area = chart.plotting_area();
         let mut previous_h: Option<f32> = None;
         let delta = calculate_delta(timeframe);
-        let limit = 0.02f32;
+        let limit = 0.1f32; // Increased from 0.02 to 0.1
 
         for (t, _, _, h) in macd_lines.iter() {
             let is_lower = previous_h.map_or(false, |prev| *h < prev);
@@ -726,17 +813,19 @@ mod test {
         let timeframe = "1h";
         let font_data = include_bytes!("../../Roboto-Light.ttf").to_vec();
 
-        let limit = 240;
+        let limit = 24 * 10;
         let candle_data = fetch_binance_kline_data::<Kline>(pair_symbol, timeframe, limit)
             .await
             .unwrap();
 
         let png = Chart::new(timeframe, Tokyo)
+            .with_candle_dimensions(5, 5)
             .with_past_candle(candle_data)
             .with_title(&format!("{pair_symbol} {timeframe}"))
             .with_font_data(font_data)
-            .with_candle_dimensions(10, 5)
             .with_macd()
+            .with_volume()
+            .with_stoch_rsi()
             .with_bollinger_band()
             .with_labels(vec![(0.75, 0.25, "71% BULL".to_string())])
             .with_label_style(20.0, 20.0, Rgb([0, 0, 255]), Rgb([0, 255, 255]), 10, 5)
