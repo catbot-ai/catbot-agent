@@ -104,7 +104,7 @@ fn setup_macd_chart(
         .max(0.2); // Adjusted to 0.2
 
     let mut macd_chart = ChartBuilder::on(area)
-        .margin(margin)
+        .margin_right(margin)
         .build_cartesian_2d(first_time..last_time, min_macd..max_macd)?;
 
     macd_chart
@@ -303,10 +303,10 @@ impl Chart {
         };
 
         // Calculate the total width needed for all candles
+        let margin_right = 100;
         let total_candles = all_candle_data.len();
-        let candle_width = self.candle_width; // 10px per candle
+        let candle_width = self.candle_width; // Fixed candle width (e.g., 10px)
         let total_width = total_candles as u32 * candle_width; // Full width for all candles
-        let margin = 100;
         let final_width = 768; // Desired output width
         let height = 1024;
 
@@ -343,7 +343,7 @@ impl Chart {
             let (top, bottom) = root.split_vertically((50).percent());
 
             let mut top_chart = ChartBuilder::on(&top)
-                .margin(margin)
+                .margin_right(margin_right)
                 .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
 
             if let Some(past_candle_data) = &self.past_candle_data {
@@ -358,7 +358,7 @@ impl Chart {
                             B_RED.into()
                         }
                     },
-                    self.candle_width,
+                    candle_width,
                 )?;
             }
 
@@ -374,7 +374,7 @@ impl Chart {
                             RGBAColor(255, 0, 0, 0.25)
                         }
                     },
-                    self.candle_width,
+                    candle_width,
                 )?;
             }
 
@@ -386,7 +386,6 @@ impl Chart {
             if self.volume_enabled || self.macd_enabled || self.stoch_rsi_enabled {
                 let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
 
-                // Divide bottom area based on enabled indicators
                 let num_indicators = [
                     self.volume_enabled,
                     self.macd_enabled,
@@ -425,7 +424,7 @@ impl Chart {
                         .collect();
                     let max_volume = volumes.iter().fold(0.0f32, |a, &b| a.max(b));
                     let mut volume_chart = ChartBuilder::on(&volume_area)
-                        .margin(margin)
+                        .margin_right(margin_right)
                         .build_cartesian_2d(first_time..last_time, 0.0f32..max_volume * 1.1)?;
                     draw_volume_bars(&mut volume_chart, &Some(past_data.to_vec()), timezone)?;
                 }
@@ -439,14 +438,14 @@ impl Chart {
                         first_time,
                         last_time,
                         &self.timeframe,
-                        margin,
+                        margin_right,
                     )?;
                 }
 
                 if self.stoch_rsi_enabled {
                     let (_idx, stoch_rsi_area) = area_iter.next().unwrap();
                     let mut stoch_rsi_chart = ChartBuilder::on(&stoch_rsi_area)
-                        .margin(margin)
+                        .margin_right(margin_right)
                         .build_cartesian_2d(first_time..last_time, 0.0f32..100.0f32)?;
 
                     let past_m4rs_candles: Vec<M4rsCandlestick> =
@@ -471,7 +470,6 @@ impl Chart {
                         d_style,
                     ))?;
 
-                    // Draw upper (80) and lower (20) lines for Stochastic RSI
                     let upper_line = 80.0f32;
                     let lower_line = 20.0f32;
                     stoch_rsi_chart.draw_series(LineSeries::new(
@@ -490,7 +488,6 @@ impl Chart {
         let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(plot_width, height);
         imgbuf.copy_from_slice(buffer.as_slice());
 
-        // Calculate the starting x-coordinate for cropping (rightmost 768 pixels)
         let crop_x = plot_width.saturating_sub(final_width);
         let mut cropped_img: ImageBuffer<Rgb<u8>, Vec<u8>> =
             image::imageops::crop_imm(&imgbuf, crop_x, 0, final_width, height).to_image();
@@ -607,21 +604,23 @@ where
     F: Fn(bool) -> RGBAColor,
 {
     chart.draw_series(candle_data.iter().map(|k| {
+        let time = parse_kline_time(k.open_time, timezone);
         let open = k.open_price.parse::<f32>().unwrap();
         let high = k.high_price.parse::<f32>().unwrap();
         let low = k.low_price.parse::<f32>().unwrap();
         let close = k.close_price.parse::<f32>().unwrap();
         let is_bullish = close >= open;
         let color = color_selector(is_bullish);
+        // Use candle_width for the width of each candlestick
         CandleStick::new(
-            parse_kline_time(k.open_time, timezone),
+            time,
             open,
             high,
             low,
             close,
             ShapeStyle::from(&color).filled(),
             ShapeStyle::from(&color).filled(),
-            candle_width,
+            candle_width, // Ensure integer for CandleStick
         )
     }))?;
     Ok(())
@@ -819,7 +818,7 @@ mod test {
             .unwrap();
 
         let png = Chart::new(timeframe, Tokyo)
-            .with_candle_dimensions(5, 5)
+            .with_candle_dimensions(10, 5)
             .with_past_candle(candle_data)
             .with_title(&format!("{pair_symbol} {timeframe}"))
             .with_font_data(font_data)

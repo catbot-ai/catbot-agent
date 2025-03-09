@@ -390,18 +390,6 @@ impl Chart {
                 draw_volume_bars(&mut volume_chart, &Some(past_data.to_vec()), timezone)?;
             }
 
-            // MACD Chart
-            if self.macd_enabled {
-                setup_macd_chart(
-                    &macd_area,
-                    past_data,
-                    timezone,
-                    first_time,
-                    last_time,
-                    &self.timeframe,
-                )?;
-            }
-
             // Stochastic RSI Chart
             let mut stoch_rsi_chart = ChartBuilder::on(&stoch_rsi_area)
                 .margin(20)
