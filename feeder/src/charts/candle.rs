@@ -9,17 +9,26 @@ use imageproc::drawing::{draw_filled_rect_mut, draw_text_mut};
 use imageproc::rect::Rect;
 use m4rs::{bolinger_band, macd, Candlestick as M4rsCandlestick};
 use plotters::coord::types::RangedCoordf32;
-use plotters::prelude::full_palette::PURPLE;
 use plotters::prelude::*;
-
-use plotters::coord::Shift;
-use plotters::style::full_palette::{BLUE_100, BLUE_500, GREEN_100, RED_100};
+use plotters::style::full_palette::{GREEN_100, RED_100};
 
 use std::error::Error;
 
 const B_RED: RGBColor = RGBColor(245, 71, 95);
 const B_GREEN: RGBColor = RGBColor(17, 203, 129);
 const B_BLACK: RGBColor = RGBColor(22, 26, 30);
+
+// BB
+const BB_BOUND: RGBColor = RGBColor(33, 88, 243);
+const BB_MIDDLE: RGBColor = RGBColor(255, 185, 2);
+
+// MCAD
+const MCAD: RGBColor = RGBColor(34, 150, 243);
+const MCAD_SIGNAL: RGBColor = RGBColor(255, 109, 1);
+
+// SRSI
+const SRSI_K: RGBColor = RGBColor(34, 150, 243);
+const SRSI_D: RGBColor = RGBColor(255, 109, 1);
 
 // Styling structures
 #[derive(Clone)]
@@ -74,16 +83,6 @@ fn parse_timeframe_duration(timeframe: &str) -> Duration {
         "d" => Duration::days(value),
         _ => panic!("Unsupported timeframe unit"),
     }
-}
-
-fn calculate_delta(timeframe: &str) -> Duration {
-    let timeframe_duration = parse_timeframe_duration(timeframe);
-    let divisor = match timeframe {
-        "1m" | "5m" => 2,
-        "1h" => 2,
-        _ => 3,
-    };
-    timeframe_duration / divisor
 }
 
 // Chart struct
@@ -426,8 +425,8 @@ impl Chart {
                         })
                         .collect();
 
-                    let k_style = ShapeStyle::from(&CYAN).stroke_width(1);
-                    let d_style = ShapeStyle::from(&MAGENTA).stroke_width(1);
+                    let k_style = ShapeStyle::from(&SRSI_K).stroke_width(1);
+                    let d_style = ShapeStyle::from(&SRSI_D).stroke_width(1);
                     stoch_rsi_chart.draw_series(LineSeries::new(
                         stoch_rsi_lines.iter().map(|(t, k, _)| (*t, *k)),
                         k_style,
@@ -439,14 +438,31 @@ impl Chart {
 
                     let upper_line = 80.0f32;
                     let lower_line = 20.0f32;
-                    stoch_rsi_chart.draw_series(LineSeries::new(
-                        vec![(first_time, upper_line), (last_time, upper_line)],
-                        ShapeStyle::from(&WHITE).stroke_width(1),
-                    ))?;
-                    stoch_rsi_chart.draw_series(LineSeries::new(
-                        vec![(first_time, lower_line), (last_time, lower_line)],
-                        ShapeStyle::from(&WHITE).stroke_width(1),
-                    ))?;
+
+                    // Style for dashed lines
+                    let dash_style = ShapeStyle {
+                        color: WHITE.mix(1.0), // Fully opaque white
+                        filled: false,
+                        stroke_width: 1,
+                    };
+
+                    // Draw dashed lines
+                    stoch_rsi_chart
+                        .draw_series(DashedLineSeries::new(
+                            vec![(first_time, upper_line), (last_time, upper_line)],
+                            5,  // dash length
+                            10, // spacing between dashes
+                            dash_style,
+                        ))
+                        .unwrap();
+                    stoch_rsi_chart
+                        .draw_series(DashedLineSeries::new(
+                            vec![(first_time, lower_line), (last_time, lower_line)],
+                            5,  // dash length
+                            10, // spacing between dashes
+                            dash_style,
+                        ))
+                        .unwrap();
                 }
             }
         }
@@ -757,8 +773,8 @@ fn draw_bollinger_bands(
             })
             .collect();
 
-        let bound_style = ShapeStyle::from(&CYAN).stroke_width(1);
-        let avg_style = ShapeStyle::from(&MAGENTA).stroke_width(1);
+        let bound_style = ShapeStyle::from(&BB_BOUND).stroke_width(1);
+        let avg_style = ShapeStyle::from(&BB_MIDDLE).stroke_width(1);
         chart.draw_series(LineSeries::new(
             past_bb_lines.iter().map(|(t, avg, _, _)| (*t, *avg)),
             avg_style,
@@ -851,8 +867,8 @@ fn draw_macd(
             })
             .collect();
 
-        let m_style = ShapeStyle::from(&MAGENTA).stroke_width(1);
-        let s_style = ShapeStyle::from(&CYAN).stroke_width(1);
+        let m_style = ShapeStyle::from(&MCAD).stroke_width(1);
+        let s_style = ShapeStyle::from(&MCAD_SIGNAL).stroke_width(1);
         chart.draw_series(LineSeries::new(
             macd_lines.iter().map(|(t, m, _, _)| (*t, *m)),
             m_style,
@@ -864,16 +880,11 @@ fn draw_macd(
 
         let plotting_area = chart.plotting_area();
         let mut previous_h: Option<f32> = None;
-        let delta = calculate_delta(timeframe);
-        let limit = 0.05f32; // Reduced limit to avoid overlap
+        let bar_width = parse_timeframe_duration(timeframe);
 
         for (t, _, _, h) in macd_lines.iter() {
             let is_lower = previous_h.map_or(false, |prev| *h < prev);
-            let h = if h.abs() > limit {
-                h
-            } else {
-                &(h.signum() * limit)
-            };
+
             let fill_color = if *h > 0.0 {
                 if is_lower {
                     GREEN_100
@@ -897,11 +908,11 @@ fn draw_macd(
             };
 
             plotting_area.draw(&Rectangle::new(
-                [(*t - delta, 0.0), (*t + delta, *h)],
+                [(*t, 0.0), (*t + bar_width, *h)],
                 fill_style,
             ))?;
             plotting_area.draw(&Rectangle::new(
-                [(*t - delta, 0.0), (*t + delta, *h)],
+                [(*t, 0.0), (*t + bar_width, *h)],
                 stroke_style,
             ))?;
             previous_h = Some(*h);
@@ -920,7 +931,7 @@ mod test {
     #[tokio::test]
     async fn entry_point() {
         let pair_symbol = "SOL_USDT";
-        let timeframe = "5m";
+        let timeframe = "1h";
         let font_data = include_bytes!("../../Roboto-Light.ttf").to_vec();
 
         let limit = 24 * 10;
