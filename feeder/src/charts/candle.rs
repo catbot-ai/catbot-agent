@@ -30,6 +30,8 @@ const MCAD_SIGNAL: RGBColor = RGBColor(255, 109, 1);
 const SRSI_K: RGBColor = RGBColor(34, 150, 243);
 const SRSI_D: RGBColor = RGBColor(255, 109, 1);
 
+const LABEL_COLOR: Rgb<u8> = Rgb([255, 255, 255]);
+
 // Styling structures
 #[derive(Clone)]
 pub struct PointStyle {
@@ -106,12 +108,12 @@ fn get_visible_range_and_data(
 
     // Step 2: Filter data for the visible range
     let visible_data: Vec<Kline> = past_data
-        .into_iter()
+        .iter()
         .filter(|k| {
             let time = parse_kline_time(k.open_time, timezone);
             time >= first_visible_time && time <= last_visible_time
         })
-        .map(|k| k.clone())
+        .cloned()
         .collect();
 
     Ok((first_visible_time, last_visible_time, visible_data))
@@ -216,10 +218,8 @@ fn draw_chart(
             let (_idx, macd_area) = area_iter.next().unwrap();
             let (first_visible_time, last_visible_time, visible_data) =
                 get_visible_range_and_data(past_data, timezone, candle_width, final_width)?;
-            let past_m4rs_candles: Vec<M4rsCandlestick> = visible_data
-                .iter()
-                .map(|k| kline_to_m4rs_candlestick(k))
-                .collect();
+            let past_m4rs_candles: Vec<M4rsCandlestick> =
+                visible_data.iter().map(kline_to_m4rs_candlestick).collect();
             let macd_result = macd(&past_m4rs_candles, 12, 26, 9)?;
             let macd_values: Vec<f32> = macd_result
                 .iter()
@@ -257,10 +257,8 @@ fn draw_chart(
             let mut stoch_rsi_chart = ChartBuilder::on(&stoch_rsi_area)
                 .margin_right(margin_right)
                 .build_cartesian_2d(first_visible_time..last_visible_time, 0.0f32..100.0f32)?;
-            let past_m4rs_candles: Vec<M4rsCandlestick> = visible_data
-                .iter()
-                .map(|k| kline_to_m4rs_candlestick(k))
-                .collect();
+            let past_m4rs_candles: Vec<M4rsCandlestick> =
+                visible_data.iter().map(kline_to_m4rs_candlestick).collect();
             let stoch_rsi_result = m4rs::stochastics(&past_m4rs_candles, 14, 3)?;
             let stoch_rsi_lines: Vec<(DateTime<Tz>, f32, f32)> = stoch_rsi_result
                 .iter()
@@ -318,7 +316,6 @@ fn draw_axis_labels(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     font_data: Vec<u8>,
     past_data: &[Kline],
-    timezone: &Tz,
     chart: &Chart,
     height: u32,
     final_width: u32,
@@ -457,7 +454,6 @@ fn draw_axis_labels(
                 &format!("{:.0}", stoch_rsi_value),
             );
         }
-        current_y += section_height;
     }
 
     Ok(())
@@ -552,16 +548,6 @@ fn draw_labels(
         }
     }
 
-    draw_text_mut(
-        img,
-        white,
-        10,
-        10,
-        PxScale { x: 50.0, y: 50.0 },
-        &font,
-        &chart.metadata.title,
-    );
-
     Ok(())
 }
 // Chart struct
@@ -623,26 +609,31 @@ impl Chart {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_candle_width(mut self, width: u32) -> Self {
         self.candle_width = width;
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_points(mut self, points: Vec<(f32, f32)>) -> Self {
         self.points = points;
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_point_style(mut self, radius: i32, color: RGBColor) -> Self {
         self.point_style = Some(PointStyle { radius, color });
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_lines(mut self, lines: Vec<[(f32, f32); 2]>) -> Self {
         self.lines = lines;
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_line_style(mut self, stroke_width: i32, color: RGBColor) -> Self {
         self.line_style = Some(LineStyle {
             stroke_width,
@@ -651,11 +642,13 @@ impl Chart {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_labels(mut self, labels: Vec<(f32, f32, String)>) -> Self {
         self.labels = labels;
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_label_style(
         mut self,
         scale_x: f32,
@@ -688,11 +681,13 @@ impl Chart {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_volume(mut self) -> Self {
         self.volume_enabled = true;
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_stoch_rsi(mut self) -> Self {
         self.stoch_rsi_enabled = true;
         self
@@ -768,6 +763,56 @@ impl Chart {
         let mut cropped_img: ImageBuffer<Rgb<u8>, Vec<u8>> =
             image::imageops::crop_imm(&imgbuf, crop_x, 0, final_width, height).to_image();
 
+        // Add header details on the cropped image
+        draw_candle_detail(&mut cropped_img, &self, font_data.clone())?;
+        if self.bollinger_enabled {
+            draw_bollinger_detail(&mut cropped_img, past_data, timezone, font_data.clone())?;
+        }
+
+        if self.volume_enabled || self.macd_enabled || self.stoch_rsi_enabled {
+            let num_indicators = [
+                self.volume_enabled,
+                self.macd_enabled,
+                self.stoch_rsi_enabled,
+            ]
+            .iter()
+            .filter(|&&enabled| enabled)
+            .count() as f32;
+
+            let section_height = height as f32 * 0.5 / num_indicators;
+            let top_section_height = height as f32 * 0.5;
+
+            let mut current_y = top_section_height;
+
+            if self.volume_enabled {
+                draw_volume_detail(
+                    &mut cropped_img,
+                    past_data,
+                    font_data.clone(),
+                    current_y as i32,
+                )?;
+
+                current_y += section_height;
+            }
+            if self.macd_enabled {
+                draw_macd_detail(
+                    &mut cropped_img,
+                    past_data,
+                    font_data.clone(),
+                    current_y as i32,
+                )?;
+                current_y += section_height;
+            }
+            if self.stoch_rsi_enabled {
+                draw_stoch_rsi_detail(
+                    &mut cropped_img,
+                    past_data,
+                    font_data.clone(),
+                    current_y as i32,
+                )?;
+            }
+        }
+
         {
             let root = BitMapBackend::with_buffer(&mut cropped_img, (final_width, height))
                 .into_drawing_area();
@@ -780,12 +825,10 @@ impl Chart {
             draw_lines(&root, &self)?;
         }
 
-        let cloned_font_data = font_data.clone();
         draw_axis_labels(
             &mut cropped_img,
-            cloned_font_data,
+            font_data.clone(),
             past_data,
-            timezone,
             &self,
             height,
             final_width,
@@ -794,14 +837,7 @@ impl Chart {
             max_price,
         )?;
 
-        let cloned_font_data = font_data.clone();
-        draw_labels(
-            &mut cropped_img,
-            cloned_font_data,
-            &self,
-            final_width,
-            height,
-        )?;
+        draw_labels(&mut cropped_img, font_data, &self, final_width, height)?;
 
         Ok(encode_png(&cropped_img)?)
     }
@@ -845,6 +881,43 @@ where
     Ok(())
 }
 
+fn draw_candle_detail(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    chart: &Chart,
+    font_data: Vec<u8>,
+) -> Result<(), Box<dyn Error>> {
+    let font = FontRef::try_from_slice(&font_data)?;
+    if let Some(past_candle_data) = &chart.past_candle_data {
+        let latest_candle = past_candle_data.last().unwrap();
+        let open = latest_candle.open_price.parse::<f32>().unwrap();
+        let high = latest_candle.high_price.parse::<f32>().unwrap();
+        let low = latest_candle.low_price.parse::<f32>().unwrap();
+        let close = latest_candle.close_price.parse::<f32>().unwrap();
+        let change = ((close - open) / open * 100.0).round() / 100.0;
+        let candle_detail = format!(
+            "{} {} O {:.2} H {:.2} L {:.2} C {:.2} {} ({:.2}%)",
+            chart.metadata.title.split(' ').next().unwrap_or(""),
+            chart.timeframe,
+            open,
+            high,
+            low,
+            close,
+            if change >= 0.0 { "+" } else { "" },
+            change
+        );
+        draw_text_mut(
+            img,
+            LABEL_COLOR,
+            10,
+            10,
+            PxScale { x: 30.0, y: 30.0 },
+            &font,
+            &candle_detail,
+        );
+    }
+    Ok(())
+}
+
 fn draw_bollinger_bands(
     chart: &mut ChartContext<
         '_,
@@ -883,6 +956,60 @@ fn draw_bollinger_bands(
             past_bb_lines.iter().map(|(t, _, _, lower)| (*t, *lower)),
             bound_style,
         ))?;
+    }
+    Ok(())
+}
+
+fn draw_bollinger_detail(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    past_data: &[Kline],
+    timezone: &Tz,
+    font_data: Vec<u8>,
+) -> Result<(), Box<dyn Error>> {
+    let font = FontRef::try_from_slice(&font_data)?;
+    if !past_data.is_empty() {
+        let past_m4rs_candles: Vec<M4rsCandlestick> =
+            past_data.iter().map(kline_to_m4rs_candlestick).collect();
+        let bb_result = bolinger_band(&past_m4rs_candles, 20)?;
+        let latest_bb = bb_result.last().unwrap();
+        let ma_7 = past_m4rs_candles
+            .iter()
+            .rev()
+            .take(7)
+            .map(|c| c.close)
+            .sum::<f64>()
+            / 7.0;
+        let ma_25 = past_m4rs_candles
+            .iter()
+            .rev()
+            .take(25)
+            .map(|c| c.close)
+            .sum::<f64>()
+            / 25.0;
+        let ma_99 = past_m4rs_candles
+            .iter()
+            .rev()
+            .take(99)
+            .map(|c| c.close)
+            .sum::<f64>()
+            / 99.0;
+        let ta_detail = format!(
+            "MA 7 close 0 SMA 9 {:.2}\nMA 25 close 0 SMA 9 {:.2}\nMA 99 close 0 SMA 9 {:.2}\nBB 20 2 {:.2} {:.2} {:.2}",
+            ma_7, ma_25, ma_99, latest_bb.avg, latest_bb.avg + 2.0 * latest_bb.sigma, latest_bb.avg - 2.0 * latest_bb.sigma
+        );
+        let mut y_offset = 50;
+        for line in ta_detail.lines() {
+            draw_text_mut(
+                img,
+                LABEL_COLOR,
+                10,
+                y_offset,
+                PxScale { x: 20.0, y: 20.0 },
+                &font,
+                line,
+            );
+            y_offset += 25;
+        }
     }
     Ok(())
 }
@@ -935,6 +1062,35 @@ fn draw_volume_bars(
     }
     Ok(())
 }
+fn draw_volume_detail(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    past_data: &[Kline],
+    font_data: Vec<u8>,
+    current_y: i32,
+) -> Result<(), Box<dyn Error>> {
+    let font = FontRef::try_from_slice(&font_data)?;
+    if !past_data.is_empty() {
+        let volume_sma: f32 = past_data
+            .iter()
+            .rev()
+            .take(9)
+            .map(|k| k.volume.parse::<f32>().unwrap())
+            .sum::<f32>()
+            / 9.0;
+        let volume_detail = format!("Volume SMA 9 {:.2}K", volume_sma / 1000.0);
+
+        draw_text_mut(
+            img,
+            LABEL_COLOR,
+            10,
+            current_y,
+            PxScale { x: 20.0, y: 20.0 },
+            &font,
+            &volume_detail,
+        );
+    }
+    Ok(())
+}
 
 fn draw_macd(
     chart: &mut ChartContext<
@@ -946,6 +1102,13 @@ fn draw_macd(
     timezone: &Tz,
     timeframe: &str,
 ) -> Result<(), Box<dyn Error>> {
+    chart
+        .configure_mesh()
+        .light_line_style(BLACK)
+        .x_max_light_lines(1)
+        .y_max_light_lines(1)
+        .draw()?;
+
     if let Some(past_data) = past_candle_data {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
             past_data.iter().map(kline_to_m4rs_candlestick).collect();
@@ -1017,12 +1180,70 @@ fn draw_macd(
     Ok(())
 }
 
+fn draw_macd_detail(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    past_data: &[Kline],
+    font_data: Vec<u8>,
+    current_y: i32,
+) -> Result<(), Box<dyn Error>> {
+    let font = FontRef::try_from_slice(&font_data)?;
+    if !past_data.is_empty() {
+        let past_m4rs_candles: Vec<M4rsCandlestick> =
+            past_data.iter().map(kline_to_m4rs_candlestick).collect();
+        let macd_result = macd(&past_m4rs_candles, 12, 26, 9)?;
+        let latest_macd = macd_result.last().unwrap();
+        let macd_detail = format!(
+            "MACD 12 26 close 9 {:.2} {:.2} {:.2}",
+            latest_macd.macd, latest_macd.signal, latest_macd.histogram
+        );
+
+        draw_text_mut(
+            img,
+            LABEL_COLOR,
+            10,
+            current_y,
+            PxScale { x: 20.0, y: 20.0 },
+            &font,
+            &macd_detail,
+        );
+    }
+    Ok(())
+}
+
+fn draw_stoch_rsi_detail(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    past_data: &[Kline],
+    font_data: Vec<u8>,
+    current_y: i32,
+) -> Result<(), Box<dyn Error>> {
+    let font = FontRef::try_from_slice(&font_data)?;
+    if !past_data.is_empty() {
+        let past_m4rs_candles: Vec<M4rsCandlestick> =
+            past_data.iter().map(kline_to_m4rs_candlestick).collect();
+        let stoch_rsi_result = m4rs::slow_stochastics(&past_m4rs_candles, 14, 3, 5)?;
+        let latest_stoch_rsi = stoch_rsi_result.last().unwrap();
+        let stoch_rsi_detail = format!(
+            "Stock RSI 14 14 3 {:.2} {:.2}",
+            latest_stoch_rsi.k, latest_stoch_rsi.d
+        );
+        draw_text_mut(
+            img,
+            LABEL_COLOR,
+            10,
+            current_y,
+            PxScale { x: 20.0, y: 20.0 },
+            &font,
+            &stoch_rsi_detail,
+        );
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use chrono_tz::Asia::Tokyo;
     use common::binance::fetch_binance_kline_data;
-    use image::Rgb;
 
     #[tokio::test]
     async fn entry_point() {
@@ -1038,14 +1259,14 @@ mod test {
         let png = Chart::new(timeframe, Tokyo)
             .with_candle_width(6)
             .with_past_candle(candle_data)
-            .with_title(&format!("{pair_symbol} {timeframe}"))
+            .with_title(pair_symbol)
             .with_font_data(font_data)
             .with_volume()
             .with_macd()
             .with_stoch_rsi()
             .with_bollinger_band()
-            .with_labels(vec![(0.75, 0.25, "71% BULL".to_string())])
-            .with_label_style(20.0, 20.0, Rgb([0, 0, 255]), Rgb([0, 255, 255]), 10, 5)
+            // .with_labels(vec![(0.75, 0.25, "71% BULL".to_string())])
+            // .with_label_style(20.0, 20.0, Rgb([0, 0, 255]), Rgb([0, 255, 255]), 10, 5)
             .build()
             .unwrap();
 
