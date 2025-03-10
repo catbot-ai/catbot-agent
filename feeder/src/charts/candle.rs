@@ -1,11 +1,11 @@
 use crate::charts::png::encode_png;
-use ab_glyph::ScaleFont;
-use ab_glyph::{Font, FontRef, PxScale};
+use ab_glyph::{Font, PxScale};
+use ab_glyph::{FontArc, ScaleFont};
 use chrono::{DateTime, Duration};
 use chrono_tz::Tz;
 use common::Kline;
 use image::{ImageBuffer, Rgb};
-use imageproc::drawing::{draw_filled_rect_mut, draw_text_mut};
+use imageproc::drawing::{draw_filled_rect_mut, draw_text_mut, text_size};
 use imageproc::rect::Rect;
 use m4rs::{bolinger_band, macd, Candlestick as M4rsCandlestick};
 use plotters::coord::types::RangedCoordf32;
@@ -33,6 +33,7 @@ const SRSI_D: RGBColor = RGBColor(255, 109, 1);
 // Label
 const LABEL_COLOR: Rgb<u8> = Rgb([255, 255, 255]);
 const LABEL_SCALE: PxScale = PxScale { x: 18.0, y: 18.0 };
+const TRANSPARENT_BLACK_50: Rgb<u8> = Rgb([0, 0, 0]); // 50% transparent black
 
 // Styling structures
 #[derive(Clone)]
@@ -100,15 +101,12 @@ fn get_visible_range_and_data(
         return Err("No candle data available".into());
     }
 
-    // Step 1: Calculate the visible time range
     let visible_candles = (final_width / candle_width) as usize;
     let start_index = total_candles.saturating_sub(visible_candles);
 
-    // Get the visible time range
     let first_visible_time = parse_kline_time(past_data[start_index].open_time, timezone);
     let last_visible_time = parse_kline_time(past_data[total_candles - 1].open_time, timezone);
 
-    // Step 2: Filter data for the visible range
     let visible_data: Vec<Kline> = past_data
         .iter()
         .filter(|k| {
@@ -316,7 +314,7 @@ fn draw_chart(
 
 fn draw_axis_labels(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
-    font_data: Vec<u8>,
+    font: &impl Font,
     past_data: &[Kline],
     chart: &Chart,
     height: u32,
@@ -327,7 +325,6 @@ fn draw_axis_labels(
 ) -> Result<(), Box<dyn Error>> {
     let white = Rgb([255u8, 255u8, 255u8]);
     let label_scale = PxScale { x: 12.0, y: 12.0 };
-    let font = FontRef::try_from_slice(&font_data)?;
     let font_metrics = font.as_scaled(label_scale);
     let text_x = (final_width - margin_right + 6) as i32;
     let text_height = (font_metrics.ascent() - font_metrics.descent()).ceil() as i32;
@@ -353,15 +350,16 @@ fn draw_axis_labels(
     ];
     for (i, y) in price_y_positions.iter().enumerate() {
         let price = max_price * 1.05 - (i as f32 * price_step);
-        draw_text_mut(
+        draw_label(
             img,
-            white,
+            font,
+            &format!("{:.2}", price),
             text_x,
             *y as i32,
             label_scale,
-            &font,
-            &format!("{:.2}", price),
-        );
+            white,
+            TRANSPARENT_BLACK_50,
+        )?;
     }
 
     let mut current_y = top_section_height;
@@ -381,15 +379,16 @@ fn draw_axis_labels(
         ];
         for (i, y) in volume_y_positions.iter().enumerate() {
             let volume = max_volume_display - (i as f32 * volume_step);
-            draw_text_mut(
+            draw_label(
                 img,
-                white,
+                font,
+                &format!("{:.0}k", volume / 1000.0),
                 text_x,
                 *y as i32,
                 label_scale,
-                &font,
-                &format!("{:.0}k", volume / 1000.0),
-            );
+                white,
+                TRANSPARENT_BLACK_50,
+            )?;
         }
         current_y += section_height;
     }
@@ -424,15 +423,16 @@ fn draw_axis_labels(
         ];
         for (i, y) in macd_y_positions.iter().enumerate() {
             let macd_value = macd_max - (i as f32 * macd_step);
-            draw_text_mut(
+            draw_label(
                 img,
-                white,
+                font,
+                &format!("{:.2}", macd_value),
                 text_x,
                 *y as i32,
                 label_scale,
-                &font,
-                &format!("{:.2}", macd_value),
-            );
+                white,
+                TRANSPARENT_BLACK_50,
+            )?;
         }
         current_y += section_height;
     }
@@ -446,15 +446,16 @@ fn draw_axis_labels(
         ];
         for (i, y) in stoch_rsi_y_positions.iter().enumerate() {
             let stoch_rsi_value = 100.0 - (i as f32 * stoch_rsi_step);
-            draw_text_mut(
+            draw_label(
                 img,
-                white,
+                font,
+                &format!("{:.0}", stoch_rsi_value),
                 text_x,
                 *y as i32,
                 label_scale,
-                &font,
-                &format!("{:.0}", stoch_rsi_value),
-            );
+                white,
+                TRANSPARENT_BLACK_50,
+            )?;
         }
     }
 
@@ -497,61 +498,73 @@ fn draw_lines(
 
 fn draw_labels(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
-    font_data: Vec<u8>,
+    font: &impl Font,
     chart: &Chart,
     final_width: u32,
     height: u32,
 ) -> Result<(), Box<dyn Error>> {
-    let font = FontRef::try_from_slice(&font_data)?;
     let white = Rgb([255u8, 255u8, 255u8]);
 
     if !chart.labels.is_empty() {
         let style = chart.label_style.clone().unwrap_or(LabelStyle {
             scale: PxScale { x: 15.0, y: 15.0 },
             color: white,
-            background_color: Rgb([0, 0, 0]),
+            background_color: TRANSPARENT_BLACK_50,
             offset_x: 5,
             offset_y: 0,
         });
 
-        let font_metrics = font.as_scaled(style.scale);
         for (x, y, text) in chart.labels.iter() {
-            let mut total_width = 0.0f32;
-            for c in text.chars() {
-                let glyph_id = font_metrics.glyph_id(c);
-                let glyph = ab_glyph::Glyph {
-                    id: glyph_id,
-                    scale: style.scale,
-                    position: ab_glyph::Point { x: 0.0, y: 0.0 },
-                };
-                total_width += font_metrics.glyph_bounds(&glyph).width();
-            }
-            let text_width = total_width.ceil() as i32;
-            let text_height = (font_metrics.ascent() - font_metrics.descent()).ceil() as i32;
             let x_pos = (*x * final_width as f32) as i32 + style.offset_x;
-            let y_pos = (*y * height as f32) as i32 + style.offset_y - text_height;
-
-            draw_filled_rect_mut(
+            let y_pos = (*y * height as f32) as i32 + style.offset_y;
+            draw_label(
                 img,
-                Rect::at(x_pos - 4, y_pos - 4)
-                    .of_size((text_width + 6) as u32, (text_height + 1) as u32),
-                style.background_color,
-            );
-
-            draw_text_mut(
-                img,
-                style.color,
-                x_pos,
-                y_pos + (font_metrics.descent() as i32),
-                style.scale,
-                &font,
+                font,
                 text,
-            );
+                x_pos,
+                y_pos,
+                style.scale,
+                style.color,
+                style.background_color,
+            )?;
         }
     }
 
     Ok(())
 }
+
+fn draw_label<F: Font>(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    font: &F,
+    text: &str,
+    x: i32,
+    y: i32,
+    scale: PxScale,
+    color: Rgb<u8>,
+    background_color: Rgb<u8>,
+) -> anyhow::Result<()> {
+    let font_metrics = font.as_scaled(scale);
+    let (text_width, text_height) = text_size(scale, font, text);
+
+    draw_filled_rect_mut(
+        img,
+        Rect::at(x - 4, y - 4).of_size(text_width, text_height),
+        background_color,
+    );
+
+    draw_text_mut(
+        img,
+        color,
+        x,
+        y + (font_metrics.descent() as i32),
+        scale,
+        font,
+        text,
+    );
+
+    Ok(())
+}
+
 // Chart struct
 pub struct Chart {
     timezone: Tz,
@@ -605,7 +618,6 @@ impl Chart {
         self.metadata.title = title.to_string();
         self
     }
-
     pub fn with_font_data(mut self, font_data: Vec<u8>) -> Self {
         self.font_data = Some(font_data);
         self
@@ -698,12 +710,14 @@ impl Chart {
     pub fn build(self) -> Result<Vec<u8>, Box<dyn Error>> {
         if self.past_candle_data.is_none() {
             return Err("Candle data set is required".into());
-        }
+        };
+
         let font_data = self
             .font_data
             .as_ref()
             .ok_or("Font data is required")?
             .clone();
+        let font = FontArc::try_from_vec(font_data)?;
         let timezone = &self.timezone;
 
         let all_candle_data = &self.past_candle_data.clone().unwrap();
@@ -766,9 +780,9 @@ impl Chart {
             image::imageops::crop_imm(&imgbuf, crop_x, 0, final_width, height).to_image();
 
         // Add header details on the cropped image
-        draw_candle_detail(&mut cropped_img, &self, font_data.clone())?;
+        draw_candle_detail(&mut cropped_img, &self, &font)?;
         if self.bollinger_enabled {
-            draw_bollinger_detail(&mut cropped_img, past_data, font_data.clone())?;
+            draw_bollinger_detail(&mut cropped_img, past_data, &font)?;
         }
 
         if self.volume_enabled || self.macd_enabled || self.stoch_rsi_enabled {
@@ -784,34 +798,18 @@ impl Chart {
             let section_height = height as f32 * 0.5 / num_indicators;
             let top_section_height = height as f32 * 0.5;
 
-            let mut current_y = top_section_height;
+            let mut current_y = top_section_height as i32;
 
             if self.volume_enabled {
-                draw_volume_detail(
-                    &mut cropped_img,
-                    past_data,
-                    font_data.clone(),
-                    current_y as i32,
-                )?;
-
-                current_y += section_height;
+                draw_volume_detail(&mut cropped_img, past_data, &font, current_y)?;
+                current_y += section_height as i32;
             }
             if self.macd_enabled {
-                draw_macd_detail(
-                    &mut cropped_img,
-                    past_data,
-                    font_data.clone(),
-                    current_y as i32,
-                )?;
-                current_y += section_height;
+                draw_macd_detail(&mut cropped_img, past_data, &font, current_y)?;
+                current_y += section_height as i32;
             }
             if self.stoch_rsi_enabled {
-                draw_stoch_rsi_detail(
-                    &mut cropped_img,
-                    past_data,
-                    font_data.clone(),
-                    current_y as i32,
-                )?;
+                draw_stoch_rsi_detail(&mut cropped_img, past_data, &font, current_y)?;
             }
         }
 
@@ -829,7 +827,7 @@ impl Chart {
 
         draw_axis_labels(
             &mut cropped_img,
-            font_data.clone(),
+            &font.clone(),
             past_data,
             &self,
             height,
@@ -839,7 +837,7 @@ impl Chart {
             max_price,
         )?;
 
-        draw_labels(&mut cropped_img, font_data, &self, final_width, height)?;
+        draw_labels(&mut cropped_img, &font, &self, final_width, height)?;
 
         Ok(encode_png(&cropped_img)?)
     }
@@ -886,16 +884,15 @@ where
 fn draw_candle_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     chart: &Chart,
-    font_data: Vec<u8>,
+    font: &impl Font,
 ) -> Result<(), Box<dyn Error>> {
-    let font = FontRef::try_from_slice(&font_data)?;
     if let Some(past_candle_data) = &chart.past_candle_data {
         let latest_candle = past_candle_data.last().unwrap();
         let open = latest_candle.open_price.parse::<f32>().unwrap();
         let high = latest_candle.high_price.parse::<f32>().unwrap();
         let low = latest_candle.low_price.parse::<f32>().unwrap();
         let close = latest_candle.close_price.parse::<f32>().unwrap();
-        let change = ((close - open) / open * 100.0).round() / 100.0;
+        let change = (close - open) / open * 100.0;
         let candle_detail = format!(
             "{} {} O {:.2} H {:.2} L {:.2} C {:.2} {} ({:.2}%)",
             chart.metadata.title.split(' ').next().unwrap_or(""),
@@ -907,15 +904,16 @@ fn draw_candle_detail(
             if change >= 0.0 { "+" } else { "" },
             change
         );
-        draw_text_mut(
+        draw_label(
             img,
-            LABEL_COLOR,
+            font,
+            &candle_detail,
             10,
             10,
             PxScale { x: 30.0, y: 30.0 },
-            &font,
-            &candle_detail,
-        );
+            LABEL_COLOR,
+            TRANSPARENT_BLACK_50,
+        )?;
     }
     Ok(())
 }
@@ -965,9 +963,8 @@ fn draw_bollinger_bands(
 fn draw_bollinger_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     past_data: &[Kline],
-    font_data: Vec<u8>,
+    font: &impl Font,
 ) -> Result<(), Box<dyn Error>> {
-    let font = FontRef::try_from_slice(&font_data)?;
     if !past_data.is_empty() {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
             past_data.iter().map(kline_to_m4rs_candlestick).collect();
@@ -1000,7 +997,16 @@ fn draw_bollinger_detail(
         );
         let mut y_offset = 50;
         for line in ta_detail.lines() {
-            draw_text_mut(img, LABEL_COLOR, 10, y_offset, LABEL_SCALE, &font, line);
+            draw_label(
+                img,
+                font,
+                line,
+                10,
+                y_offset,
+                LABEL_SCALE,
+                LABEL_COLOR,
+                TRANSPARENT_BLACK_50,
+            )?;
             y_offset += 25;
         }
     }
@@ -1038,30 +1044,27 @@ fn draw_volume_bars(
                 stroke_width: 0,
             };
             let stroke_style = ShapeStyle {
-                color: B_BLACK.into(), // 1px black stroke
+                color: B_BLACK.into(),
                 filled: false,
                 stroke_width: 1,
             };
 
-            // Create filled rectangle
             let filled_rect = Rectangle::new([(time, 0.0), (time + bar_width, volume)], fill_style);
-            // Create stroked rectangle
             let stroked_rect =
                 Rectangle::new([(time, 0.0), (time + bar_width, volume)], stroke_style);
 
-            // Return both rectangles as a vector
             vec![filled_rect, stroked_rect]
         }))?;
     }
     Ok(())
 }
+
 fn draw_volume_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     past_data: &[Kline],
-    font_data: Vec<u8>,
+    font: &impl Font,
     current_y: i32,
 ) -> Result<(), Box<dyn Error>> {
-    let font = FontRef::try_from_slice(&font_data)?;
     if !past_data.is_empty() {
         let volume_sma: f32 = past_data
             .iter()
@@ -1071,16 +1074,16 @@ fn draw_volume_detail(
             .sum::<f32>()
             / 9.0;
         let volume_detail = format!("Volume SMA 9 {:.2}K", volume_sma / 1000.0);
-
-        draw_text_mut(
+        draw_label(
             img,
-            LABEL_COLOR,
+            font,
+            &volume_detail,
             10,
             current_y,
             LABEL_SCALE,
-            &font,
-            &volume_detail,
-        );
+            LABEL_COLOR,
+            TRANSPARENT_BLACK_50,
+        )?;
     }
     Ok(())
 }
@@ -1176,10 +1179,9 @@ fn draw_macd(
 fn draw_macd_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     past_data: &[Kline],
-    font_data: Vec<u8>,
+    font: &impl Font,
     current_y: i32,
 ) -> Result<(), Box<dyn Error>> {
-    let font = FontRef::try_from_slice(&font_data)?;
     if !past_data.is_empty() {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
             past_data.iter().map(kline_to_m4rs_candlestick).collect();
@@ -1189,16 +1191,16 @@ fn draw_macd_detail(
             "MACD 12 26 close 9 {:.2} {:.2} {:.2}",
             latest_macd.macd, latest_macd.signal, latest_macd.histogram
         );
-
-        draw_text_mut(
+        draw_label(
             img,
-            LABEL_COLOR,
+            font,
+            &macd_detail,
             10,
             current_y,
             LABEL_SCALE,
-            &font,
-            &macd_detail,
-        );
+            LABEL_COLOR,
+            TRANSPARENT_BLACK_50,
+        )?;
     }
     Ok(())
 }
@@ -1206,10 +1208,9 @@ fn draw_macd_detail(
 fn draw_stoch_rsi_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     past_data: &[Kline],
-    font_data: Vec<u8>,
+    font: &impl Font,
     current_y: i32,
 ) -> Result<(), Box<dyn Error>> {
-    let font = FontRef::try_from_slice(&font_data)?;
     if !past_data.is_empty() {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
             past_data.iter().map(kline_to_m4rs_candlestick).collect();
@@ -1219,15 +1220,16 @@ fn draw_stoch_rsi_detail(
             "Stock RSI 14 14 3 {:.2} {:.2}",
             latest_stoch_rsi.k, latest_stoch_rsi.d
         );
-        draw_text_mut(
+        draw_label(
             img,
-            LABEL_COLOR,
+            font,
+            &stoch_rsi_detail,
             10,
             current_y,
             LABEL_SCALE,
-            &font,
-            &stoch_rsi_detail,
-        );
+            LABEL_COLOR,
+            TRANSPARENT_BLACK_50,
+        )?;
     }
     Ok(())
 }
