@@ -892,9 +892,9 @@ fn draw_macd(
                     B_GREEN
                 }
             } else if is_lower {
-                RED_100
-            } else {
                 B_RED
+            } else {
+                RED_100
             };
             let fill_style = ShapeStyle {
                 color: fill_color.into(),
