@@ -768,7 +768,7 @@ impl Chart {
         // Add header details on the cropped image
         draw_candle_detail(&mut cropped_img, &self, font_data.clone())?;
         if self.bollinger_enabled {
-            draw_bollinger_detail(&mut cropped_img, past_data, timezone, font_data.clone())?;
+            draw_bollinger_detail(&mut cropped_img, past_data, font_data.clone())?;
         }
 
         if self.volume_enabled || self.macd_enabled || self.stoch_rsi_enabled {
@@ -965,7 +965,6 @@ fn draw_bollinger_bands(
 fn draw_bollinger_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     past_data: &[Kline],
-    timezone: &Tz,
     font_data: Vec<u8>,
 ) -> Result<(), Box<dyn Error>> {
     let font = FontRef::try_from_slice(&font_data)?;
