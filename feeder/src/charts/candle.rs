@@ -85,12 +85,42 @@ fn parse_timeframe_duration(timeframe: &str) -> Duration {
     }
 }
 
+fn get_visible_range_and_data<'a>(
+    past_data: &'a [Kline],
+    timezone: &Tz,
+    candle_width: u32,
+    final_width: u32,
+) -> Result<(DateTime<Tz>, DateTime<Tz>, Vec<&'a Kline>), Box<dyn Error>> {
+    let total_candles = past_data.len();
+    if total_candles == 0 {
+        return Err("No candle data available".into());
+    }
+
+    // Step 1: Calculate the visible time range
+    let visible_candles = (final_width / candle_width) as usize;
+    let start_index = total_candles.saturating_sub(visible_candles);
+
+    // Get the visible time range
+    let first_visible_time = parse_kline_time(past_data[start_index].open_time, timezone);
+    let last_visible_time = parse_kline_time(past_data[total_candles - 1].open_time, timezone);
+
+    // Step 2: Filter data for the visible range
+    let visible_data: Vec<&Kline> = past_data
+        .iter()
+        .filter(|k| {
+            let time = parse_kline_time(k.open_time, timezone);
+            time >= first_visible_time && time <= last_visible_time
+        })
+        .collect();
+
+    Ok((first_visible_time, last_visible_time, visible_data))
+}
+
 // Chart struct
 pub struct Chart {
     timezone: Tz,
     timeframe: String,
     past_candle_data: Option<Vec<Kline>>,
-    predicted_candle_data: Option<Vec<Kline>>,
     metadata: ChartMetaData,
     font_data: Option<Vec<u8>>,
     candle_width: u32,
@@ -112,7 +142,6 @@ impl Chart {
             timezone,
             timeframe: timeframe.to_string(),
             past_candle_data: None,
-            predicted_candle_data: None,
             metadata: ChartMetaData {
                 title: String::new(),
             },
@@ -328,38 +357,21 @@ impl Chart {
                 }
 
                 let mut area_iter = areas.into_iter().enumerate();
+
                 if self.volume_enabled {
                     let (_idx, volume_area) = area_iter.next().unwrap();
 
-                    // Step 1: Calculate the visible time range
-                    let total_candles = past_data.len();
-                    let final_width = 768; // As defined earlier
-                    let visible_candles = (final_width / candle_width) as usize;
-                    let start_index = total_candles.saturating_sub(visible_candles);
+                    // Use the helper function to get the visible range and data
+                    let (first_visible_time, last_visible_time, visible_data) =
+                        get_visible_range_and_data(past_data, timezone, candle_width, final_width)?;
 
-                    // Get the visible time range
-                    let first_visible_time =
-                        parse_kline_time(past_data[start_index].open_time, timezone);
-                    let last_visible_time =
-                        parse_kline_time(past_data[total_candles - 1].open_time, timezone);
-
-                    // Step 2: Filter data for the visible range and calculate max_volume
-                    let visible_data: Vec<&Kline> = past_data
-                        .iter()
-                        .filter(|k| {
-                            let time = parse_kline_time(k.open_time, timezone);
-                            time >= first_visible_time && time <= last_visible_time
-                        })
-                        .collect();
-
+                    // Calculate max_volume for the visible range
                     let max_volume = visible_data
                         .iter()
                         .map(|k| k.volume.parse::<f32>().unwrap())
                         .fold(0.0f32, |a, b| a.max(b));
 
-                    println!("max_volume (visible range): {:?}", max_volume);
-
-                    // Step 3: Build the volume chart with the visible time range and max_volume
+                    // Build the volume chart with the visible time range and max_volume
                     let mut volume_chart = ChartBuilder::on(&volume_area)
                         .margin_right(margin_right)
                         .build_cartesian_2d(
@@ -377,8 +389,16 @@ impl Chart {
 
                 if self.macd_enabled {
                     let (_idx, macd_area) = area_iter.next().unwrap();
-                    let past_m4rs_candles: Vec<M4rsCandlestick> =
-                        past_data.iter().map(kline_to_m4rs_candlestick).collect();
+
+                    // Use the helper function to get the visible range and data
+                    let (first_visible_time, last_visible_time, visible_data) =
+                        get_visible_range_and_data(past_data, timezone, candle_width, final_width)?;
+
+                    // Calculate MACD values for the visible range
+                    let past_m4rs_candles: Vec<M4rsCandlestick> = visible_data
+                        .iter()
+                        .map(|k| kline_to_m4rs_candlestick(k))
+                        .collect();
                     let macd_result = macd(&past_m4rs_candles, 12, 26, 9)?;
                     let macd_values: Vec<f32> = macd_result
                         .iter()
@@ -398,12 +418,18 @@ impl Chart {
                         .iter()
                         .fold(f32::NEG_INFINITY, |a, &b| a.max(b))
                         .max(1.0);
+
+                    // Build the MACD chart with the visible time range
                     let mut macd_chart = ChartBuilder::on(&macd_area)
                         .margin_right(margin_right)
-                        .build_cartesian_2d(first_time..last_time, macd_min..macd_max)?;
+                        .build_cartesian_2d(
+                            first_visible_time..last_visible_time,
+                            macd_min..macd_max,
+                        )?;
+
                     draw_macd(
                         &mut macd_chart,
-                        &Some(past_data.to_vec()),
+                        &Some(visible_data.into_iter().cloned().collect()),
                         timezone,
                         &self.timeframe,
                     )?;
