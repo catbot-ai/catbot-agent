@@ -367,7 +367,12 @@ impl Chart {
                     let mut volume_chart = ChartBuilder::on(&volume_area)
                         .margin_right(margin_right)
                         .build_cartesian_2d(first_time..last_time, 0.0f32..max_volume * 1.1)?;
-                    draw_volume_bars(&mut volume_chart, &Some(past_data.to_vec()), timezone)?;
+                    draw_volume_bars(
+                        &mut volume_chart,
+                        &Some(past_data.to_vec()),
+                        timezone,
+                        &self.timeframe,
+                    )?;
                 }
 
                 if self.macd_enabled {
@@ -778,6 +783,7 @@ fn draw_volume_bars(
     >,
     past_candle_data: &Option<Vec<Kline>>,
     timezone: &Tz,
+    timeframe: &str,
 ) -> Result<(), Box<dyn Error>> {
     if let Some(past_data) = past_candle_data {
         chart
@@ -789,7 +795,7 @@ fn draw_volume_bars(
         chart.draw_series(past_data.iter().flat_map(|k| {
             let time = parse_kline_time(k.open_time, timezone);
             let volume = k.volume.parse::<f32>().unwrap();
-            let bar_width = parse_timeframe_duration("1h"); // Match the 1h timeframe
+            let bar_width = parse_timeframe_duration(timeframe);
             let open = k.open_price.parse::<f32>().unwrap();
             let close = k.close_price.parse::<f32>().unwrap();
             let is_bullish = close >= open;
@@ -914,7 +920,7 @@ mod test {
     #[tokio::test]
     async fn entry_point() {
         let pair_symbol = "SOL_USDT";
-        let timeframe = "1h";
+        let timeframe = "5m";
         let font_data = include_bytes!("../../Roboto-Light.ttf").to_vec();
 
         let limit = 24 * 10;
