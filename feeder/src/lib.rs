@@ -14,7 +14,7 @@ async fn gen_candle(pair_symbol: String, timeframe: String) -> anyhow::Result<Ve
 }
 
 // TODO: pixel font
-const DEFAULT_FONT_NAME: &str = "Roboto-Light.ttf";
+const DEFAULT_FONT_NAME: &str = "RobotoMono-Regular.ttf";
 
 pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<Response> {
     if let Some(pair_symbol) = ctx.param("pair_symbol") {

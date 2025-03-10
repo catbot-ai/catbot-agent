@@ -30,9 +30,13 @@ const MCAD_SIGNAL: RGBColor = RGBColor(255, 109, 1);
 const SRSI_K: RGBColor = RGBColor(34, 150, 243);
 const SRSI_D: RGBColor = RGBColor(255, 109, 1);
 
+// Axis
+const AXIS_SCALE: PxScale = PxScale { x: 18.0, y: 18.0 };
+
 // Label
+const HEAD_SCALE: PxScale = PxScale { x: 22.0, y: 22.0 };
 const LABEL_COLOR: Rgb<u8> = Rgb([255, 255, 255]);
-const LABEL_SCALE: PxScale = PxScale { x: 18.0, y: 18.0 };
+const LABEL_SCALE: PxScale = PxScale { x: 20.0, y: 20.0 };
 const TRANSPARENT_BLACK_50: Rgb<u8> = Rgb([0, 0, 0]); // 50% transparent black
 
 // Styling structures
@@ -324,7 +328,7 @@ fn draw_axis_labels(
     max_price: f32,
 ) -> Result<(), Box<dyn Error>> {
     let white = Rgb([255u8, 255u8, 255u8]);
-    let label_scale = PxScale { x: 12.0, y: 12.0 };
+    let label_scale = AXIS_SCALE;
     let font_metrics = font.as_scaled(label_scale);
     let text_x = (final_width - margin_right + 6) as i32;
     let text_height = (font_metrics.ascent() - font_metrics.descent()).ceil() as i32;
@@ -548,7 +552,7 @@ fn draw_label<F: Font>(
 
     draw_filled_rect_mut(
         img,
-        Rect::at(x - 4, y - 4).of_size(text_width, text_height),
+        Rect::at(x, y).of_size(text_width, text_height),
         background_color,
     );
 
@@ -910,7 +914,7 @@ fn draw_candle_detail(
             &candle_detail,
             10,
             10,
-            PxScale { x: 30.0, y: 30.0 },
+            HEAD_SCALE,
             LABEL_COLOR,
             TRANSPARENT_BLACK_50,
         )?;
@@ -1244,7 +1248,7 @@ mod test {
     async fn entry_point() {
         let pair_symbol = "SOL_USDT";
         let timeframe = "1h";
-        let font_data = include_bytes!("../../Roboto-Light.ttf").to_vec();
+        let font_data = include_bytes!("../../RobotoMono-Regular.ttf").to_vec();
 
         let limit = 24 * 10;
         let candle_data = fetch_binance_kline_data::<Kline>(pair_symbol, timeframe, limit)
