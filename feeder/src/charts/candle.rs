@@ -136,11 +136,6 @@ impl Chart {
         self
     }
 
-    pub fn with_predicted_candle(mut self, predicted_candle_data: Vec<Kline>) -> Self {
-        self.predicted_candle_data = Some(predicted_candle_data);
-        self
-    }
-
     pub fn with_title(mut self, title: &str) -> Self {
         self.metadata.title = title.to_string();
         self
@@ -227,19 +222,14 @@ impl Chart {
     }
 
     pub fn build(self) -> Result<Vec<u8>, Box<dyn Error>> {
-        if self.past_candle_data.is_none() && self.predicted_candle_data.is_none() {
-            return Err("At least one candle data set is required".into());
+        if self.past_candle_data.is_none() {
+            return Err("Candle data set is required".into());
         }
         let font_data = self.font_data.ok_or("Font data is required")?;
         let font = FontRef::try_from_slice(&font_data)?;
         let timezone = &self.timezone;
 
-        let all_candle_data = match (&self.past_candle_data, &self.predicted_candle_data) {
-            (Some(past), Some(pred)) => [past.clone(), pred.clone()].concat(),
-            (Some(past), None) => past.clone(),
-            (None, Some(pred)) => pred.clone(),
-            (None, None) => unreachable!(),
-        };
+        let all_candle_data = &self.past_candle_data.clone().unwrap();
 
         // Calculate the total width needed for all candles
         let margin_right = 100;
@@ -285,37 +275,19 @@ impl Chart {
                 .margin_right(margin_right)
                 .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
 
-            if let Some(past_candle_data) = &self.past_candle_data {
-                draw_candlesticks(
-                    &mut top_chart,
-                    past_candle_data,
-                    timezone,
-                    |is_bullish| {
-                        if is_bullish {
-                            B_GREEN.into()
-                        } else {
-                            B_RED.into()
-                        }
-                    },
-                    candle_width,
-                )?;
-            }
-
-            if let Some(predicted_candle_data) = &self.predicted_candle_data {
-                draw_candlesticks(
-                    &mut top_chart,
-                    predicted_candle_data,
-                    timezone,
-                    |is_bullish| {
-                        if is_bullish {
-                            RGBAColor(0, 255, 0, 0.25)
-                        } else {
-                            RGBAColor(255, 0, 0, 0.25)
-                        }
-                    },
-                    candle_width,
-                )?;
-            }
+            draw_candlesticks(
+                &mut top_chart,
+                all_candle_data,
+                timezone,
+                |is_bullish| {
+                    if is_bullish {
+                        B_GREEN.into()
+                    } else {
+                        B_RED.into()
+                    }
+                },
+                candle_width,
+            )?;
 
             if self.bollinger_enabled {
                 let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
@@ -363,6 +335,7 @@ impl Chart {
                         .map(|k| k.volume.parse::<f32>().unwrap())
                         .collect();
                     let max_volume = volumes.iter().fold(0.0f32, |a, &b| a.max(b));
+                    println!("max_volume: {:?}", max_volume);
                     let mut volume_chart = ChartBuilder::on(&volume_area)
                         .margin_right(margin_right)
                         .build_cartesian_2d(first_time..last_time, 0.0f32..max_volume * 1.1)?;
@@ -804,12 +777,12 @@ fn draw_volume_bars(
     if let Some(past_data) = past_candle_data {
         chart
             .configure_mesh()
-            .light_line_style(&BLACK)
+            .light_line_style(BLACK)
             .x_max_light_lines(1)
             .y_max_light_lines(1)
             .draw()?;
         chart.draw_series(past_data.iter().flat_map(|k| {
-            let time = parse_kline_time(k.open_time, timezone);
+            let time: DateTime<Tz> = parse_kline_time(k.open_time, timezone);
             let volume = k.volume.parse::<f32>().unwrap();
             let bar_width = parse_timeframe_duration(timeframe);
             let open = k.open_price.parse::<f32>().unwrap();
