@@ -85,12 +85,12 @@ fn parse_timeframe_duration(timeframe: &str) -> Duration {
     }
 }
 
-fn get_visible_range_and_data<'a>(
-    past_data: &'a [Kline],
+fn get_visible_range_and_data(
+    past_data: &[Kline],
     timezone: &Tz,
     candle_width: u32,
     final_width: u32,
-) -> Result<(DateTime<Tz>, DateTime<Tz>, Vec<&'a Kline>), Box<dyn Error>> {
+) -> Result<(DateTime<Tz>, DateTime<Tz>, Vec<Kline>), Box<dyn Error>> {
     let total_candles = past_data.len();
     if total_candles == 0 {
         return Err("No candle data available".into());
@@ -105,17 +105,465 @@ fn get_visible_range_and_data<'a>(
     let last_visible_time = parse_kline_time(past_data[total_candles - 1].open_time, timezone);
 
     // Step 2: Filter data for the visible range
-    let visible_data: Vec<&Kline> = past_data
-        .iter()
+    let visible_data: Vec<Kline> = past_data
+        .into_iter()
         .filter(|k| {
             let time = parse_kline_time(k.open_time, timezone);
             time >= first_visible_time && time <= last_visible_time
         })
+        .map(|k| k.clone())
         .collect();
 
     Ok((first_visible_time, last_visible_time, visible_data))
 }
 
+fn draw_chart(
+    root: DrawingArea<BitMapBackend<'_>, plotters::coord::Shift>,
+    all_candle_data: &[Kline],
+    past_data: &[Kline],
+    timezone: &Tz,
+    chart: &Chart,
+    min_price: f32,
+    max_price: f32,
+    first_time: DateTime<Tz>,
+    last_time: DateTime<Tz>,
+    margin_right: u32,
+    candle_width: u32,
+    final_width: u32,
+) -> Result<(), Box<dyn Error>> {
+    root.fill(&B_BLACK)?;
+
+    let (top, bottom) = root.split_vertically((50).percent());
+
+    let mut top_chart = ChartBuilder::on(&top)
+        .margin_right(margin_right)
+        .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
+
+    draw_candlesticks(
+        &mut top_chart,
+        all_candle_data,
+        timezone,
+        |is_bullish| {
+            if is_bullish {
+                B_GREEN.into()
+            } else {
+                B_RED.into()
+            }
+        },
+        candle_width,
+    )?;
+
+    if chart.bollinger_enabled {
+        draw_bollinger_bands(&mut top_chart, past_data, timezone)?;
+    }
+
+    if chart.volume_enabled || chart.macd_enabled || chart.stoch_rsi_enabled {
+        let num_indicators = [
+            chart.volume_enabled,
+            chart.macd_enabled,
+            chart.stoch_rsi_enabled,
+        ]
+        .iter()
+        .filter(|&&enabled| enabled)
+        .count() as f32;
+        let section_height_percent = (100.0 / num_indicators).round() as u32;
+
+        let mut remaining_area = bottom;
+        let mut areas = Vec::new();
+
+        if chart.volume_enabled {
+            let (volume_area, rest) =
+                remaining_area.split_vertically((section_height_percent).percent());
+            areas.push(volume_area);
+            remaining_area = rest;
+        }
+        println!("section_height_percent: {:?}", section_height_percent);
+        if chart.macd_enabled {
+            let (macd_area, rest) =
+                remaining_area.split_vertically((section_height_percent * 2).percent());
+            areas.push(macd_area);
+            remaining_area = rest;
+        }
+        if chart.stoch_rsi_enabled {
+            areas.push(remaining_area);
+        }
+
+        let mut area_iter = areas.into_iter().enumerate();
+
+        if chart.volume_enabled {
+            let (_idx, volume_area) = area_iter.next().unwrap();
+            let (first_visible_time, last_visible_time, visible_data) =
+                get_visible_range_and_data(past_data, timezone, candle_width, final_width)?;
+            let max_volume = visible_data
+                .iter()
+                .map(|k| k.volume.parse::<f32>().unwrap())
+                .fold(0.0f32, |a, b| a.max(b));
+            let mut volume_chart = ChartBuilder::on(&volume_area)
+                .margin_right(margin_right)
+                .build_cartesian_2d(
+                    first_visible_time..last_visible_time,
+                    0.0f32..max_volume * 1.1,
+                )?;
+            draw_volume_bars(
+                &mut volume_chart,
+                &Some(visible_data.into_iter().collect()),
+                timezone,
+                &chart.timeframe,
+            )?;
+        }
+
+        if chart.macd_enabled {
+            let (_idx, macd_area) = area_iter.next().unwrap();
+            let (first_visible_time, last_visible_time, visible_data) =
+                get_visible_range_and_data(past_data, timezone, candle_width, final_width)?;
+            let past_m4rs_candles: Vec<M4rsCandlestick> = visible_data
+                .iter()
+                .map(|k| kline_to_m4rs_candlestick(k))
+                .collect();
+            let macd_result = macd(&past_m4rs_candles, 12, 26, 9)?;
+            let macd_values: Vec<f32> = macd_result
+                .iter()
+                .flat_map(|entry| {
+                    vec![
+                        entry.macd as f32,
+                        entry.signal as f32,
+                        entry.histogram as f32,
+                    ]
+                })
+                .collect();
+            let macd_min = macd_values
+                .iter()
+                .fold(f32::INFINITY, |a, &b| a.min(b))
+                .min(-1.0);
+            let macd_max = macd_values
+                .iter()
+                .fold(f32::NEG_INFINITY, |a, &b| a.max(b))
+                .max(1.0);
+            let mut macd_chart = ChartBuilder::on(&macd_area)
+                .margin_right(margin_right)
+                .build_cartesian_2d(first_visible_time..last_visible_time, macd_min..macd_max)?;
+            draw_macd(
+                &mut macd_chart,
+                &Some(visible_data.into_iter().collect()),
+                timezone,
+                &chart.timeframe,
+            )?;
+        }
+
+        if chart.stoch_rsi_enabled {
+            let (_idx, stoch_rsi_area) = area_iter.next().unwrap();
+            let (first_visible_time, last_visible_time, visible_data) =
+                get_visible_range_and_data(past_data, timezone, candle_width, final_width)?;
+            let mut stoch_rsi_chart = ChartBuilder::on(&stoch_rsi_area)
+                .margin_right(margin_right)
+                .build_cartesian_2d(first_visible_time..last_visible_time, 0.0f32..100.0f32)?;
+            let past_m4rs_candles: Vec<M4rsCandlestick> = visible_data
+                .iter()
+                .map(|k| kline_to_m4rs_candlestick(k))
+                .collect();
+            let stoch_rsi_result = m4rs::stochastics(&past_m4rs_candles, 14, 3)?;
+            let stoch_rsi_lines: Vec<(DateTime<Tz>, f32, f32)> = stoch_rsi_result
+                .iter()
+                .map(|entry| {
+                    let t = parse_kline_time(entry.at as i64, timezone);
+                    (t, entry.k as f32, entry.d as f32)
+                })
+                .collect();
+            let k_style = ShapeStyle::from(&SRSI_K).stroke_width(1);
+            let d_style = ShapeStyle::from(&SRSI_D).stroke_width(1);
+            stoch_rsi_chart.draw_series(LineSeries::new(
+                stoch_rsi_lines.iter().map(|(t, k, _)| (*t, *k)),
+                k_style,
+            ))?;
+            stoch_rsi_chart.draw_series(LineSeries::new(
+                stoch_rsi_lines.iter().map(|(t, _, d)| (*t, *d)),
+                d_style,
+            ))?;
+            let upper_line = 80.0f32;
+            let lower_line = 20.0f32;
+            let dash_style = ShapeStyle {
+                color: WHITE.mix(1.0),
+                filled: false,
+                stroke_width: 1,
+            };
+            stoch_rsi_chart
+                .draw_series(DashedLineSeries::new(
+                    vec![
+                        (first_visible_time, upper_line),
+                        (last_visible_time, upper_line),
+                    ],
+                    5,
+                    10,
+                    dash_style,
+                ))
+                .unwrap();
+            stoch_rsi_chart
+                .draw_series(DashedLineSeries::new(
+                    vec![
+                        (first_visible_time, lower_line),
+                        (last_visible_time, lower_line),
+                    ],
+                    5,
+                    10,
+                    dash_style,
+                ))
+                .unwrap();
+        }
+    }
+
+    Ok(())
+}
+
+fn draw_axis_labels(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    font_data: Vec<u8>,
+    past_data: &[Kline],
+    timezone: &Tz,
+    chart: &Chart,
+    height: u32,
+    final_width: u32,
+    margin_right: u32,
+    min_price: f32,
+    max_price: f32,
+) -> Result<(), Box<dyn Error>> {
+    let white = Rgb([255u8, 255u8, 255u8]);
+    let label_scale = PxScale { x: 12.0, y: 12.0 };
+    let font = FontRef::try_from_slice(&font_data)?;
+    let font_metrics = font.as_scaled(label_scale);
+    let text_x = (final_width - margin_right + 6) as i32;
+    let text_height = (font_metrics.ascent() - font_metrics.descent()).ceil() as i32;
+
+    let num_indicators = [
+        chart.volume_enabled,
+        chart.macd_enabled,
+        chart.stoch_rsi_enabled,
+    ]
+    .iter()
+    .filter(|&&enabled| enabled)
+    .count() as f32;
+    let section_height = height as f32 * 0.5 / num_indicators;
+    let top_section_height = height as f32 * 0.5;
+
+    // Add price labels for the candlestick section
+    let price_range = max_price * 1.05 - min_price * 0.95;
+    let price_step = price_range / 2.0;
+    let price_y_positions = [
+        0.0,
+        top_section_height * 0.5,
+        top_section_height - text_height as f32,
+    ];
+    for (i, y) in price_y_positions.iter().enumerate() {
+        let price = max_price * 1.05 - (i as f32 * price_step);
+        draw_text_mut(
+            img,
+            white,
+            text_x,
+            *y as i32,
+            label_scale,
+            &font,
+            &format!("{:.2}", price),
+        );
+    }
+
+    let mut current_y = top_section_height;
+
+    if chart.volume_enabled {
+        let volumes: Vec<f32> = past_data
+            .iter()
+            .map(|k| k.volume.parse::<f32>().unwrap())
+            .collect();
+        let max_volume = volumes.iter().fold(0.0f32, |a, &b| a.max(b));
+        let max_volume_display = max_volume * 1.1;
+        let volume_step = max_volume_display / 2.0;
+        let volume_y_positions = [
+            current_y,
+            current_y + section_height * 0.5,
+            current_y + section_height - text_height as f32,
+        ];
+        for (i, y) in volume_y_positions.iter().enumerate() {
+            let volume = max_volume_display - (i as f32 * volume_step);
+            draw_text_mut(
+                img,
+                white,
+                text_x,
+                *y as i32,
+                label_scale,
+                &font,
+                &format!("{:.0}k", volume / 1000.0),
+            );
+        }
+        current_y += section_height;
+    }
+
+    if chart.macd_enabled {
+        let past_m4rs_candles: Vec<M4rsCandlestick> =
+            past_data.iter().map(kline_to_m4rs_candlestick).collect();
+        let macd_result = macd(&past_m4rs_candles, 12, 26, 9)?;
+        let macd_values: Vec<f32> = macd_result
+            .iter()
+            .flat_map(|entry| {
+                vec![
+                    entry.macd as f32,
+                    entry.signal as f32,
+                    entry.histogram as f32,
+                ]
+            })
+            .collect();
+        let macd_min = macd_values
+            .iter()
+            .fold(f32::INFINITY, |a, &b| a.min(b))
+            .min(-1.0);
+        let macd_max = macd_values
+            .iter()
+            .fold(f32::NEG_INFINITY, |a, &b| a.max(b))
+            .max(1.0);
+        let macd_step = (macd_max - macd_min) / 2.0;
+        let macd_y_positions = [
+            current_y,
+            current_y + section_height * 0.5,
+            current_y + section_height - text_height as f32,
+        ];
+        for (i, y) in macd_y_positions.iter().enumerate() {
+            let macd_value = macd_max - (i as f32 * macd_step);
+            draw_text_mut(
+                img,
+                white,
+                text_x,
+                *y as i32,
+                label_scale,
+                &font,
+                &format!("{:.2}", macd_value),
+            );
+        }
+        current_y += section_height;
+    }
+
+    if chart.stoch_rsi_enabled {
+        let stoch_rsi_step = 100.0 / 2.0;
+        let stoch_rsi_y_positions = [
+            current_y,
+            current_y + section_height * 0.5,
+            current_y + section_height - text_height as f32,
+        ];
+        for (i, y) in stoch_rsi_y_positions.iter().enumerate() {
+            let stoch_rsi_value = 100.0 - (i as f32 * stoch_rsi_step);
+            draw_text_mut(
+                img,
+                white,
+                text_x,
+                *y as i32,
+                label_scale,
+                &font,
+                &format!("{:.0}", stoch_rsi_value),
+            );
+        }
+        current_y += section_height;
+    }
+
+    Ok(())
+}
+
+fn draw_lines(
+    root: &DrawingArea<BitMapBackend<'_>, Cartesian2d<RangedCoordf32, RangedCoordf32>>,
+    chart: &Chart,
+) -> Result<(), Box<dyn Error>> {
+    if !chart.lines.is_empty() {
+        let style = chart.line_style.clone().unwrap_or(LineStyle {
+            stroke_width: 2,
+            color: YELLOW,
+        });
+        for &[p1, p2] in chart.lines.iter() {
+            root.draw(&PathElement::new(
+                vec![p1, p2],
+                ShapeStyle::from(&style.color).stroke_width(style.stroke_width as u32),
+            ))?;
+        }
+    }
+
+    if !chart.points.is_empty() {
+        let style = chart.point_style.clone().unwrap_or(PointStyle {
+            radius: 3,
+            color: WHITE,
+        });
+        for &(x, y) in chart.points.iter() {
+            root.draw(&Circle::new(
+                (x, y),
+                style.radius,
+                ShapeStyle::from(&style.color).filled(),
+            ))?;
+        }
+    }
+
+    Ok(())
+}
+
+fn draw_labels(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    font_data: Vec<u8>,
+    chart: &Chart,
+    final_width: u32,
+    height: u32,
+) -> Result<(), Box<dyn Error>> {
+    let font = FontRef::try_from_slice(&font_data)?;
+    let white = Rgb([255u8, 255u8, 255u8]);
+
+    if !chart.labels.is_empty() {
+        let style = chart.label_style.clone().unwrap_or(LabelStyle {
+            scale: PxScale { x: 15.0, y: 15.0 },
+            color: white,
+            background_color: Rgb([0, 0, 0]),
+            offset_x: 5,
+            offset_y: 0,
+        });
+
+        let font_metrics = font.as_scaled(style.scale);
+        for (x, y, text) in chart.labels.iter() {
+            let mut total_width = 0.0f32;
+            for c in text.chars() {
+                let glyph_id = font_metrics.glyph_id(c);
+                let glyph = ab_glyph::Glyph {
+                    id: glyph_id,
+                    scale: style.scale,
+                    position: ab_glyph::Point { x: 0.0, y: 0.0 },
+                };
+                total_width += font_metrics.glyph_bounds(&glyph).width();
+            }
+            let text_width = total_width.ceil() as i32;
+            let text_height = (font_metrics.ascent() - font_metrics.descent()).ceil() as i32;
+            let x_pos = (*x * final_width as f32) as i32 + style.offset_x;
+            let y_pos = (*y * height as f32) as i32 + style.offset_y - text_height;
+
+            draw_filled_rect_mut(
+                img,
+                Rect::at(x_pos - 4, y_pos - 4)
+                    .of_size((text_width + 6) as u32, (text_height + 1) as u32),
+                style.background_color,
+            );
+
+            draw_text_mut(
+                img,
+                style.color,
+                x_pos,
+                y_pos + (font_metrics.descent() as i32),
+                style.scale,
+                &font,
+                text,
+            );
+        }
+    }
+
+    draw_text_mut(
+        img,
+        white,
+        10,
+        10,
+        PxScale { x: 50.0, y: 50.0 },
+        &font,
+        &chart.metadata.title,
+    );
+
+    Ok(())
+}
 // Chart struct
 pub struct Chart {
     timezone: Tz,
@@ -254,26 +702,27 @@ impl Chart {
         if self.past_candle_data.is_none() {
             return Err("Candle data set is required".into());
         }
-        let font_data = self.font_data.ok_or("Font data is required")?;
-        let font = FontRef::try_from_slice(&font_data)?;
+        let font_data = self
+            .font_data
+            .as_ref()
+            .ok_or("Font data is required")?
+            .clone();
         let timezone = &self.timezone;
 
         let all_candle_data = &self.past_candle_data.clone().unwrap();
+        let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
 
-        // Calculate the total width needed for all candles
         let margin_right = 100;
         let total_candles = all_candle_data.len();
-        let candle_width = self.candle_width; // Fixed candle width (e.g., 10px)
-        let total_width = total_candles as u32 * candle_width; // Full width for all candles
-        let final_width = 768; // Desired output width
+        let candle_width = self.candle_width;
+        let total_width = total_candles as u32 * candle_width;
+        let final_width = 768;
         let height = 1024;
 
-        // Ensure the total width is at least the final width
         let plot_width = total_width.max(final_width);
         let bar: (u32, u32) = (plot_width, height);
         let mut buffer = vec![0; (plot_width * height * 3) as usize];
 
-        // Determine the full time range for plotting
         let first_time = parse_kline_time(all_candle_data[0].open_time, timezone);
         let last_time = parse_kline_time(
             all_candle_data[all_candle_data.len() - 1].open_time,
@@ -296,205 +745,22 @@ impl Chart {
 
         {
             let root = BitMapBackend::with_buffer(&mut buffer, bar).into_drawing_area();
-            root.fill(&B_BLACK)?;
-
-            let (top, bottom) = root.split_vertically((50).percent());
-
-            let mut top_chart = ChartBuilder::on(&top)
-                .margin_right(margin_right)
-                .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
-
-            draw_candlesticks(
-                &mut top_chart,
+            draw_chart(
+                root,
                 all_candle_data,
+                past_data,
                 timezone,
-                |is_bullish| {
-                    if is_bullish {
-                        B_GREEN.into()
-                    } else {
-                        B_RED.into()
-                    }
-                },
+                &self,
+                min_price,
+                max_price,
+                first_time,
+                last_time,
+                margin_right,
                 candle_width,
+                final_width,
             )?;
-
-            if self.bollinger_enabled {
-                let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
-                draw_bollinger_bands(&mut top_chart, past_data, timezone)?;
-            }
-
-            if self.volume_enabled || self.macd_enabled || self.stoch_rsi_enabled {
-                let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
-
-                let num_indicators = [
-                    self.volume_enabled,
-                    self.macd_enabled,
-                    self.stoch_rsi_enabled,
-                ]
-                .iter()
-                .filter(|&&enabled| enabled)
-                .count() as f32;
-                let section_height_percent = (100.0 / num_indicators).round() as u32;
-
-                let mut remaining_area = bottom;
-                let mut areas = Vec::new();
-
-                if self.volume_enabled {
-                    let (volume_area, rest) =
-                        remaining_area.split_vertically((section_height_percent).percent());
-                    areas.push(volume_area);
-                    remaining_area = rest;
-                }
-                println!("section_height_percent: {:?}", section_height_percent);
-                if self.macd_enabled {
-                    let (macd_area, rest) =
-                        remaining_area.split_vertically((section_height_percent * 2).percent());
-                    areas.push(macd_area);
-                    remaining_area = rest;
-                }
-                if self.stoch_rsi_enabled {
-                    areas.push(remaining_area);
-                }
-
-                let mut area_iter = areas.into_iter().enumerate();
-
-                if self.volume_enabled {
-                    let (_idx, volume_area) = area_iter.next().unwrap();
-
-                    // Use the helper function to get the visible range and data
-                    let (first_visible_time, last_visible_time, visible_data) =
-                        get_visible_range_and_data(past_data, timezone, candle_width, final_width)?;
-
-                    // Calculate max_volume for the visible range
-                    let max_volume = visible_data
-                        .iter()
-                        .map(|k| k.volume.parse::<f32>().unwrap())
-                        .fold(0.0f32, |a, b| a.max(b));
-
-                    // Build the volume chart with the visible time range and max_volume
-                    let mut volume_chart = ChartBuilder::on(&volume_area)
-                        .margin_right(margin_right)
-                        .build_cartesian_2d(
-                            first_visible_time..last_visible_time,
-                            0.0f32..max_volume * 1.1,
-                        )?;
-
-                    draw_volume_bars(
-                        &mut volume_chart,
-                        &Some(visible_data.into_iter().cloned().collect()),
-                        timezone,
-                        &self.timeframe,
-                    )?;
-                }
-
-                if self.macd_enabled {
-                    let (_idx, macd_area) = area_iter.next().unwrap();
-
-                    // Use the helper function to get the visible range and data
-                    let (first_visible_time, last_visible_time, visible_data) =
-                        get_visible_range_and_data(past_data, timezone, candle_width, final_width)?;
-
-                    // Calculate MACD values for the visible range
-                    let past_m4rs_candles: Vec<M4rsCandlestick> = visible_data
-                        .iter()
-                        .map(|k| kline_to_m4rs_candlestick(k))
-                        .collect();
-                    let macd_result = macd(&past_m4rs_candles, 12, 26, 9)?;
-                    let macd_values: Vec<f32> = macd_result
-                        .iter()
-                        .flat_map(|entry| {
-                            vec![
-                                entry.macd as f32,
-                                entry.signal as f32,
-                                entry.histogram as f32,
-                            ]
-                        })
-                        .collect();
-                    let macd_min = macd_values
-                        .iter()
-                        .fold(f32::INFINITY, |a, &b| a.min(b))
-                        .min(-1.0);
-                    let macd_max = macd_values
-                        .iter()
-                        .fold(f32::NEG_INFINITY, |a, &b| a.max(b))
-                        .max(1.0);
-
-                    // Build the MACD chart with the visible time range
-                    let mut macd_chart = ChartBuilder::on(&macd_area)
-                        .margin_right(margin_right)
-                        .build_cartesian_2d(
-                            first_visible_time..last_visible_time,
-                            macd_min..macd_max,
-                        )?;
-
-                    draw_macd(
-                        &mut macd_chart,
-                        &Some(visible_data.into_iter().cloned().collect()),
-                        timezone,
-                        &self.timeframe,
-                    )?;
-                }
-
-                if self.stoch_rsi_enabled {
-                    let (_idx, stoch_rsi_area) = area_iter.next().unwrap();
-                    let mut stoch_rsi_chart = ChartBuilder::on(&stoch_rsi_area)
-                        .margin_right(margin_right)
-                        .build_cartesian_2d(first_time..last_time, 0.0f32..100.0f32)?;
-
-                    let past_m4rs_candles: Vec<M4rsCandlestick> =
-                        past_data.iter().map(kline_to_m4rs_candlestick).collect();
-                    let stoch_rsi_result = m4rs::stochastics(&past_m4rs_candles, 14, 3)?;
-                    let stoch_rsi_lines: Vec<(DateTime<Tz>, f32, f32)> = stoch_rsi_result
-                        .iter()
-                        .map(|entry| {
-                            let t = parse_kline_time(entry.at as i64, timezone);
-                            (t, entry.k as f32, entry.d as f32)
-                        })
-                        .collect();
-
-                    let k_style = ShapeStyle::from(&SRSI_K).stroke_width(1);
-                    let d_style = ShapeStyle::from(&SRSI_D).stroke_width(1);
-                    stoch_rsi_chart.draw_series(LineSeries::new(
-                        stoch_rsi_lines.iter().map(|(t, k, _)| (*t, *k)),
-                        k_style,
-                    ))?;
-                    stoch_rsi_chart.draw_series(LineSeries::new(
-                        stoch_rsi_lines.iter().map(|(t, _, d)| (*t, *d)),
-                        d_style,
-                    ))?;
-
-                    let upper_line = 80.0f32;
-                    let lower_line = 20.0f32;
-
-                    // Style for dashed lines
-                    let dash_style = ShapeStyle {
-                        color: WHITE.mix(1.0), // Fully opaque white
-                        filled: false,
-                        stroke_width: 1,
-                    };
-
-                    // Draw dashed lines
-                    stoch_rsi_chart
-                        .draw_series(DashedLineSeries::new(
-                            vec![(first_time, upper_line), (last_time, upper_line)],
-                            5,  // dash length
-                            10, // spacing between dashes
-                            dash_style,
-                        ))
-                        .unwrap();
-                    stoch_rsi_chart
-                        .draw_series(DashedLineSeries::new(
-                            vec![(first_time, lower_line), (last_time, lower_line)],
-                            5,  // dash length
-                            10, // spacing between dashes
-                            dash_style,
-                        ))
-                        .unwrap();
-                }
-            }
         }
 
-        // Crop the image to the rightmost 768 pixels
         let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(plot_width, height);
         imgbuf.copy_from_slice(buffer.as_slice());
 
@@ -502,7 +768,6 @@ impl Chart {
         let mut cropped_img: ImageBuffer<Rgb<u8>, Vec<u8>> =
             image::imageops::crop_imm(&imgbuf, crop_x, 0, final_width, height).to_image();
 
-        let white = Rgb([255u8, 255u8, 255u8]);
         {
             let root = BitMapBackend::with_buffer(&mut cropped_img, (final_width, height))
                 .into_drawing_area();
@@ -512,227 +777,31 @@ impl Chart {
                 (0..final_width as i32, 0..height as i32),
             ));
 
-            if !self.lines.is_empty() {
-                let style = self.line_style.clone().unwrap_or(LineStyle {
-                    stroke_width: 2,
-                    color: YELLOW,
-                });
-                for &[p1, p2] in self.lines.iter() {
-                    root.draw(&PathElement::new(
-                        vec![p1, p2],
-                        ShapeStyle::from(&style.color).stroke_width(style.stroke_width as u32),
-                    ))?;
-                }
-            }
-
-            if !self.points.is_empty() {
-                let style = self.point_style.clone().unwrap_or(PointStyle {
-                    radius: 3,
-                    color: WHITE,
-                });
-                for &(x, y) in self.points.iter() {
-                    root.draw(&Circle::new(
-                        (x, y),
-                        style.radius,
-                        ShapeStyle::from(&style.color).filled(),
-                    ))?;
-                }
-            }
+            draw_lines(&root, &self)?;
         }
 
-        // Add y-axis labels for indicators
-        let label_scale = PxScale { x: 12.0, y: 12.0 };
-        let font_metrics = font.as_scaled(label_scale);
-        let text_x = (final_width - margin_right + 6) as i32;
-        let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
-        let text_height = (font_metrics.ascent() - font_metrics.descent()).ceil() as i32;
-
-        // Calculate section heights and starting positions
-        let num_indicators = [
-            self.volume_enabled,
-            self.macd_enabled,
-            self.stoch_rsi_enabled,
-        ]
-        .iter()
-        .filter(|&&enabled| enabled)
-        .count() as f32;
-        let section_height = height as f32 * 0.5 / num_indicators;
-        let top_section_height = height as f32 * 0.5;
-
-        // Add price labels for the candlestick section (3 labels: top, middle, bottom)
-        let price_range = max_price * 1.05 - min_price * 0.95;
-        let price_step = price_range / 2.0;
-        let price_y_positions = [
-            0.0,
-            top_section_height * 0.5,
-            top_section_height - text_height as f32,
-        ];
-        for (i, y) in price_y_positions.iter().enumerate() {
-            let price = max_price * 1.05 - (i as f32 * price_step);
-            draw_text_mut(
-                &mut cropped_img,
-                white,
-                text_x,
-                *y as i32,
-                label_scale,
-                &font,
-                &format!("{:.2}", price),
-            );
-        }
-
-        let mut current_y = top_section_height;
-
-        if self.volume_enabled {
-            let volumes: Vec<f32> = past_data
-                .iter()
-                .map(|k| k.volume.parse::<f32>().unwrap())
-                .collect();
-            let max_volume = volumes.iter().fold(0.0f32, |a, &b| a.max(b));
-            let max_volume_display = max_volume * 1.1;
-            let volume_step = max_volume_display / 2.0;
-            let volume_y_positions = [
-                current_y,
-                current_y + section_height * 0.5,
-                current_y + section_height - text_height as f32,
-            ];
-            for (i, y) in volume_y_positions.iter().enumerate() {
-                let volume = max_volume_display - (i as f32 * volume_step);
-                draw_text_mut(
-                    &mut cropped_img,
-                    white,
-                    text_x,
-                    *y as i32,
-                    label_scale,
-                    &font,
-                    &format!("{:.0}k", volume / 1000.0),
-                );
-            }
-
-            current_y += section_height;
-        }
-
-        if self.macd_enabled {
-            let past_m4rs_candles: Vec<M4rsCandlestick> =
-                past_data.iter().map(kline_to_m4rs_candlestick).collect();
-            let macd_result = macd(&past_m4rs_candles, 12, 26, 9)?;
-            let macd_values: Vec<f32> = macd_result
-                .iter()
-                .flat_map(|entry| {
-                    vec![
-                        entry.macd as f32,
-                        entry.signal as f32,
-                        entry.histogram as f32,
-                    ]
-                })
-                .collect();
-            let macd_min = macd_values
-                .iter()
-                .fold(f32::INFINITY, |a, &b| a.min(b))
-                .min(-1.0);
-            let macd_max = macd_values
-                .iter()
-                .fold(f32::NEG_INFINITY, |a, &b| a.max(b))
-                .max(1.0);
-            let macd_step = (macd_max - macd_min) / 2.0;
-            let macd_y_positions = [
-                current_y,
-                current_y + section_height * 0.5,
-                current_y + section_height - text_height as f32,
-            ];
-            for (i, y) in macd_y_positions.iter().enumerate() {
-                let macd_value = macd_max - (i as f32 * macd_step);
-                draw_text_mut(
-                    &mut cropped_img,
-                    white,
-                    text_x,
-                    *y as i32,
-                    label_scale,
-                    &font,
-                    &format!("{:.2}", macd_value),
-                );
-            }
-
-            current_y += section_height;
-        }
-
-        println!("current_y: {}", current_y);
-
-        if self.stoch_rsi_enabled {
-            let stoch_rsi_step = 100.0 / 2.0;
-            let stoch_rsi_y_positions = [
-                current_y,
-                current_y + section_height * 0.5,
-                current_y + section_height - text_height as f32,
-            ];
-            for (i, y) in stoch_rsi_y_positions.iter().enumerate() {
-                let stoch_rsi_value = 100.0 - (i as f32 * stoch_rsi_step);
-                draw_text_mut(
-                    &mut cropped_img,
-                    white,
-                    text_x,
-                    *y as i32,
-                    label_scale,
-                    &font,
-                    &format!("{:.0}", stoch_rsi_value),
-                );
-            }
-
-            current_y += section_height;
-        }
-
-        if !self.labels.is_empty() {
-            let style = self.label_style.clone().unwrap_or(LabelStyle {
-                scale: PxScale { x: 15.0, y: 15.0 },
-                color: white,
-                background_color: Rgb([0, 0, 0]),
-                offset_x: 5,
-                offset_y: 0,
-            });
-            let font_metrics = font.as_scaled(style.scale);
-            for (x, y, text) in self.labels.iter() {
-                let mut total_width = 0.0f32;
-                for c in text.chars() {
-                    let glyph_id = font_metrics.glyph_id(c);
-                    let glyph = ab_glyph::Glyph {
-                        id: glyph_id,
-                        scale: style.scale,
-                        position: ab_glyph::Point { x: 0.0, y: 0.0 },
-                    };
-                    total_width += font_metrics.glyph_bounds(&glyph).width();
-                }
-                let text_width = total_width.ceil() as i32;
-                let text_height = (font_metrics.ascent() - font_metrics.descent()).ceil() as i32;
-                let x_pos = (*x * final_width as f32) as i32 + style.offset_x;
-                let y_pos = (*y * height as f32) as i32 + style.offset_y - text_height;
-
-                draw_filled_rect_mut(
-                    &mut cropped_img,
-                    Rect::at(x_pos - 4, y_pos - 4)
-                        .of_size((text_width + 6) as u32, (text_height + 1) as u32),
-                    style.background_color,
-                );
-
-                draw_text_mut(
-                    &mut cropped_img,
-                    style.color,
-                    x_pos,
-                    y_pos + (font_metrics.descent() as i32),
-                    style.scale,
-                    &font,
-                    text,
-                );
-            }
-        }
-
-        draw_text_mut(
+        let cloned_font_data = font_data.clone();
+        draw_axis_labels(
             &mut cropped_img,
-            white,
-            10,
-            10,
-            PxScale { x: 50.0, y: 50.0 },
-            &font,
-            &self.metadata.title,
-        );
+            cloned_font_data,
+            past_data,
+            timezone,
+            &self,
+            height,
+            final_width,
+            margin_right,
+            min_price,
+            max_price,
+        )?;
+
+        let cloned_font_data = font_data.clone();
+        draw_labels(
+            &mut cropped_img,
+            cloned_font_data,
+            &self,
+            final_width,
+            height,
+        )?;
 
         Ok(encode_png(&cropped_img)?)
     }
