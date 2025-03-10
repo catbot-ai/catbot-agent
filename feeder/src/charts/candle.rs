@@ -30,7 +30,9 @@ const MCAD_SIGNAL: RGBColor = RGBColor(255, 109, 1);
 const SRSI_K: RGBColor = RGBColor(34, 150, 243);
 const SRSI_D: RGBColor = RGBColor(255, 109, 1);
 
+// Label
 const LABEL_COLOR: Rgb<u8> = Rgb([255, 255, 255]);
+const LABEL_SCALE: PxScale = PxScale { x: 18.0, y: 18.0 };
 
 // Styling structures
 #[derive(Clone)]
@@ -999,15 +1001,7 @@ fn draw_bollinger_detail(
         );
         let mut y_offset = 50;
         for line in ta_detail.lines() {
-            draw_text_mut(
-                img,
-                LABEL_COLOR,
-                10,
-                y_offset,
-                PxScale { x: 20.0, y: 20.0 },
-                &font,
-                line,
-            );
+            draw_text_mut(img, LABEL_COLOR, 10, y_offset, LABEL_SCALE, &font, line);
             y_offset += 25;
         }
     }
@@ -1084,7 +1078,7 @@ fn draw_volume_detail(
             LABEL_COLOR,
             10,
             current_y,
-            PxScale { x: 20.0, y: 20.0 },
+            LABEL_SCALE,
             &font,
             &volume_detail,
         );
@@ -1202,7 +1196,7 @@ fn draw_macd_detail(
             LABEL_COLOR,
             10,
             current_y,
-            PxScale { x: 20.0, y: 20.0 },
+            LABEL_SCALE,
             &font,
             &macd_detail,
         );
@@ -1231,7 +1225,7 @@ fn draw_stoch_rsi_detail(
             LABEL_COLOR,
             10,
             current_y,
-            PxScale { x: 20.0, y: 20.0 },
+            LABEL_SCALE,
             &font,
             &stoch_rsi_detail,
         );
