@@ -330,18 +330,46 @@ impl Chart {
                 let mut area_iter = areas.into_iter().enumerate();
                 if self.volume_enabled {
                     let (_idx, volume_area) = area_iter.next().unwrap();
-                    let volumes: Vec<f32> = past_data
+
+                    // Step 1: Calculate the visible time range
+                    let total_candles = past_data.len();
+                    let final_width = 768; // As defined earlier
+                    let visible_candles = (final_width / candle_width) as usize;
+                    let start_index = total_candles.saturating_sub(visible_candles);
+
+                    // Get the visible time range
+                    let first_visible_time =
+                        parse_kline_time(past_data[start_index].open_time, timezone);
+                    let last_visible_time =
+                        parse_kline_time(past_data[total_candles - 1].open_time, timezone);
+
+                    // Step 2: Filter data for the visible range and calculate max_volume
+                    let visible_data: Vec<&Kline> = past_data
+                        .iter()
+                        .filter(|k| {
+                            let time = parse_kline_time(k.open_time, timezone);
+                            time >= first_visible_time && time <= last_visible_time
+                        })
+                        .collect();
+
+                    let max_volume = visible_data
                         .iter()
                         .map(|k| k.volume.parse::<f32>().unwrap())
-                        .collect();
-                    let max_volume = volumes.iter().fold(0.0f32, |a, &b| a.max(b));
-                    println!("max_volume: {:?}", max_volume);
+                        .fold(0.0f32, |a, b| a.max(b));
+
+                    println!("max_volume (visible range): {:?}", max_volume);
+
+                    // Step 3: Build the volume chart with the visible time range and max_volume
                     let mut volume_chart = ChartBuilder::on(&volume_area)
                         .margin_right(margin_right)
-                        .build_cartesian_2d(first_time..last_time, 0.0f32..max_volume * 1.1)?;
+                        .build_cartesian_2d(
+                            first_visible_time..last_visible_time,
+                            0.0f32..max_volume * 1.1,
+                        )?;
+
                     draw_volume_bars(
                         &mut volume_chart,
-                        &Some(past_data.to_vec()),
+                        &Some(visible_data.into_iter().cloned().collect()),
                         timezone,
                         &self.timeframe,
                     )?;
