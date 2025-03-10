@@ -45,17 +45,20 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
             }
         };
 
-        // Get chart metadata
-        let chart_metadata = ChartMetaData {
-            title: format!("{pair_symbol} {timeframe}"),
-        };
+        // TODO: Define chart metadata
+        // let chart_metadata = ChartMetaData {
+        //     title: format!("{pair_symbol} {timeframe}"),
+        // };
 
         // Get image
         let buffer_result = Chart::new(timeframe, Tokyo)
+            .with_candle_width(6)
             .with_past_candle(candle_data)
-            .with_title(&chart_metadata.title)
+            .with_title(pair_symbol)
             .with_font_data(font_data)
+            .with_volume()
             .with_macd()
+            .with_stoch_rsi()
             .with_bollinger_band()
             .build();
 

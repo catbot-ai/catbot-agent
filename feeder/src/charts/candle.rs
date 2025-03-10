@@ -1146,9 +1146,9 @@ fn draw_macd(
 
             let fill_color = if *h > 0.0 {
                 if is_lower {
-                    GREEN_100
-                } else {
                     B_GREEN
+                } else {
+                    GREEN_100
                 }
             } else if is_lower {
                 B_RED
