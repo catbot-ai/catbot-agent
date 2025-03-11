@@ -92,6 +92,7 @@ pub fn draw_chart(
         .filter(|&&enabled| enabled)
         .count() as f32;
         let section_height_percent = (100.0 / num_indicators).round() as u32;
+        println!("section_height_percent: {:?}", section_height_percent);
 
         let mut remaining_area = bottom;
         let mut areas = Vec::new();
@@ -102,13 +103,13 @@ pub fn draw_chart(
             areas.push(volume_area);
             remaining_area = rest;
         }
-        println!("section_height_percent: {:?}", section_height_percent);
+
         if chart.macd_enabled {
-            let (macd_area, rest) =
-                remaining_area.split_vertically((section_height_percent).percent());
+            let (macd_area, rest) = remaining_area.split_vertically((50).percent());
             areas.push(macd_area);
             remaining_area = rest;
         }
+
         if chart.stoch_rsi_enabled {
             areas.push(remaining_area);
         }
