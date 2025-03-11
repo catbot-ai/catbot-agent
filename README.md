@@ -48,8 +48,6 @@ npx wrangler secret put GEMINI_API_KEY
   --output "screenshot.webp"
   ```
 
-```
-
 ## Features
 
 ### Free
@@ -69,9 +67,9 @@ npx wrangler secret put GEMINI_API_KEY
 - [free-web] user can see yesterday result.
 - [free-web] user can see profit comparison between `free` | `signed-in` | `staked`.
 - Stake to get signals.
-- More stake = more update frequency.
+- More stake = more signals frequency.
 - Update via email and discord.
 - Unstake took 7 days.
 - Staker get role in Discord.
-- Gold member get access to the bot.
-```
+- Gold member get access realtime bot.
+- Gold member get circuit breaker.
