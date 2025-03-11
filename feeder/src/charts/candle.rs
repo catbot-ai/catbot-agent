@@ -1,3 +1,4 @@
+use super::helpers::extract_signals;
 use super::helpers::parse_kline_time;
 use super::painters::*;
 use crate::charts::png::encode_png;
@@ -225,10 +226,32 @@ impl Chart {
         let min_price = prices.iter().fold(f32::INFINITY, |a, &b| a.min(b));
         let max_price = prices.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
 
+        // Mock short signal from last candle - 10 to last candle with entry and target times
+        let mut long_signals: Vec<(i64, f32, f32)> = Vec::new();
+        let mut short_signals: Vec<(i64, i64, f32, f32)> = Vec::new(); // Updated to (entry_time, target_time, entry_price, target_price)
+
+        if all_candle_data.len() >= 11 {
+            // Ensure we have enough candles (need at least 11 for last - 10)
+            let last_candle = &all_candle_data[all_candle_data.len() - 1];
+            let last_minus_10_candle = &all_candle_data[all_candle_data.len() - 11];
+
+            let entry_price = last_minus_10_candle.close_price.parse::<f32>().unwrap();
+            let target_price = last_candle.close_price.parse::<f32>().unwrap();
+
+            // Short signal: from last_minus_10_candle (entry) to last_candle (target)
+            short_signals.push((
+                last_minus_10_candle.open_time, // entry_time
+                last_candle.open_time,          // target_time
+                entry_price,                    // entry_price
+                target_price,                   // target_price
+            ));
+        }
+
+        // Scope for drawing operations
         {
-            let root = BitMapBackend::with_buffer(&mut buffer, bar).into_drawing_area();
+            let mut root = BitMapBackend::with_buffer(&mut buffer, bar).into_drawing_area();
             draw_chart(
-                root,
+                &mut root,
                 all_candle_data,
                 past_data,
                 timezone,
@@ -241,8 +264,20 @@ impl Chart {
                 candle_width,
                 final_width,
             )?;
+
+            let mut top_chart = ChartBuilder::on(&root.split_vertically((50).percent()).0)
+                .margin_right(margin_right)
+                .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
+            draw_point_on_last_candle(
+                &mut top_chart,
+                all_candle_data,
+                timezone,
+                plot_width,
+                height,
+            )?;
         }
 
+        // Create imgbuf after root is dropped
         let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(plot_width, height);
         imgbuf.copy_from_slice(buffer.as_slice());
 

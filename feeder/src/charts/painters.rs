@@ -43,7 +43,7 @@ const LABEL_SCALE: PxScale = PxScale { x: 20.0, y: 20.0 };
 const TRANSPARENT_BLACK_50: Rgb<u8> = Rgb([0, 0, 0]); // 50% transparent black
 
 pub fn draw_chart(
-    root: DrawingArea<BitMapBackend<'_>, plotters::coord::Shift>,
+    root: &mut DrawingArea<BitMapBackend<'_>, plotters::coord::Shift>,
     all_candle_data: &[Kline],
     past_data: &[Kline],
     timezone: &Tz,
@@ -105,7 +105,7 @@ pub fn draw_chart(
         println!("section_height_percent: {:?}", section_height_percent);
         if chart.macd_enabled {
             let (macd_area, rest) =
-                remaining_area.split_vertically((section_height_percent * 2).percent());
+                remaining_area.split_vertically((section_height_percent).percent());
             areas.push(macd_area);
             remaining_area = rest;
         }
@@ -862,7 +862,7 @@ pub fn draw_stoch_rsi_detail(
         let stoch_rsi_result = m4rs::slow_stochastics(&past_m4rs_candles, 14, 3, 5)?;
         let latest_stoch_rsi = stoch_rsi_result.last().unwrap();
         let stoch_rsi_detail = format!(
-            "Stock RSI 14 14 3 {:.2} {:.2}",
+            "Stoch RSI 14 14 3 {:.2} {:.2}",
             latest_stoch_rsi.k, latest_stoch_rsi.d
         );
         draw_label(
@@ -877,4 +877,95 @@ pub fn draw_stoch_rsi_detail(
         )?;
     }
     Ok(())
+}
+
+pub fn draw_point_on_last_candle(
+    chart: &mut ChartContext<
+        '_,
+        BitMapBackend<'_>,
+        Cartesian2d<RangedDateTime<DateTime<Tz>>, RangedCoordf32>,
+    >,
+    candle_data: &[Kline],
+    timezone: &Tz,
+    plot_width: u32,
+    height: u32,
+) -> Result<(Vec<(i32, i32, String)>, Vec<(i64, i64, f32, f32)>), Box<dyn Error>> {
+    let mut short_signals = Vec::new();
+    let mut label_info = Vec::new();
+
+    // Step 1: Generate and push the short signal
+    if candle_data.len() >= 11 {
+        let last_candle = &candle_data[candle_data.len() - 1];
+        let last_minus_10_candle = &candle_data[candle_data.len() - 11];
+
+        let entry_price = last_minus_10_candle.close_price.parse::<f32>().unwrap();
+        let target_price = last_candle.close_price.parse::<f32>().unwrap();
+
+        // Push the short signal into short_signals
+        short_signals.push((
+            last_minus_10_candle.open_time, // entry_time
+            last_candle.open_time,          // target_time
+            entry_price,                    // entry_price
+            target_price,                   // target_price
+        ));
+    }
+
+    // Step 2: Draw circles and line based on the short_signals data
+    let line_style = ShapeStyle::from(&RED).stroke_width(2); // Red line for short signal
+    for &(entry_time, target_time, entry_price, target_price) in &short_signals {
+        let entry_dt = parse_kline_time(entry_time, timezone);
+        let target_dt = parse_kline_time(target_time, timezone);
+
+        // Draw circle at the entry point
+        chart.draw_series(std::iter::once(Circle::new(
+            (entry_dt, entry_price),
+            5,                               // Radius of 5 pixels
+            ShapeStyle::from(&RED).filled(), // Red for short signal entry
+        )))?;
+
+        // Draw circle at the target point
+        chart.draw_series(std::iter::once(Circle::new(
+            (target_dt, target_price),
+            5,                               // Radius of 5 pixels
+            ShapeStyle::from(&RED).filled(), // Red for short signal target
+        )))?;
+
+        // Draw line connecting entry and target points
+        chart.draw_series(LineSeries::new(
+            vec![(entry_dt, entry_price), (target_dt, target_price)],
+            line_style,
+        ))?;
+
+        // Convert chart coordinates to pixel coordinates for labels
+        let x_range = chart.x_range();
+        let y_range = chart.y_range();
+
+        // Entry point label
+        let entry_x_pixel = ((entry_dt - x_range.start).num_milliseconds() as f32
+            / (x_range.end - x_range.start).num_milliseconds() as f32
+            * plot_width as f32) as i32;
+        let entry_y_pixel = ((entry_price - y_range.start) / (y_range.end - y_range.start)
+            * height as f32
+            * 0.5) as i32;
+        label_info.push((
+            entry_x_pixel,
+            entry_y_pixel - 20,
+            format!("Entry: {:.2}", entry_price),
+        ));
+
+        // Target point label
+        let target_x_pixel = ((target_dt - x_range.start).num_milliseconds() as f32
+            / (x_range.end - x_range.start).num_milliseconds() as f32
+            * plot_width as f32) as i32;
+        let target_y_pixel = ((target_price - y_range.start) / (y_range.end - y_range.start)
+            * height as f32
+            * 0.5) as i32;
+        label_info.push((
+            target_x_pixel,
+            target_y_pixel - 20,
+            format!("Target: {:.2}", target_price),
+        ));
+    }
+
+    Ok((label_info, short_signals))
 }
