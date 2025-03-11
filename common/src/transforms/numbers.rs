@@ -1,5 +1,5 @@
-use common::OrderBook;
-use std::collections::BTreeMap;
+use crate::OrderBook;
+use std::collections::{BTreeMap, HashMap};
 use strum::{Display, EnumString};
 
 #[derive(Debug, EnumString, Display)]
@@ -54,6 +54,73 @@ pub fn group_by_fractional_part(
     println!("Grouped Asks: {:?}", grouped_asks);
 
     (grouped_bids, grouped_asks)
+}
+
+pub fn group_by_fractional_part_f32(
+    orderbook_data: &OrderBook,
+    fractional_part: FractionalPart,
+) -> (HashMap<u32, f64>, HashMap<u32, f64>) {
+    let mut grouped_bids: HashMap<u32, f64> = HashMap::new();
+    let mut grouped_asks: HashMap<u32, f64> = HashMap::new();
+
+    let multiplier = match fractional_part {
+        FractionalPart::OneTenth => 10.0,
+        FractionalPart::One => 1.0,
+        FractionalPart::Ten => 0.1,
+        FractionalPart::Hundred => 0.01,
+    };
+
+    for bid in &orderbook_data.bids {
+        if bid.len() == 2 {
+            if let (Ok(price_str), Ok(amount_str)) = (bid[0].parse::<f64>(), bid[1].parse::<f64>())
+            {
+                let price = (price_str * multiplier).floor() / multiplier;
+                if price.is_finite() {
+                    grouped_bids.insert(((price as f32).to_bits() as u32).into(), amount_str);
+                }
+            }
+        }
+    }
+
+    for ask in &orderbook_data.asks {
+        if ask.len() == 2 {
+            if let (Ok(price_str), Ok(amount_str)) = (ask[0].parse::<f64>(), ask[1].parse::<f64>())
+            {
+                let price = (price_str * multiplier).ceil() / multiplier;
+                if price.is_finite() {
+                    grouped_asks.insert(((price as f32).to_bits() as u32).into(), amount_str);
+                }
+            }
+        }
+    }
+
+    (grouped_bids, grouped_asks)
+}
+
+pub fn convert_grouped_data(
+    grouped_bids: &HashMap<u32, f64>,
+    grouped_asks: &HashMap<u32, f64>,
+    min_price: f32,
+    max_price: f32,
+) -> (HashMap<u32, f32>, HashMap<u32, f32>) {
+    let mut bid_volumes: HashMap<u32, f32> = HashMap::new();
+    let mut ask_volumes: HashMap<u32, f32> = HashMap::new();
+
+    for (price_bits, volume) in grouped_bids.iter() {
+        let price = f32::from_bits(*price_bits);
+        if price >= min_price && price <= max_price && price.is_finite() {
+            bid_volumes.insert(*price_bits, *volume as f32);
+        }
+    }
+
+    for (price_bits, volume) in grouped_asks.iter() {
+        let price = f32::from_bits(*price_bits);
+        if price >= min_price && price <= max_price && price.is_finite() {
+            ask_volumes.insert(*price_bits, *volume as f32);
+        }
+    }
+
+    (bid_volumes, ask_volumes)
 }
 
 struct PriceAmount {

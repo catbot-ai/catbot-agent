@@ -3,7 +3,10 @@ use ab_glyph::ScaleFont;
 use ab_glyph::{Font, PxScale};
 use chrono::DateTime;
 use chrono_tz::Tz;
-use common::Kline;
+use common::numbers::{
+    convert_grouped_data, group_by_fractional_part, group_by_fractional_part_f32, FractionalPart,
+};
+use common::{Kline, OrderBook};
 use image::{ImageBuffer, Rgb};
 use imageproc::drawing::{draw_filled_rect_mut, draw_text_mut, text_size};
 use imageproc::rect::Rect;
@@ -11,7 +14,7 @@ use m4rs::{bolinger_band, macd, Candlestick as M4rsCandlestick};
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
 use plotters::style::full_palette::{GREEN_100, RED_100};
-
+use std::collections::HashMap;
 use std::error::Error;
 
 use super::candle::*;
@@ -978,6 +981,74 @@ pub fn draw_point_on_candle(
             vec![(entry_dt, entry_price), (target_dt, target_price)],
             short_line_style,
         ))?;
+    }
+
+    Ok(())
+}
+
+pub fn draw_order_book(
+    root: &DrawingArea<BitMapBackend<'_>, plotters::coord::Shift>,
+    orderbook_data: &OrderBook,
+    min_price: f32,
+    max_price: f32,
+) -> Result<(), Box<dyn Error>> {
+    // Group the order book data f32 type.
+    let (grouped_bids, grouped_asks): (HashMap<u32, f64>, HashMap<u32, f64>) =
+        group_by_fractional_part_f32(orderbook_data, FractionalPart::One);
+
+    // Transform group to hashmap
+    let (bid_volumes, ask_volumes) =
+        convert_grouped_data(&grouped_bids, &grouped_asks, min_price, max_price);
+
+    // Determine the maximum volume for scaling the horizontal axis
+    let max_volume = bid_volumes
+        .values()
+        .chain(ask_volumes.values())
+        .copied()
+        .filter(|v| v.is_finite())
+        .fold(0.0, f32::max);
+
+    // Create the chart context
+    let mut chart =
+        ChartBuilder::on(root).build_cartesian_2d(0f32..max_volume * 1.1, min_price..max_price)?;
+
+    chart.configure_mesh().draw()?;
+
+    // Prepare bid data for the histogram
+    let bid_data: Vec<(f32, f32)> = bid_volumes
+        .iter()
+        .map(|(price_bits, volume)| (f32::from_bits(*price_bits), *volume))
+        .collect();
+
+    // Prepare ask data for the histogram
+    let ask_data: Vec<(f32, f32)> = ask_volumes
+        .iter()
+        .map(|(price_bits, volume)| (f32::from_bits(*price_bits), *volume))
+        .collect();
+
+    println!("bid_data:{:?}", bid_data);
+    println!("ask_data:{:?}", ask_data);
+
+    // Draw the bid histograms
+    for (price, volume) in bid_data.iter() {
+        if price.is_finite() && volume.is_finite() {
+            let style = ShapeStyle::from(&GREEN).filled();
+            chart.draw_series(std::iter::once(Rectangle::new(
+                [(0.0, *price), (*volume, *price + 0.1)],
+                style,
+            )))?;
+        }
+    }
+
+    // Draw the ask histograms
+    for (price, volume) in ask_data.iter() {
+        if price.is_finite() && volume.is_finite() {
+            let style = ShapeStyle::from(&RED).filled();
+            chart.draw_series(std::iter::once(Rectangle::new(
+                [(0.0, *price), (*volume, *price + 0.1)],
+                style,
+            )))?;
+        }
     }
 
     Ok(())

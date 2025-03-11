@@ -66,7 +66,7 @@ impl From<Kline> for ConciseKline {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct OrderBook {
     pub last_update_id: i64,

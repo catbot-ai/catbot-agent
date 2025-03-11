@@ -5,6 +5,7 @@ use ab_glyph::FontArc;
 use ab_glyph::PxScale;
 use chrono_tz::Tz;
 use common::Kline;
+use common::OrderBook;
 use image::{ImageBuffer, Rgb};
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
@@ -47,6 +48,7 @@ pub struct Chart {
     pub font_data: Option<Vec<u8>>,
     pub candle_width: u32,
     pub points: Vec<(f32, f32)>,
+    pub orderbook_data: Option<OrderBook>,
     pub point_style: Option<PointStyle>,
     pub lines: Vec<[(f32, f32); 2]>,
     pub line_style: Option<LineStyle>,
@@ -119,6 +121,10 @@ impl Chart {
     #[allow(dead_code)]
     pub fn with_labels(mut self, labels: Vec<(f32, f32, String)>) -> Self {
         self.labels = labels;
+        self
+    }
+    pub fn with_orderbook(mut self, orderbook_data: OrderBook) -> Self {
+        self.orderbook_data = Some(orderbook_data);
         self
     }
 
@@ -252,6 +258,11 @@ impl Chart {
                 &self.long_signals,
                 &self.short_signals,
             )?;
+
+            // Draw order book
+            if let Some(orderbook_data) = &self.orderbook_data {
+                draw_order_book(&root, orderbook_data, min_price, max_price)?;
+            }
         } // `root` goes out of scope here, ending the borrow of `buffer`
 
         // Create imgbuf after root is dropped
@@ -331,10 +342,11 @@ mod test {
     use super::*;
     use chrono_tz::Asia::Tokyo;
     use common::binance::fetch_binance_kline_data;
+    use common::binance::fetch_orderbook_depth;
 
     #[tokio::test]
     async fn entry_point() {
-        let pair_symbol = "SOL_USDT";
+        let pair_symbol = "SOLUSDT";
         let timeframe = "1h";
         let font_data = include_bytes!("../../RobotoMono-Regular.ttf").to_vec();
 
@@ -342,6 +354,8 @@ mod test {
         let candle_data = fetch_binance_kline_data::<Kline>(pair_symbol, timeframe, limit)
             .await
             .unwrap();
+
+        let orderbook = fetch_orderbook_depth(pair_symbol, 1000).await.unwrap();
 
         // Generate mock signals based on fixed candle ranges
         let mut long_signals = Vec::new();
@@ -401,9 +415,10 @@ mod test {
             .with_past_candle(candle_data)
             .with_title(pair_symbol)
             .with_font_data(font_data)
-            .with_volume()
-            .with_macd()
-            .with_stoch_rsi()
+            // .with_volume()
+            // .with_macd()
+            // .with_stoch_rsi()
+            .with_orderbook(orderbook)
             .with_bollinger_band()
             // .with_long_signals(long_signals)
             // .with_short_signals(short_signals)
