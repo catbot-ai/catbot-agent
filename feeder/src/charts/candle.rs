@@ -1,4 +1,3 @@
-use super::helpers::extract_signals;
 use super::helpers::parse_kline_time;
 use super::painters::*;
 use crate::charts::png::encode_png;
@@ -12,13 +11,13 @@ use plotters::prelude::*;
 use std::error::Error;
 
 // Styling structures
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct PointStyle {
     pub radius: i32,
     pub color: RGBColor,
 }
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct LineStyle {
     pub stroke_width: i32,
     pub color: RGBColor,
@@ -33,11 +32,13 @@ pub struct LabelStyle {
     pub offset_y: i32,
 }
 
+#[derive(Default, Clone)]
 pub struct ChartMetaData {
     pub title: String,
 }
 
 // Chart struct
+#[derive(Default, Clone)]
 pub struct Chart {
     pub timezone: Tz,
     pub timeframe: String,
@@ -54,30 +55,17 @@ pub struct Chart {
     pub macd_enabled: bool,
     pub bollinger_enabled: bool,
     pub volume_enabled: bool,
-    pub stoch_rsi_enabled: bool, // New field
+    pub stoch_rsi_enabled: bool,
+    pub long_signals: Vec<(i64, i64, f32, f32)>, // (entry_time, target_time, entry_price, target_price)
+    pub short_signals: Vec<(i64, i64, f32, f32)>, // (entry_time, target_time, entry_price, target_price)
 }
 
 impl Chart {
     pub fn new(timeframe: &str, timezone: Tz) -> Self {
         Chart {
-            timezone,
             timeframe: timeframe.to_string(),
-            past_candle_data: None,
-            metadata: ChartMetaData {
-                title: String::new(),
-            },
-            font_data: None,
-            candle_width: 10,
-            points: Vec::new(),
-            point_style: None,
-            lines: Vec::new(),
-            line_style: None,
-            labels: Vec::new(),
-            label_style: None,
-            macd_enabled: false,
-            bollinger_enabled: false,
-            volume_enabled: false,
-            stoch_rsi_enabled: false,
+            timezone,
+            ..Default::default()
         }
     }
 
@@ -179,6 +167,16 @@ impl Chart {
         self
     }
 
+    pub fn with_long_signals(mut self, signals: Vec<(i64, i64, f32, f32)>) -> Self {
+        self.long_signals = signals;
+        self
+    }
+
+    pub fn with_short_signals(mut self, signals: Vec<(i64, i64, f32, f32)>) -> Self {
+        self.short_signals = signals;
+        self
+    }
+
     pub fn build(self) -> Result<Vec<u8>, Box<dyn Error>> {
         if self.past_candle_data.is_none() {
             return Err("Candle data set is required".into());
@@ -226,26 +224,6 @@ impl Chart {
         let min_price = prices.iter().fold(f32::INFINITY, |a, &b| a.min(b));
         let max_price = prices.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
 
-        // Generate mock signals based on the last candle
-        let mut long_signals = Vec::new();
-        let mut short_signals = Vec::new();
-
-        if all_candle_data.len() >= 11 {
-            let last_candle = &all_candle_data[all_candle_data.len() - 1];
-            let last_minus_10_candle = &all_candle_data[all_candle_data.len() - 11];
-
-            let entry_price = last_minus_10_candle.close_price.parse::<f32>().unwrap();
-            let target_price = last_candle.close_price.parse::<f32>().unwrap();
-            let entry_time = last_minus_10_candle.open_time;
-            let target_time = last_candle.open_time;
-
-            // Mock long signal
-            long_signals.push((entry_time, target_time, entry_price, target_price));
-
-            // Mock short signal
-            short_signals.push((entry_time, target_time, entry_price, target_price));
-        }
-
         // Scope for drawing operations
         {
             let mut root = BitMapBackend::with_buffer(&mut buffer, bar).into_drawing_area();
@@ -267,8 +245,14 @@ impl Chart {
             let mut top_chart = ChartBuilder::on(&root.split_vertically((50).percent()).0)
                 .margin_right(margin_right)
                 .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
-            draw_point_on_candle(&mut top_chart, timezone, &long_signals, &short_signals)?;
-        }
+
+            draw_point_on_candle(
+                &mut top_chart,
+                timezone,
+                &self.long_signals,
+                &self.short_signals,
+            )?;
+        } // `root` goes out of scope here, ending the borrow of `buffer`
 
         // Create imgbuf after root is dropped
         let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(plot_width, height);
@@ -354,10 +338,63 @@ mod test {
         let timeframe = "1h";
         let font_data = include_bytes!("../../RobotoMono-Regular.ttf").to_vec();
 
-        let limit = 24 * 10;
+        let limit = 24 * 10; // 240 candles, enough for iteration
         let candle_data = fetch_binance_kline_data::<Kline>(pair_symbol, timeframe, limit)
             .await
             .unwrap();
+
+        // Generate mock signals based on fixed candle ranges
+        let mut long_signals = Vec::new();
+        let mut short_signals = Vec::new();
+
+        if candle_data.len() >= 31 {
+            // Long signal: entry at last - 10, target at last
+            let last_candle = &candle_data[candle_data.len() - 1];
+            let last_minus_10_candle = &candle_data[candle_data.len() - 11]; // last - 10
+
+            let long_entry_time = last_minus_10_candle.open_time;
+            let long_entry_price = last_minus_10_candle.close_price.parse::<f32>().unwrap();
+            let long_target_time = last_candle.open_time;
+            let long_target_price = last_candle.close_price.parse::<f32>().unwrap();
+
+            long_signals.push((
+                long_entry_time,
+                long_target_time,
+                long_entry_price,
+                long_target_price,
+            ));
+
+            // Short signal: entry at last - 30, target at last - 20
+            let last_minus_30_candle = &candle_data[candle_data.len() - 31]; // last - 30
+            let last_minus_20_candle = &candle_data[candle_data.len() - 21]; // last - 20
+
+            let short_entry_time = last_minus_30_candle.open_time;
+            let short_entry_price = last_minus_30_candle.close_price.parse::<f32>().unwrap();
+            let short_target_time = last_minus_20_candle.open_time;
+            let short_target_price = last_minus_20_candle.close_price.parse::<f32>().unwrap();
+
+            short_signals.push((
+                short_entry_time,
+                short_target_time,
+                short_entry_price,
+                short_target_price,
+            ));
+
+            // Debug prints to verify
+            println!(
+                "Long Signal: Entry Time: {}, Entry Price: {}, Target Time: {}, Target Price: {}",
+                long_entry_time, long_entry_price, long_target_time, long_target_price
+            );
+            println!(
+                "Short Signal: Entry Time: {}, Entry Price: {}, Target Time: {}, Target Price: {}",
+                short_entry_time, short_entry_price, short_target_time, short_target_price
+            );
+        } else {
+            println!(
+                "Not enough candles to generate mock signals. Need at least 31 candles, got {}",
+                candle_data.len()
+            );
+        }
 
         let png = Chart::new(timeframe, Tokyo)
             .with_candle_width(6)
@@ -368,8 +405,8 @@ mod test {
             .with_macd()
             .with_stoch_rsi()
             .with_bollinger_band()
-            // .with_labels(vec![(0.75, 0.25, "71% BULL".to_string())])
-            // .with_label_style(20.0, 20.0, Rgb([0, 0, 255]), Rgb([0, 255, 255]), 10, 5)
+            .with_long_signals(long_signals)
+            .with_short_signals(short_signals)
             .build()
             .unwrap();
 
