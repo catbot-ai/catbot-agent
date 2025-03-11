@@ -258,11 +258,6 @@ impl Chart {
                 &self.long_signals,
                 &self.short_signals,
             )?;
-
-            // Draw order book
-            if let Some(orderbook_data) = &self.orderbook_data {
-                draw_order_book(&root, orderbook_data, min_price, max_price)?;
-            }
         } // `root` goes out of scope here, ending the borrow of `buffer`
 
         // Create imgbuf after root is dropped
@@ -307,17 +302,7 @@ impl Chart {
             }
         }
 
-        {
-            let root = BitMapBackend::with_buffer(&mut cropped_img, (final_width, height))
-                .into_drawing_area();
-            let root = root.apply_coord_spec(Cartesian2d::<RangedCoordf32, RangedCoordf32>::new(
-                0f32..1f32,
-                0f32..1f32,
-                (0..final_width as i32, 0..height as i32),
-            ));
-
-            draw_lines(&root, &self)?;
-        }
+        draw_lines(&mut cropped_img, &self, final_width, height)?;
 
         draw_axis_labels(
             &mut cropped_img,

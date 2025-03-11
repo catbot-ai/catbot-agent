@@ -420,9 +420,18 @@ pub fn draw_axis_labels(
 }
 
 pub fn draw_lines(
-    root: &DrawingArea<BitMapBackend<'_>, Cartesian2d<RangedCoordf32, RangedCoordf32>>,
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     chart: &Chart,
+    width: u32,
+    height: u32,
 ) -> Result<(), Box<dyn Error>> {
+    let root = BitMapBackend::with_buffer(img, (width, height)).into_drawing_area();
+    let root = root.apply_coord_spec(Cartesian2d::<RangedCoordf32, RangedCoordf32>::new(
+        0f32..1f32,
+        0f32..1f32,
+        (0..width as i32, 0..height as i32),
+    ));
+
     if !chart.lines.is_empty() {
         let style = chart.line_style.clone().unwrap_or(LineStyle {
             stroke_width: 2,
