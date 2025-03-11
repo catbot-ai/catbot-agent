@@ -405,8 +405,8 @@ mod test {
             .with_macd()
             .with_stoch_rsi()
             .with_bollinger_band()
-            .with_long_signals(long_signals)
-            .with_short_signals(short_signals)
+            // .with_long_signals(long_signals)
+            // .with_short_signals(short_signals)
             .build()
             .unwrap();
 

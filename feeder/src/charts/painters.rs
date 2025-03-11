@@ -41,6 +41,7 @@ const HEAD_SCALE: PxScale = PxScale { x: 22.0, y: 22.0 };
 const LABEL_COLOR: Rgb<u8> = Rgb([255, 255, 255]);
 const LABEL_SCALE: PxScale = PxScale { x: 20.0, y: 20.0 };
 const TRANSPARENT_BLACK_50: Rgb<u8> = Rgb([0, 0, 0]); // 50% transparent black
+const TRANSPARENT_RED: Rgb<u8> = Rgb([255, 0, 0]);
 
 pub fn draw_chart(
     root: &mut DrawingArea<BitMapBackend<'_>, plotters::coord::Shift>,
@@ -286,6 +287,35 @@ pub fn draw_axis_labels(
         )?;
     }
 
+    // Add current price label with refined y-position mapping
+    if let Some(last_candle) = past_data.last() {
+        let current_price = last_candle.close_price.parse::<f32>().unwrap();
+        let adjusted_min_price = min_price * 0.95;
+        let adjusted_max_price = max_price * 1.05;
+        let price_range_adjusted = adjusted_max_price - adjusted_min_price;
+
+        // Map current_price to y-position within the candlestick section
+        let normalized_position = (current_price - adjusted_min_price) / price_range_adjusted;
+        let y_position =
+            2 + (top_section_height * (1.0 - normalized_position)) as i32 - text_height / 2;
+
+        // Constrain y-position to stay within the candlestick section
+        let y_position_clamped = y_position
+            .max(0)
+            .min((top_section_height - text_height as f32) as i32);
+
+        draw_label(
+            img,
+            font,
+            &format!("{:.2}", current_price),
+            text_x,
+            y_position_clamped,
+            label_scale,
+            white,
+            TRANSPARENT_RED, // Red background
+        )?;
+    }
+
     let mut current_y = top_section_height;
 
     if chart.volume_enabled {
@@ -469,10 +499,14 @@ pub fn draw_label<F: Font>(
 ) -> anyhow::Result<()> {
     let font_metrics = font.as_scaled(scale);
     let (text_width, text_height) = text_size(scale, font, text);
+    let padding = 3;
 
     draw_filled_rect_mut(
         img,
-        Rect::at(x, y).of_size(text_width, text_height),
+        Rect::at(x - padding, y - padding).of_size(
+            text_width + 2 * padding as u32,
+            text_height + 2 * padding as u32,
+        ),
         background_color,
     );
 
@@ -480,7 +514,7 @@ pub fn draw_label<F: Font>(
         img,
         color,
         x,
-        y + (font_metrics.descent() as i32),
+        y + (font_metrics.descent() as i32) - padding / 2,
         scale,
         font,
         text,
