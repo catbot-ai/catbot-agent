@@ -304,7 +304,7 @@ impl Chart {
 
         draw_lines(&mut cropped_img, &self, final_width, height)?;
 
-        draw_axis_labels(
+        let current_price_y = draw_axis_labels(
             &mut cropped_img,
             &font.clone(),
             past_data,
@@ -315,6 +315,20 @@ impl Chart {
             min_price,
             max_price,
         )?;
+
+        // Draw order book
+        if let Some(orderbook_data) = &self.orderbook_data {
+            draw_order_book(
+                &mut cropped_img,
+                &font,
+                orderbook_data,
+                min_price,
+                max_price,
+                final_width,
+                height,
+                current_price_y,
+            )?;
+        }
 
         draw_labels(&mut cropped_img, &font, &self, final_width, height)?;
 

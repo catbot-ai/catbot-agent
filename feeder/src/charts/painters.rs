@@ -14,6 +14,7 @@ use m4rs::{bolinger_band, macd, Candlestick as M4rsCandlestick};
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
 use plotters::style::full_palette::{GREEN_100, RED_100};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::error::Error;
 
@@ -37,14 +38,20 @@ const SRSI_K: RGBColor = RGBColor(34, 150, 243);
 const SRSI_D: RGBColor = RGBColor(255, 109, 1);
 
 // Axis
-const AXIS_SCALE: PxScale = PxScale { x: 18.0, y: 18.0 };
+const AXIS_SCALE: PxScale = PxScale { x: 20.0, y: 20.0 };
 
 // Label
 const HEAD_SCALE: PxScale = PxScale { x: 22.0, y: 22.0 };
 const LABEL_COLOR: Rgb<u8> = Rgb([255, 255, 255]);
 const LABEL_SCALE: PxScale = PxScale { x: 20.0, y: 20.0 };
-const TRANSPARENT_BLACK_50: Rgb<u8> = Rgb([0, 0, 0]); // 50% transparent black
+
+// TODO: TRANSPARENT
+const TRANSPARENT_BLACK_50: Rgb<u8> = Rgb([0, 0, 0]);
 const TRANSPARENT_RED: Rgb<u8> = Rgb([255, 0, 0]);
+
+// Order
+const BID_COLOR: RGBColor = RGBColor(0, 255, 0);
+const ASK_COLOR: RGBColor = RGBColor(255, 0, 0);
 
 pub fn draw_chart(
     root: &mut DrawingArea<BitMapBackend<'_>, plotters::coord::Shift>,
@@ -250,7 +257,7 @@ pub fn draw_axis_labels(
     margin_right: u32,
     min_price: f32,
     max_price: f32,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(i32), Box<dyn Error>> {
     let white = Rgb([255u8, 255u8, 255u8]);
     let label_scale = AXIS_SCALE;
     let font_metrics = font.as_scaled(label_scale);
@@ -291,6 +298,7 @@ pub fn draw_axis_labels(
     }
 
     // Add current price label with refined y-position mapping
+    let mut current_price_y = 0;
     if let Some(last_candle) = past_data.last() {
         let current_price = last_candle.close_price.parse::<f32>().unwrap();
         let adjusted_min_price = min_price * 0.95;
@@ -306,6 +314,8 @@ pub fn draw_axis_labels(
         let y_position_clamped = y_position
             .max(0)
             .min((top_section_height - text_height as f32) as i32);
+
+        current_price_y = y_position_clamped;
 
         draw_label(
             img,
@@ -416,7 +426,7 @@ pub fn draw_axis_labels(
         }
     }
 
-    Ok(())
+    Ok(current_price_y)
 }
 
 pub fn draw_lines(
@@ -511,11 +521,11 @@ pub fn draw_label<F: Font>(
 ) -> anyhow::Result<()> {
     let font_metrics = font.as_scaled(scale);
     let (text_width, text_height) = text_size(scale, font, text);
-    let padding = 3;
+    let padding = 2f32 * scale.x / text_height as f32;
 
     draw_filled_rect_mut(
         img,
-        Rect::at(x - padding, y - padding).of_size(
+        Rect::at(x, y).of_size(
             text_width + 2 * padding as u32,
             text_height + 2 * padding as u32,
         ),
@@ -525,8 +535,8 @@ pub fn draw_label<F: Font>(
     draw_text_mut(
         img,
         color,
-        x,
-        y + (font_metrics.descent() as i32) - padding / 2,
+        (x as f32 + padding) as i32,
+        (y as f32 + padding + font_metrics.descent() / text_height as f32 * scale.y * 0.6) as i32,
         scale,
         font,
         text,
@@ -996,10 +1006,14 @@ pub fn draw_point_on_candle(
 }
 
 pub fn draw_order_book(
-    root: &DrawingArea<BitMapBackend<'_>, plotters::coord::Shift>,
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    font: &impl Font,
     orderbook_data: &OrderBook,
     min_price: f32,
     max_price: f32,
+    width: u32,
+    height: u32,
+    current_price_y: i32,
 ) -> Result<(), Box<dyn Error>> {
     // Group the order book data f32 type.
     let (grouped_bids, grouped_asks): (HashMap<u32, f64>, HashMap<u32, f64>) =
@@ -1009,54 +1023,148 @@ pub fn draw_order_book(
     let (bid_volumes, ask_volumes) =
         convert_grouped_data(&grouped_bids, &grouped_asks, min_price, max_price);
 
-    // Determine the maximum volume for scaling the horizontal axis
-    let max_volume = bid_volumes
-        .values()
-        .chain(ask_volumes.values())
-        .copied()
-        .filter(|v| v.is_finite())
-        .fold(0.0, f32::max);
-
-    // Create the chart context
-    let mut chart =
-        ChartBuilder::on(root).build_cartesian_2d(0f32..max_volume * 1.1, min_price..max_price)?;
-
-    chart.configure_mesh().draw()?;
-
     // Prepare bid data for the histogram
-    let bid_data: Vec<(f32, f32)> = bid_volumes
+    let mut bid_data: Vec<(f32, f32)> = bid_volumes
         .iter()
         .map(|(price_bits, volume)| (f32::from_bits(*price_bits), *volume))
         .collect();
 
     // Prepare ask data for the histogram
-    let ask_data: Vec<(f32, f32)> = ask_volumes
+    let mut ask_data: Vec<(f32, f32)> = ask_volumes
         .iter()
         .map(|(price_bits, volume)| (f32::from_bits(*price_bits), *volume))
         .collect();
 
-    println!("bid_data:{:?}", bid_data);
-    println!("ask_data:{:?}", ask_data);
+    // Sort ask_data by first element (price) in descending order
+    ask_data.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
 
-    // Draw the bid histograms
-    for (price, volume) in bid_data.iter() {
-        if price.is_finite() && volume.is_finite() {
-            let style = ShapeStyle::from(&GREEN).filled();
-            chart.draw_series(std::iter::once(Rectangle::new(
-                [(0.0, *price), (*volume, *price + 0.1)],
-                style,
-            )))?;
+    // Sort bid_data by first element (price) in descending order
+    bid_data.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
+
+    // Prepare position for the histogram
+    let mut current_y = 0u32;
+    let rect_height = 19u32;
+    let offset_y =
+        current_price_y - rect_height as i32 * bid_data.len() as i32 + ask_data.len() as i32;
+    let factor = 10f32;
+    let gap: i32 = 1;
+    let max_width = width;
+    let current_x = 40u32;
+
+    // let max_bid_volume = bid_data
+    //     .iter()
+    //     .map(|(_, volume)| *volume)
+    //     .fold(0.0, f32::max);
+    // let max_rect_width = (factor * max_bid_volume / max_width as f32) as i32;
+    // let offset_x = width - max_rect_width as u32;
+    let offset_x = current_x + 80u32;
+
+    {
+        let root = BitMapBackend::with_buffer(img, (width, height)).into_drawing_area();
+
+        // Draw the ask histograms
+        for (price, volume) in ask_data.iter() {
+            if price.is_finite() && volume.is_finite() {
+                let rect_width = (factor * *volume / width as f32) as i32;
+
+                root.draw(&Rectangle::new(
+                    [
+                        (offset_x as i32, offset_y + current_y as i32),
+                        (
+                            offset_x as i32 + rect_width,
+                            offset_y + (current_y as i32) + rect_height as i32,
+                        ),
+                    ],
+                    ShapeStyle::from(&ASK_COLOR).filled(),
+                ))?;
+
+                current_y += rect_height + gap as u32;
+            }
+        }
+
+        // Draw the bid histograms
+        for (price, volume) in bid_data.iter() {
+            if price.is_finite() && volume.is_finite() {
+                let rect_width = (factor * *volume / max_width as f32) as i32;
+
+                root.draw(&Rectangle::new(
+                    [
+                        (offset_x as i32, offset_y + current_y as i32),
+                        (
+                            offset_x as i32 + rect_width,
+                            offset_y + (current_y as i32) + rect_height as i32,
+                        ),
+                    ],
+                    ShapeStyle::from(&BID_COLOR).filled(),
+                ))?;
+
+                current_y += rect_height + gap as u32;
+            }
         }
     }
 
-    // Draw the ask histograms
+    // Reset
+    let mut current_y = 0u32;
+    let offset_x = 0;
+
+    let NUM_WHITE = Rgb([255, 255, 255]);
+    let NUM_RED = Rgb([255, 0, 20]);
+    let NUM_GREEN = Rgb([0, 255, 20]);
+
+    // Draw label
     for (price, volume) in ask_data.iter() {
         if price.is_finite() && volume.is_finite() {
-            let style = ShapeStyle::from(&RED).filled();
-            chart.draw_series(std::iter::once(Rectangle::new(
-                [(0.0, *price), (*volume, *price + 0.1)],
-                style,
-            )))?;
+            draw_label(
+                img,
+                font,
+                &format!("{:.0}", price),
+                offset_x as i32,
+                offset_y + current_y as i32,
+                LABEL_SCALE,
+                NUM_RED,
+                TRANSPARENT_BLACK_50,
+            )?;
+
+            draw_label(
+                img,
+                font,
+                &format!("{:.2}", volume),
+                (current_x + offset_x) as i32,
+                offset_y + current_y as i32,
+                LABEL_SCALE,
+                NUM_WHITE,
+                TRANSPARENT_BLACK_50,
+            )?;
+
+            current_y += rect_height + gap as u32;
+        }
+    }
+
+    for (price, volume) in bid_data.iter() {
+        if price.is_finite() && volume.is_finite() {
+            draw_label(
+                img,
+                font,
+                &format!("{:.0}", price),
+                offset_x as i32,
+                offset_y + current_y as i32,
+                LABEL_SCALE,
+                NUM_GREEN,
+                TRANSPARENT_BLACK_50,
+            )?;
+
+            draw_label(
+                img,
+                font,
+                &format!("{:.2}", volume),
+                (current_x + offset_x) as i32,
+                offset_y + current_y as i32,
+                LABEL_SCALE,
+                NUM_WHITE,
+                TRANSPARENT_BLACK_50,
+            )?;
+
+            current_y += rect_height + gap as u32;
         }
     }
 
