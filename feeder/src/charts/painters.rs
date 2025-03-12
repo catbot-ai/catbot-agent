@@ -50,6 +50,7 @@ const TRANSPARENT_RED: Rgb<u8> = Rgb([255, 0, 0]);
 // Order
 const BID_COLOR: RGBColor = RGBColor(0, 255, 0);
 const ASK_COLOR: RGBColor = RGBColor(255, 0, 0);
+const ORDER_LABEL_SCALE: PxScale = PxScale { x: 17.0, y: 17.0 };
 
 pub fn draw_chart(
     root: &mut DrawingArea<BitMapBackend<'_>, plotters::coord::Shift>,
@@ -1041,7 +1042,7 @@ pub fn draw_order_book(
 
     // Prepare position for the histogram
     let mut current_y = 0u32;
-    let rect_height = 19u32;
+    let rect_height = 16u32;
     let offset_y =
         current_price_y - rect_height as i32 * (bid_data.len() as i32 + ask_data.len() as i32) / 2;
     let factor = 10f32;
@@ -1103,7 +1104,7 @@ pub fn draw_order_book(
 
     // Reset
     let mut current_y = 0u32;
-    let offset_x = 0;
+    let offset_x = 10;
 
     let NUM_WHITE = Rgb([255, 255, 255]);
     let NUM_RED = Rgb([255, 0, 20]);
@@ -1118,7 +1119,7 @@ pub fn draw_order_book(
                 &format!("{:.0}", price),
                 offset_x as i32,
                 offset_y + current_y as i32,
-                LABEL_SCALE,
+                ORDER_LABEL_SCALE,
                 NUM_RED,
                 TRANSPARENT_BLACK_50,
             )?;
@@ -1129,7 +1130,7 @@ pub fn draw_order_book(
                 &format!("{:.2}", volume),
                 (current_x + offset_x) as i32,
                 offset_y + current_y as i32,
-                LABEL_SCALE,
+                ORDER_LABEL_SCALE,
                 NUM_WHITE,
                 TRANSPARENT_BLACK_50,
             )?;
@@ -1146,7 +1147,7 @@ pub fn draw_order_book(
                 &format!("{:.0}", price),
                 offset_x as i32,
                 offset_y + current_y as i32,
-                LABEL_SCALE,
+                ORDER_LABEL_SCALE,
                 NUM_GREEN,
                 TRANSPARENT_BLACK_50,
             )?;
@@ -1157,7 +1158,7 @@ pub fn draw_order_book(
                 &format!("{:.2}", volume),
                 (current_x + offset_x) as i32,
                 offset_y + current_y as i32,
-                LABEL_SCALE,
+                ORDER_LABEL_SCALE,
                 NUM_WHITE,
                 TRANSPARENT_BLACK_50,
             )?;
