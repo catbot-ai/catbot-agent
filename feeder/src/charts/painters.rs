@@ -3,9 +3,7 @@ use ab_glyph::ScaleFont;
 use ab_glyph::{Font, PxScale};
 use chrono::DateTime;
 use chrono_tz::Tz;
-use common::numbers::{
-    convert_grouped_data, group_by_fractional_part, group_by_fractional_part_f32, FractionalPart,
-};
+use common::numbers::{convert_grouped_data, group_by_fractional_part_f32, FractionalPart};
 use common::{Kline, OrderBook};
 use image::{ImageBuffer, Rgb};
 use imageproc::drawing::{draw_filled_rect_mut, draw_text_mut, text_size};
@@ -1045,7 +1043,7 @@ pub fn draw_order_book(
     let mut current_y = 0u32;
     let rect_height = 19u32;
     let offset_y =
-        current_price_y - rect_height as i32 * bid_data.len() as i32 + ask_data.len() as i32;
+        current_price_y - rect_height as i32 * (bid_data.len() as i32 + ask_data.len() as i32) / 2;
     let factor = 10f32;
     let gap: i32 = 1;
     let max_width = width;

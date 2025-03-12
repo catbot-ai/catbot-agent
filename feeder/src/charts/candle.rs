@@ -7,7 +7,6 @@ use chrono_tz::Tz;
 use common::Kline;
 use common::OrderBook;
 use image::{ImageBuffer, Rgb};
-use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
 use std::error::Error;
 
@@ -123,6 +122,8 @@ impl Chart {
         self.labels = labels;
         self
     }
+
+    #[allow(dead_code)]
     pub fn with_orderbook(mut self, orderbook_data: OrderBook) -> Self {
         self.orderbook_data = Some(orderbook_data);
         self
@@ -173,11 +174,13 @@ impl Chart {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_long_signals(mut self, signals: Vec<(i64, i64, f32, f32)>) -> Self {
         self.long_signals = signals;
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_short_signals(mut self, signals: Vec<(i64, i64, f32, f32)>) -> Self {
         self.short_signals = signals;
         self
@@ -203,10 +206,10 @@ impl Chart {
         let total_candles = all_candle_data.len();
         let candle_width = self.candle_width;
         let total_width = total_candles as u32 * candle_width;
-        let final_width = 768;
+        let max_width = 1024;
         let height = 1024;
 
-        let plot_width = total_width.max(final_width);
+        let plot_width = total_width.max(max_width);
         let bar: (u32, u32) = (plot_width, height);
         let mut buffer = vec![0; (plot_width * height * 3) as usize];
 
@@ -245,7 +248,7 @@ impl Chart {
                 last_time,
                 margin_right,
                 candle_width,
-                final_width,
+                max_width,
             )?;
 
             let mut top_chart = ChartBuilder::on(&root.split_vertically((50).percent()).0)
@@ -264,9 +267,9 @@ impl Chart {
         let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(plot_width, height);
         imgbuf.copy_from_slice(buffer.as_slice());
 
-        let crop_x = plot_width.saturating_sub(final_width);
+        let crop_x = plot_width.saturating_sub(max_width);
         let mut cropped_img: ImageBuffer<Rgb<u8>, Vec<u8>> =
-            image::imageops::crop_imm(&imgbuf, crop_x, 0, final_width, height).to_image();
+            image::imageops::crop_imm(&imgbuf, crop_x, 0, max_width, height).to_image();
 
         // Add header details on the cropped image
         draw_candle_detail(&mut cropped_img, &self, &font)?;
@@ -302,7 +305,7 @@ impl Chart {
             }
         }
 
-        draw_lines(&mut cropped_img, &self, final_width, height)?;
+        draw_lines(&mut cropped_img, &self, max_width, height)?;
 
         let current_price_y = draw_axis_labels(
             &mut cropped_img,
@@ -310,7 +313,7 @@ impl Chart {
             past_data,
             &self,
             height,
-            final_width,
+            max_width,
             margin_right,
             min_price,
             max_price,
@@ -324,13 +327,13 @@ impl Chart {
                 orderbook_data,
                 min_price,
                 max_price,
-                final_width,
+                max_width,
                 height,
                 current_price_y,
             )?;
         }
 
-        draw_labels(&mut cropped_img, &font, &self, final_width, height)?;
+        draw_labels(&mut cropped_img, &font, &self, max_width, height)?;
 
         Ok(encode_png(&cropped_img)?)
     }
@@ -414,13 +417,13 @@ mod test {
             .with_past_candle(candle_data)
             .with_title(pair_symbol)
             .with_font_data(font_data)
-            // .with_volume()
-            // .with_macd()
-            // .with_stoch_rsi()
+            .with_volume()
+            .with_macd()
+            .with_stoch_rsi()
             .with_orderbook(orderbook)
             .with_bollinger_band()
-            // .with_long_signals(long_signals)
-            // .with_short_signals(short_signals)
+            .with_long_signals(long_signals)
+            .with_short_signals(short_signals)
             .build()
             .unwrap();
 
