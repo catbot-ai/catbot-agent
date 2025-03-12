@@ -56,7 +56,7 @@ const NUM_WHITE: Rgb<u8> = Rgb([255, 255, 255]);
 const NUM_RED: Rgb<u8> = Rgb([B_RED.0, B_RED.1, B_RED.2]);
 const NUM_GREEN: Rgb<u8> = Rgb([B_GREEN.0, B_GREEN.1, B_GREEN.2]);
 
-const PRICE_LINE_COLOR: Rgb<u8> = Rgb([B_RED.0, B_RED.1, B_RED.2]);
+const PRICE_LINE_COLOR: Rgb<u8> = PRICE_BG_COLOR;
 
 #[allow(clippy::too_many_arguments, unused)]
 pub fn draw_chart(
@@ -1056,13 +1056,15 @@ pub fn draw_order_book(
 
     // Prepare position for the histogram
     let mut current_y = -{ price_rect_height_half } / 2i32;
-    let rect_height = 16u32;
-    let offset_y =
-        current_price_y - rect_height as i32 * (bid_data.len() as i32 + ask_data.len() as i32) / 2;
+    let rect_height = 8u32;
+    let gap = 8i32;
+    let bar_height = rect_height as i32 + gap;
+    let offset_y = bar_height - gap / 2 + current_price_y
+        - 1
+        - bar_height * (bid_data.len() as i32 + ask_data.len() as i32) / 2;
 
-    let gap: i32 = 1;
-    let max_bar_width = 50;
-    let current_x = 40u32;
+    let max_bar_width = 64;
+    let current_x = 32u32;
 
     let max_bid_volume = bid_data
         .iter()
@@ -1076,7 +1078,7 @@ pub fn draw_order_book(
     let max_volume_width = max_bid_volume.max(max_ask_volume) as i32;
 
     let max_rect_width = (max_volume_width as f32 / max_bar_width as f32) as i32;
-    let offset_x = parent_offset_x + current_x + 80u32;
+    let offset_x = parent_offset_x + current_x + 72u32;
 
     {
         let root = BitMapBackend::with_buffer(img, (width, height)).into_drawing_area();
@@ -1126,7 +1128,7 @@ pub fn draw_order_book(
 
     // Reset
     let mut current_y = -price_rect_height_half / 2i32;
-    let offset_x = parent_offset_x + 10;
+    let offset_x = parent_offset_x;
 
     // Draw label
     for (price, volume) in ask_data.iter() {
@@ -1190,7 +1192,7 @@ pub fn draw_order_book(
     let price_line_y = current_price_y as f32 + price_rect_height_half as f32;
     draw_line_segment_mut(
         img,
-        (parent_offset_x as f32, price_line_y),
+        (parent_offset_x as f32 - 16f32, price_line_y),
         (width as f32, price_line_y),
         PRICE_LINE_COLOR,
     );
