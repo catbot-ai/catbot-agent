@@ -49,10 +49,16 @@ const PRICE_BG_COLOR: Rgb<u8> = Rgb([255, 255, 0]);
 const PRICE_TEXT_COLOR: Rgb<u8> = Rgb([22, 26, 30]);
 
 // Order
-const BID_COLOR: RGBColor = RGBColor(0, 255, 0);
-const ASK_COLOR: RGBColor = RGBColor(255, 0, 0);
+const BID_COLOR: RGBColor = B_GREEN;
+const ASK_COLOR: RGBColor = B_RED;
 const ORDER_LABEL_SCALE: PxScale = PxScale { x: 17.0, y: 17.0 };
+const NUM_WHITE: Rgb<u8> = Rgb([255, 255, 255]);
+const NUM_RED: Rgb<u8> = Rgb([B_RED.0, B_RED.1, B_RED.2]);
+const NUM_GREEN: Rgb<u8> = Rgb([B_GREEN.0, B_GREEN.1, B_GREEN.2]);
 
+const PRICE_LINE_COLOR: Rgb<u8> = Rgb([B_RED.0, B_RED.1, B_RED.2]);
+
+#[allow(clippy::too_many_arguments, unused)]
 pub fn draw_chart(
     root: &mut DrawingArea<BitMapBackend<'_>, plotters::coord::Shift>,
     all_candle_data: &[Kline],
@@ -247,6 +253,7 @@ pub fn draw_chart(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments, unused)]
 pub fn draw_axis_labels(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     font: &impl Font,
@@ -509,6 +516,7 @@ pub fn draw_labels(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments, unused)]
 pub fn draw_label<F: Font>(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     font: &F,
@@ -1019,12 +1027,6 @@ pub fn draw_order_book(
     let parent_offset_x = parent_offset_x + 80;
     let price_rect_height = 20;
     let price_rect_height_half = price_rect_height / 2;
-
-    let NUM_WHITE = Rgb([255, 255, 255]);
-    let NUM_RED = Rgb([255, 0, 20]);
-    let NUM_GREEN = Rgb([0, 255, 20]);
-
-    let PRICE_LINE_COLOR = Rgb([255, 0, 0]);
 
     // Group the order book data f32 type.
     let (grouped_bids, grouped_asks): (HashMap<u32, f64>, HashMap<u32, f64>) =
