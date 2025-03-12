@@ -1059,9 +1059,10 @@ pub fn draw_order_book(
     let rect_height = 8u32;
     let gap = 8i32;
     let bar_height = rect_height as i32 + gap;
-    let offset_y = bar_height - gap / 2 + current_price_y
-        - 1
-        - bar_height * (bid_data.len() as i32 + ask_data.len() as i32) / 2;
+    // let offset_y = bar_height - gap / 2 + current_price_y
+    //     - bar_height * (bid_data.len() as i32 + ask_data.len() as i32) / 2;
+    let offset_y =
+        current_price_y - bar_height * (ask_data.len() as i32) + bar_height - bar_height / 4 - 1;
 
     let max_bar_width = 64;
     let current_x = 32u32;
@@ -1103,7 +1104,7 @@ pub fn draw_order_book(
             }
         }
 
-        current_y += price_rect_height_half;
+        current_y += bar_height / 2;
 
         // Draw the bid histograms
         for (price, volume) in bid_data.iter() {
