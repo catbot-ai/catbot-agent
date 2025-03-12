@@ -1091,10 +1091,10 @@ pub fn draw_order_book(
 
                 root.draw(&Rectangle::new(
                     [
-                        (offset_x as i32, offset_y + current_y),
+                        (offset_x as i32, offset_y + current_y + 6),
                         (
                             offset_x as i32 + rect_width,
-                            offset_y + (current_y) + rect_height as i32,
+                            offset_y + current_y + rect_height as i32 + 6,
                         ),
                     ],
                     ShapeStyle::from(&ASK_COLOR).filled(),
@@ -1113,10 +1113,10 @@ pub fn draw_order_book(
 
                 root.draw(&Rectangle::new(
                     [
-                        (offset_x as i32, offset_y + current_y),
+                        (offset_x as i32, offset_y + current_y + 6),
                         (
                             offset_x as i32 + rect_width,
-                            offset_y + current_y + rect_height as i32,
+                            offset_y + current_y + rect_height as i32 + 6,
                         ),
                     ],
                     ShapeStyle::from(&BID_COLOR).filled(),
@@ -1128,7 +1128,7 @@ pub fn draw_order_book(
     }
 
     // Reset
-    let mut current_y = -price_rect_height_half / 2i32;
+    let mut current_y = -{ price_rect_height_half } / 2i32;
     let offset_x = parent_offset_x;
 
     // Draw label
