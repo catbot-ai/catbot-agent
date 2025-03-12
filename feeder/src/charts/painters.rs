@@ -6,7 +6,7 @@ use chrono_tz::Tz;
 use common::numbers::{convert_grouped_data, group_by_fractional_part_f32, FractionalPart};
 use common::{Kline, OrderBook};
 use image::{ImageBuffer, Rgb};
-use imageproc::drawing::{draw_filled_rect_mut, draw_text_mut, text_size};
+use imageproc::drawing::{draw_filled_rect_mut, draw_line_segment_mut, draw_text_mut, text_size};
 use imageproc::rect::Rect;
 use m4rs::{bolinger_band, macd, Candlestick as M4rsCandlestick};
 use plotters::coord::types::RangedCoordf32;
@@ -45,7 +45,8 @@ const LABEL_SCALE: PxScale = PxScale { x: 20.0, y: 20.0 };
 
 // TODO: TRANSPARENT
 const TRANSPARENT_BLACK_50: Rgb<u8> = Rgb([0, 0, 0]);
-const TRANSPARENT_RED: Rgb<u8> = Rgb([255, 0, 0]);
+const PRICE_BG_COLOR: Rgb<u8> = Rgb([255, 255, 0]);
+const PRICE_TEXT_COLOR: Rgb<u8> = Rgb([22, 26, 30]);
 
 // Order
 const BID_COLOR: RGBColor = RGBColor(0, 255, 0);
@@ -323,8 +324,8 @@ pub fn draw_axis_labels(
             text_x,
             y_position_clamped,
             label_scale,
-            white,
-            TRANSPARENT_RED, // Red background
+            PRICE_TEXT_COLOR,
+            PRICE_BG_COLOR,
         )?;
     }
 
@@ -1013,7 +1014,18 @@ pub fn draw_order_book(
     width: u32,
     height: u32,
     current_price_y: i32,
+    parent_offset_x: u32,
 ) -> Result<(), Box<dyn Error>> {
+    let parent_offset_x = parent_offset_x + 80;
+    let price_rect_height = 20;
+    let price_rect_height_half = price_rect_height / 2;
+
+    let NUM_WHITE = Rgb([255, 255, 255]);
+    let NUM_RED = Rgb([255, 0, 20]);
+    let NUM_GREEN = Rgb([0, 255, 20]);
+
+    let PRICE_LINE_COLOR = Rgb([255, 0, 0]);
+
     // Group the order book data f32 type.
     let (grouped_bids, grouped_asks): (HashMap<u32, f64>, HashMap<u32, f64>) =
         group_by_fractional_part_f32(orderbook_data, FractionalPart::One);
@@ -1041,22 +1053,28 @@ pub fn draw_order_book(
     bid_data.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
 
     // Prepare position for the histogram
-    let mut current_y = 0u32;
+    let mut current_y = -{ price_rect_height_half } / 2i32;
     let rect_height = 16u32;
     let offset_y =
         current_price_y - rect_height as i32 * (bid_data.len() as i32 + ask_data.len() as i32) / 2;
-    let factor = 10f32;
+
     let gap: i32 = 1;
-    let max_width = width;
+    let max_bar_width = 50;
     let current_x = 40u32;
 
-    // let max_bid_volume = bid_data
-    //     .iter()
-    //     .map(|(_, volume)| *volume)
-    //     .fold(0.0, f32::max);
-    // let max_rect_width = (factor * max_bid_volume / max_width as f32) as i32;
-    // let offset_x = width - max_rect_width as u32;
-    let offset_x = current_x + 80u32;
+    let max_bid_volume = bid_data
+        .iter()
+        .map(|(_, volume)| *volume)
+        .fold(0.0, f32::max);
+
+    let max_ask_volume = ask_data
+        .iter()
+        .map(|(_, volume)| *volume)
+        .fold(0.0, f32::max);
+    let max_volume_width = max_bid_volume.max(max_ask_volume) as i32;
+
+    let max_rect_width = (max_volume_width as f32 / max_bar_width as f32) as i32;
+    let offset_x = parent_offset_x + current_x + 80u32;
 
     {
         let root = BitMapBackend::with_buffer(img, (width, height)).into_drawing_area();
@@ -1064,51 +1082,49 @@ pub fn draw_order_book(
         // Draw the ask histograms
         for (price, volume) in ask_data.iter() {
             if price.is_finite() && volume.is_finite() {
-                let rect_width = (factor * *volume / width as f32) as i32;
+                let rect_width = (*volume / max_rect_width as f32) as i32;
 
                 root.draw(&Rectangle::new(
                     [
-                        (offset_x as i32, offset_y + current_y as i32),
+                        (offset_x as i32, offset_y + current_y),
                         (
                             offset_x as i32 + rect_width,
-                            offset_y + (current_y as i32) + rect_height as i32,
+                            offset_y + (current_y) + rect_height as i32,
                         ),
                     ],
                     ShapeStyle::from(&ASK_COLOR).filled(),
                 ))?;
 
-                current_y += rect_height + gap as u32;
+                current_y += (rect_height + gap as u32) as i32;
             }
         }
+
+        current_y += price_rect_height_half;
 
         // Draw the bid histograms
         for (price, volume) in bid_data.iter() {
             if price.is_finite() && volume.is_finite() {
-                let rect_width = (factor * *volume / max_width as f32) as i32;
+                let rect_width = (*volume / max_rect_width as f32) as i32;
 
                 root.draw(&Rectangle::new(
                     [
-                        (offset_x as i32, offset_y + current_y as i32),
+                        (offset_x as i32, offset_y + current_y),
                         (
                             offset_x as i32 + rect_width,
-                            offset_y + (current_y as i32) + rect_height as i32,
+                            offset_y + current_y + rect_height as i32,
                         ),
                     ],
                     ShapeStyle::from(&BID_COLOR).filled(),
                 ))?;
 
-                current_y += rect_height + gap as u32;
+                current_y += (rect_height + gap as u32) as i32;
             }
         }
     }
 
     // Reset
-    let mut current_y = 0u32;
-    let offset_x = 10;
-
-    let NUM_WHITE = Rgb([255, 255, 255]);
-    let NUM_RED = Rgb([255, 0, 20]);
-    let NUM_GREEN = Rgb([0, 255, 20]);
+    let mut current_y = -price_rect_height_half / 2i32;
+    let offset_x = parent_offset_x + 10;
 
     // Draw label
     for (price, volume) in ask_data.iter() {
@@ -1118,7 +1134,7 @@ pub fn draw_order_book(
                 font,
                 &format!("{:.0}", price),
                 offset_x as i32,
-                offset_y + current_y as i32,
+                offset_y + current_y,
                 ORDER_LABEL_SCALE,
                 NUM_RED,
                 TRANSPARENT_BLACK_50,
@@ -1129,15 +1145,16 @@ pub fn draw_order_book(
                 font,
                 &format!("{:.2}", volume),
                 (current_x + offset_x) as i32,
-                offset_y + current_y as i32,
+                offset_y + current_y,
                 ORDER_LABEL_SCALE,
                 NUM_WHITE,
                 TRANSPARENT_BLACK_50,
             )?;
 
-            current_y += rect_height + gap as u32;
+            current_y += rect_height as i32 + gap;
         }
     }
+    current_y += price_rect_height_half;
 
     for (price, volume) in bid_data.iter() {
         if price.is_finite() && volume.is_finite() {
@@ -1146,7 +1163,7 @@ pub fn draw_order_book(
                 font,
                 &format!("{:.0}", price),
                 offset_x as i32,
-                offset_y + current_y as i32,
+                offset_y + current_y,
                 ORDER_LABEL_SCALE,
                 NUM_GREEN,
                 TRANSPARENT_BLACK_50,
@@ -1157,15 +1174,24 @@ pub fn draw_order_book(
                 font,
                 &format!("{:.2}", volume),
                 (current_x + offset_x) as i32,
-                offset_y + current_y as i32,
+                offset_y + current_y,
                 ORDER_LABEL_SCALE,
                 NUM_WHITE,
                 TRANSPARENT_BLACK_50,
             )?;
 
-            current_y += rect_height + gap as u32;
+            current_y += (rect_height + gap as u32) as i32;
         }
     }
+
+    // Draw price line
+    let price_line_y = current_price_y as f32 + price_rect_height_half as f32;
+    draw_line_segment_mut(
+        img,
+        (parent_offset_x as f32, price_line_y),
+        (width as f32, price_line_y),
+        PRICE_LINE_COLOR,
+    );
 
     Ok(())
 }

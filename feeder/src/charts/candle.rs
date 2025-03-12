@@ -202,16 +202,19 @@ impl Chart {
         let all_candle_data = &self.past_candle_data.clone().unwrap();
         let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
 
-        let margin_right = 100;
         let total_candles = all_candle_data.len();
         let candle_width = self.candle_width;
         let total_width = total_candles as u32 * candle_width;
-        let max_width = 1024;
-        let height = 1024;
+        let root_width = 1024;
+        let root_height = 1024;
 
-        let plot_width = total_width.max(max_width);
-        let bar: (u32, u32) = (plot_width, height);
-        let mut buffer = vec![0; (plot_width * height * 3) as usize];
+        let chart_width = 768;
+        let margin_right = 1024 - chart_width;
+        let right_offset_x = chart_width;
+
+        let plot_width = total_width.max(root_width);
+        let bar: (u32, u32) = (plot_width, root_height);
+        let mut buffer = vec![0; (plot_width * root_height * 3) as usize];
 
         let first_time = parse_kline_time(all_candle_data[0].open_time, timezone);
         let last_time = parse_kline_time(
@@ -248,7 +251,7 @@ impl Chart {
                 last_time,
                 margin_right,
                 candle_width,
-                max_width,
+                root_width,
             )?;
 
             let mut top_chart = ChartBuilder::on(&root.split_vertically((50).percent()).0)
@@ -264,12 +267,12 @@ impl Chart {
         } // `root` goes out of scope here, ending the borrow of `buffer`
 
         // Create imgbuf after root is dropped
-        let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(plot_width, height);
+        let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(plot_width, root_height);
         imgbuf.copy_from_slice(buffer.as_slice());
 
-        let crop_x = plot_width.saturating_sub(max_width);
+        let crop_x = plot_width.saturating_sub(root_width);
         let mut cropped_img: ImageBuffer<Rgb<u8>, Vec<u8>> =
-            image::imageops::crop_imm(&imgbuf, crop_x, 0, max_width, height).to_image();
+            image::imageops::crop_imm(&imgbuf, crop_x, 0, root_width, root_height).to_image();
 
         // Add header details on the cropped image
         draw_candle_detail(&mut cropped_img, &self, &font)?;
@@ -287,8 +290,8 @@ impl Chart {
             .filter(|&&enabled| enabled)
             .count() as f32;
 
-            let section_height = height as f32 * 0.5 / num_indicators;
-            let top_section_height = height as f32 * 0.5;
+            let section_height = root_height as f32 * 0.5 / num_indicators;
+            let top_section_height = root_height as f32 * 0.5;
 
             let mut current_y = top_section_height as i32;
 
@@ -305,15 +308,15 @@ impl Chart {
             }
         }
 
-        draw_lines(&mut cropped_img, &self, max_width, height)?;
+        draw_lines(&mut cropped_img, &self, root_width, root_height)?;
 
         let current_price_y = draw_axis_labels(
             &mut cropped_img,
             &font.clone(),
             past_data,
             &self,
-            height,
-            max_width,
+            root_height,
+            root_width,
             margin_right,
             min_price,
             max_price,
@@ -327,13 +330,14 @@ impl Chart {
                 orderbook_data,
                 min_price,
                 max_price,
-                max_width,
-                height,
+                root_width,
+                root_height,
                 current_price_y,
+                right_offset_x,
             )?;
         }
 
-        draw_labels(&mut cropped_img, &font, &self, max_width, height)?;
+        draw_labels(&mut cropped_img, &font, &self, root_width, root_height)?;
 
         Ok(encode_png(&cropped_img)?)
     }
