@@ -30,7 +30,7 @@ impl PriceHistory {
             ($field:ident, $timeframe:expr) => {
                 if let Some(data) = &self.$field {
                     price_history_string.push_str(&format!(
-                        "**Price History ({} timeframe):**\n{}\n",
+                        "**Price History ({} timeframe):**\n{}\n\n",
                         $timeframe, data
                     ));
                 }

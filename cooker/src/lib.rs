@@ -1,4 +1,6 @@
-use predictions::predict::get_prediction;
+use predictions::{
+    binance::get_binance_prompt, predict::get_prediction, prediction_types::PredictionType,
+};
 use providers::gemini::{GeminiModel, GeminiProvider};
 
 mod predictions;
@@ -6,6 +8,11 @@ mod providers;
 
 use common::jup::get_preps_position;
 use worker::*;
+
+pub enum Route {
+    SUGGESTIONS,
+    PREDICTIONS,
+}
 
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
@@ -27,14 +34,30 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
         orderbook_limit: i32,
         pair_symbol: String,
         maybe_wallet_address: Option<String>,
+        route: Route,
     ) -> Result<Response> {
-        let output_result = predict_with_gemini(
-            gemini_api_key.to_owned(),
-            pair_symbol,
-            orderbook_limit,
-            maybe_wallet_address,
-        )
-        .await;
+        let output_result = match route {
+            Route::SUGGESTIONS => {
+                predict_with_gemini(
+                    gemini_api_key.to_owned(),
+                    pair_symbol,
+                    orderbook_limit,
+                    maybe_wallet_address,
+                    &PredictionType::Suggestions,
+                )
+                .await
+            }
+            Route::PREDICTIONS => {
+                predict_with_gemini(
+                    gemini_api_key.to_owned(),
+                    pair_symbol,
+                    orderbook_limit,
+                    maybe_wallet_address,
+                    &PredictionType::Predictions,
+                )
+                .await
+            }
+        };
 
         match output_result {
             Ok(output) => match serde_json::from_str::<serde_json::Value>(&output) {
@@ -62,6 +85,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                     orderbook_limit,
                     pair_symbol,
                     maybe_wallet_address,
+                    Route::SUGGESTIONS,
                 )
                 .await
             },
@@ -72,7 +96,29 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                 Some(token) => token.to_owned(),
                 None => return Response::error("Bad Request - Missing Token", 400),
             };
-            handle_prediction_request(gemini_api_key, orderbook_limit, pair_symbol, None).await
+            handle_prediction_request(
+                gemini_api_key,
+                orderbook_limit,
+                pair_symbol,
+                None,
+                Route::SUGGESTIONS,
+            )
+            .await
+        })
+        // Endpoint: /api/v1/predict/:token
+        .get_async("/api/v1/predict/:token", |_req, ctx| async move {
+            let pair_symbol = match ctx.param("token") {
+                Some(token) => token.to_owned(),
+                None => return Response::error("Bad Request - Missing Token", 400),
+            };
+            handle_prediction_request(
+                gemini_api_key,
+                orderbook_limit,
+                pair_symbol,
+                None,
+                Route::PREDICTIONS,
+            )
+            .await
         })
         .run(req, env)
         .await
@@ -83,6 +129,7 @@ pub async fn predict_with_gemini(
     pair_symbol: String,
     orderbook_limit: i32,
     maybe_wallet_address: Option<String>,
+    prediction_type: &PredictionType,
 ) -> anyhow::Result<String, String> {
     let gemini_model = GeminiModel::default();
     let provider = GeminiProvider::new_v1beta(&gemini_api_key);
@@ -99,14 +146,17 @@ pub async fn predict_with_gemini(
         },
     };
 
-    let prediction_result = get_prediction(
+    let prompt = get_binance_prompt(
         &pair_symbol,
-        &provider,
         &gemini_model,
         orderbook_limit,
         maybe_preps_positions,
+        prediction_type,
     )
-    .await;
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let prediction_result = get_prediction(&provider, &gemini_model, prompt).await;
 
     match prediction_result {
         Ok(prediction_output) => Ok(serde_json::to_string_pretty(&prediction_output)
@@ -117,7 +167,7 @@ pub async fn predict_with_gemini(
 
 #[cfg(test)]
 mod tests {
-    use crate::predict_with_gemini;
+    use crate::{predict_with_gemini, predictions::prediction_types::PredictionType};
 
     #[tokio::test]
     async fn test_with_wallet() {
@@ -127,9 +177,15 @@ mod tests {
         let symbol = "SOLUSDT";
         let wallet_address = std::env::var("WALLET_ADDRESS").ok();
 
-        let result = predict_with_gemini(gemini_api_key, symbol.to_string(), 100, wallet_address)
-            .await
-            .unwrap();
+        let result = predict_with_gemini(
+            gemini_api_key,
+            symbol.to_string(),
+            100,
+            wallet_address,
+            &PredictionType::Suggestions,
+        )
+        .await
+        .unwrap();
         println!(
             "{:#?}",
             serde_json::from_str::<serde_json::Value>(&result).unwrap()
@@ -143,9 +199,15 @@ mod tests {
         let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
         let symbol = "SOLUSDT";
 
-        let result = predict_with_gemini(gemini_api_key, symbol.to_string(), 100, None)
-            .await
-            .unwrap();
+        let result = predict_with_gemini(
+            gemini_api_key,
+            symbol.to_string(),
+            100,
+            None,
+            &PredictionType::Suggestions,
+        )
+        .await
+        .unwrap();
         println!(
             "{:#?}",
             serde_json::from_str::<serde_json::Value>(&result).unwrap()
