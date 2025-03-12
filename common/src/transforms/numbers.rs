@@ -76,7 +76,7 @@ pub fn group_by_fractional_part_f32(
             {
                 let price = (price_str * multiplier).floor() / multiplier;
                 if price.is_finite() {
-                    grouped_bids.insert(((price as f32).to_bits() as u32).into(), amount_str);
+                    grouped_bids.insert((price as f32).to_bits(), amount_str);
                 }
             }
         }
@@ -88,7 +88,7 @@ pub fn group_by_fractional_part_f32(
             {
                 let price = (price_str * multiplier).ceil() / multiplier;
                 if price.is_finite() {
-                    grouped_asks.insert(((price as f32).to_bits() as u32).into(), amount_str);
+                    grouped_asks.insert((price as f32).to_bits(), amount_str);
                 }
             }
         }

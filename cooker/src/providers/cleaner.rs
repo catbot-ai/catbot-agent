@@ -32,7 +32,7 @@ fn fix_trailing_commas(json_str: &str) -> String {
 
 #[test]
 fn test_fix_trailing_comma_and_deserialize() {
-    use common::PredictionOutput;
+    use common::SuggestionOutput;
 
     let raw_json = r#"{
         "summary": {
@@ -97,7 +97,7 @@ fn test_fix_trailing_comma_and_deserialize() {
 
     let fixed_json = fix_trailing_commas(raw_json);
 
-    let result = serde_json::from_str::<PredictionOutput>(&fixed_json);
+    let result = serde_json::from_str::<SuggestionOutput>(&fixed_json);
     assert!(result.is_ok());
 
     if let Ok(response) = result {

@@ -110,6 +110,30 @@ pub fn get_schema_instruction(
 }}
 "#
         ),
-        PredictionType::Predictions => todo!(),
+        PredictionType::GraphPredictions => format!(
+            r#"{{
+    "signals": [{{
+        "direction": string, // Predicted direction, long or shot
+        "symbol": "{symbol}",
+        "confidence": number, // Confidence about this signal: 0.0-1.0
+        "current_price": {current_price},
+        "entry_price": number, // Can be future price.
+        "target_price": number, // >2.5% above entry, beyond first resistance or support
+        "stop_loss": number, // The value should less than profit.
+        "timeframe": "string", // Time in minutes or hours e.g. 5m,15m,1h,2h,3h,...
+        "entry_datetime": "string", // ISO time prediction when to make a trade for this signal, Can be now or in the future date time.
+        "target_datetime": "string", // ISO time prediction when to take profit.
+        "rationale": "string" // Rationale about this signal e.g., "4h momentum up, bids outpace asks", "1h rejection at xxx, high ask volume"
+    }}],
+    "klines": [{{ // Predicted next 24 klines in 1h timeframe
+        "close_time": number, // Unix timestamp e.g. 1741737600000
+        "high": number, // Predicted high price
+        "low": number, // Predicted low price
+        "close": number, // Predicted close price
+        "volume": number // Predicted volume
+    }}]
+}}
+"#
+        ),
     }
 }

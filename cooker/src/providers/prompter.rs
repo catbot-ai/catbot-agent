@@ -199,7 +199,7 @@ mod tests {
             Some(price_history), // Option<PriceHistory> with empty data
             orderbook,           // OrderBook
             None,                // Option<Vec<PerpsPosition>>
-            &PredictionType::Predictions,
+            &PredictionType::GraphPredictions,
         );
 
         // Print the prompt for verification

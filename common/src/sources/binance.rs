@@ -64,6 +64,8 @@ pub async fn fetch_orderbook_depth(pair_symbol: &str, limit: i32) -> Result<Orde
 #[cfg(test)]
 #[tokio::test]
 async fn test() {
+    use crate::ConciseKline;
+
     let pair_symbol = "SOL_USDT";
     let interval = "1h";
 
@@ -76,6 +78,11 @@ async fn test() {
         .await
         .unwrap();
     println!("Fetched {} Kline data points", kline_data.len()); // Log data points fetched
+
+    let kline_data = fetch_binance_kline_data::<ConciseKline>(pair_symbol, interval, 1)
+        .await
+        .unwrap();
+    println!("Fetched {} ConciseKline data points", kline_data.len()); // Log data points fetched
 
     assert!(!kline_data.is_empty());
 }

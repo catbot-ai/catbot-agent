@@ -3,27 +3,28 @@ use crate::providers::{
     gemini::{GeminiModel, GeminiProvider},
 };
 use chrono_tz::Asia::Tokyo;
-use common::{PredictionOutput, PredictionOutputWithTimeStampBuilder, RefinedPredictionOutput};
 
 use anyhow::Result;
+use common::Refinable;
 use md5;
+use serde::Deserialize;
 
-pub async fn get_prediction(
+pub async fn get_prediction<T>(
     provider: &GeminiProvider,
     model: &GeminiModel,
     prompt: String,
-) -> Result<RefinedPredictionOutput> {
-    // --- Call Gemini API ---
-    println!("Calling Gemini API...");
-    let gemini_response = provider
-        .call_api::<PredictionOutput>(model, &prompt, None)
-        .await?;
+) -> Result<T::Refined>
+where
+    T: Refinable + Send + Sync + for<'de> Deserialize<'de> + 'static,
+{
+    println!("\nCalling Gemini API...");
+    let gemini_response = provider.call_api::<T>(model, &prompt, None).await?;
 
     let model_name = model.as_ref().to_string();
-    let prompt_hash = format!("{:x}", md5::compute(prompt));
-    let prediction_output_with_timestamp =
-        PredictionOutputWithTimeStampBuilder::new(gemini_response, Tokyo)
-            .build(&model_name, &prompt_hash);
+    let prompt_hash = md5::compute(prompt)
+        .iter()
+        .fold(String::new(), |acc, b| format!("{acc}{:02x}", b));
+    let refined_output = gemini_response.refine(Tokyo, &model_name, &prompt_hash);
 
-    Ok(prediction_output_with_timestamp)
+    Ok(refined_output)
 }

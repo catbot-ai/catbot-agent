@@ -16,7 +16,7 @@ pub struct Kline {
     pub ignore: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ConciseKline {
     pub close_time: i64,
     #[serde(serialize_with = "serialize_price")]

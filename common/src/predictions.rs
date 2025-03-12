@@ -4,9 +4,98 @@ use chrono::{DateTime, Utc};
 use chrono_tz::{Asia::Tokyo, Tz};
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::ConciseKline;
+
+#[derive(Debug, Serialize)]
+pub enum PredictionOutput {
+    Suggestions(RefinedSuggestionOutput),
+    GraphPredictions(RefinedGraphPredictionOutput),
+}
+
+pub trait Refinable {
+    type Refined;
+    fn refine(self, timezone: Tz, model_name: &str, prompt_hash: &str) -> Self::Refined;
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
-pub struct PredictionOutput {
+pub struct GraphPredictionOutput {
+    pub signals: Vec<PredictedLongShortSignal>,
+    pub klines: Vec<ConciseKline>,
+}
+
+pub struct GraphPredictionOutputWithTimeStampBuilder {
+    pub graph_response: GraphPredictionOutput,
+    pub timezone: Tz,
+}
+
+impl GraphPredictionOutputWithTimeStampBuilder {
+    pub fn new(graph_response: GraphPredictionOutput, timezone: Tz) -> Self {
+        GraphPredictionOutputWithTimeStampBuilder {
+            graph_response,
+            timezone,
+        }
+    }
+
+    pub fn build(self, model_name: &str, prompt_hash: &str) -> RefinedGraphPredictionOutput {
+        let model_name = model_name.to_owned();
+        let prompt_hash = prompt_hash.to_owned();
+
+        let now_utc = Utc::now();
+        let now_local = now_utc.with_timezone(&self.timezone);
+        let iso_local = now_local.to_rfc3339();
+
+        let iso_utc = now_utc.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+
+        println!("🔥 self.graph_response:{:#?}", self.graph_response.clone());
+
+        let signals = self
+            .graph_response
+            .signals
+            .into_iter()
+            .map(LongShortSignal::from)
+            .collect();
+
+        let klines = self.graph_response.klines;
+
+        let timestamp = now_utc.timestamp_millis();
+
+        RefinedGraphPredictionOutput {
+            timestamp,
+            current_datetime: iso_utc,
+            current_datetime_local: iso_local,
+            signals,
+            klines,
+            model_name,
+            prompt_hash,
+        }
+    }
+}
+
+impl Refinable for GraphPredictionOutput {
+    type Refined = RefinedGraphPredictionOutput;
+    fn refine(self, timezone: Tz, model_name: &str, prompt_hash: &str) -> Self::Refined {
+        GraphPredictionOutputWithTimeStampBuilder::new(self, timezone)
+            .build(model_name, prompt_hash)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct RefinedGraphPredictionOutput {
+    pub timestamp: i64,
+    pub current_datetime: String,
+    pub current_datetime_local: String,
+    pub signals: Vec<LongShortSignal>,
+    pub klines: Vec<ConciseKline>,
+    // Stats
+    pub model_name: String,
+    pub prompt_hash: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct SuggestionOutput {
     pub summary: Summary,
     pub signals: Vec<PredictedLongShortSignal>,
     pub positions: Option<Vec<PredictedPosition>>,
@@ -14,7 +103,7 @@ pub struct PredictionOutput {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
-pub struct RefinedPredictionOutput {
+pub struct RefinedSuggestionOutput {
     pub timestamp: i64,
     pub current_datetime: String,
     pub current_datetime_local: String,
@@ -26,20 +115,20 @@ pub struct RefinedPredictionOutput {
     pub prompt_hash: String,
 }
 
-pub struct PredictionOutputWithTimeStampBuilder {
-    pub gemini_response: PredictionOutput,
+pub struct SuggestionOutputWithTimeStampBuilder {
+    pub gemini_response: SuggestionOutput,
     pub timezone: Tz, // Store the timezone here.
 }
 
-impl PredictionOutputWithTimeStampBuilder {
-    pub fn new(gemini_response: PredictionOutput, timezone: Tz) -> Self {
-        PredictionOutputWithTimeStampBuilder {
+impl SuggestionOutputWithTimeStampBuilder {
+    pub fn new(gemini_response: SuggestionOutput, timezone: Tz) -> Self {
+        SuggestionOutputWithTimeStampBuilder {
             gemini_response,
             timezone,
         }
     }
 
-    pub fn build(self, model_name: &str, prompt_hash: &str) -> RefinedPredictionOutput {
+    pub fn build(self, model_name: &str, prompt_hash: &str) -> RefinedSuggestionOutput {
         let model_name = model_name.to_owned();
         let prompt_hash = prompt_hash.to_owned();
 
@@ -59,7 +148,7 @@ impl PredictionOutputWithTimeStampBuilder {
         let positions = self.gemini_response.positions.or(Some(vec![]));
         let timestamp = now_utc.timestamp_millis();
 
-        RefinedPredictionOutput {
+        RefinedSuggestionOutput {
             timestamp,
             current_datetime: iso_utc,
             current_datetime_local: iso_local,
@@ -69,6 +158,13 @@ impl PredictionOutputWithTimeStampBuilder {
             model_name,
             prompt_hash,
         }
+    }
+}
+
+impl Refinable for SuggestionOutput {
+    type Refined = RefinedSuggestionOutput;
+    fn refine(self, timezone: Tz, model_name: &str, prompt_hash: &str) -> Self::Refined {
+        SuggestionOutputWithTimeStampBuilder::new(self, timezone).build(model_name, prompt_hash)
     }
 }
 

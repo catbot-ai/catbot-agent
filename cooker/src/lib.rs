@@ -6,7 +6,7 @@ use providers::gemini::{GeminiModel, GeminiProvider};
 mod predictions;
 mod providers;
 
-use common::jup::get_preps_position;
+use common::{jup::get_preps_position, GraphPredictionOutput, PredictionOutput, SuggestionOutput};
 use worker::*;
 
 pub enum Route {
@@ -53,7 +53,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                     pair_symbol,
                     orderbook_limit,
                     maybe_wallet_address,
-                    &PredictionType::Predictions,
+                    &PredictionType::GraphPredictions,
                 )
                 .await
             }
@@ -138,11 +138,11 @@ pub async fn predict_with_gemini(
     let maybe_preps_positions = match maybe_wallet_address {
         Some(wallet_address) => match get_preps_position(Some(wallet_address)).await {
             Ok(positions) => positions,
-            Err(error) => return Err(format!("Error getting position: {:?}", error)),
+            Err(error) => return Err(format!("Error getting position: {:?}", error.to_string())),
         },
         None => match get_preps_position(None).await {
             Ok(positions) => positions,
-            Err(error) => return Err(format!("Error getting position: {:?}", error)),
+            Err(error) => return Err(format!("Error getting position: {:?}", error.to_string())),
         },
     };
 
@@ -156,12 +156,25 @@ pub async fn predict_with_gemini(
     .await
     .map_err(|e| e.to_string())?;
 
-    let prediction_result = get_prediction(&provider, &gemini_model, prompt).await;
+    let prediction_result = match prediction_type {
+        PredictionType::Suggestions => {
+            get_prediction::<SuggestionOutput>(&provider, &gemini_model, prompt)
+                .await
+                .map(PredictionOutput::Suggestions)
+                .map_err(|e| format!("\nError getting suggestion prediction: {e}"))
+        }
+        PredictionType::GraphPredictions => {
+            get_prediction::<GraphPredictionOutput>(&provider, &gemini_model, prompt)
+                .await
+                .map(PredictionOutput::GraphPredictions)
+                .map_err(|e| format!("\nError getting graph prediction: {e}"))
+        }
+    };
 
     match prediction_result {
         Ok(prediction_output) => Ok(serde_json::to_string_pretty(&prediction_output)
             .map_err(|e| format!("Failed to serialize prediction output to JSON: {}", e))?),
-        Err(error) => Err(format!("Error getting prediction: {:?}", error)),
+        Err(error) => Err(error),
     }
 }
 
@@ -205,6 +218,28 @@ mod tests {
             100,
             None,
             &PredictionType::Suggestions,
+        )
+        .await
+        .unwrap();
+        println!(
+            "{:#?}",
+            serde_json::from_str::<serde_json::Value>(&result).unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_prediction_without_wallet() {
+        dotenvy::from_filename(".env").expect("No .env file");
+
+        let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
+        let symbol = "SOLUSDT";
+
+        let result = predict_with_gemini(
+            gemini_api_key,
+            symbol.to_string(),
+            100,
+            None,
+            &PredictionType::GraphPredictions,
         )
         .await
         .unwrap();

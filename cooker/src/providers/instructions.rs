@@ -49,8 +49,8 @@ pub const PERPS_INSTRUCTION: &str = r#"
 "#;
 
 pub const GRAPH_INSTRUCTION: &str = r#"
-- Predict next 30 klines data for current timeframe from provided context and analysis.
-- Ensure that suggested long/short singnals is matched predicted klines time and value.
+- Predict next 24 klines data for 1h timeframe from provided data after analysis.
+- Ensure that suggested long/short signals is matched predicted klines time and value.
 "#;
 
 pub const SUFFIX_INSTRUCTION: &str = r#"
@@ -63,7 +63,7 @@ pub fn get_instruction(prediction_type: &PredictionType) -> String {
         PredictionType::Suggestions => {
             format!(r#"{TRADE_INSTRUCTION}{PERPS_INSTRUCTION}{SUFFIX_INSTRUCTION}"#)
         }
-        PredictionType::Predictions => {
+        PredictionType::GraphPredictions => {
             format!(r#"{TRADE_INSTRUCTION}{GRAPH_INSTRUCTION}{SUFFIX_INSTRUCTION}"#)
         }
     }

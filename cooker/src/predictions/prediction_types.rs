@@ -2,5 +2,5 @@
 #[derive(Debug)]
 pub enum PredictionType {
     Suggestions,
-    Predictions,
+    GraphPredictions,
 }
