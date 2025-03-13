@@ -127,13 +127,13 @@ pub fn get_schema_instruction(
     }}],
     "klines": [
         [
-            1741843286000,  // Open time: Timestamp in milliseconds when the K-line opens
-            "123.45", // Open price: The price at the start of the time interval
-            "123.45", // High price: The highest price during the time interval
-            "123.45", // Low price: The lowest price during the time interval
-            "123.45", // Close price: The price at the end of the time interval
-            "0",   // Volume: The total trading volume during the time interval
-            1741843286999,  // Close time: Timestamp in milliseconds when the K-line closes
+            1741870260000,  // Open time: Timestamp in milliseconds when the K-line opens
+            "123.45", // Predicted open price: The price at the start of the time interval
+            "123.45", // Predicted high price: The highest price during the time interval
+            "123.45", // Predicted low price: The lowest price during the time interval
+            "123.45", // Predicted close price: The price at the end of the time interval
+            "0",   // Predicted  volume: The total trading volume during the time interval
+            1741873860000,  // Close time: Timestamp in milliseconds when the K-line closes
         ]
     ]
 }}
