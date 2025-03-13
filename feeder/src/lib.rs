@@ -1,6 +1,6 @@
 mod charts;
 
-use charts::candle::{Chart, ChartMetaData};
+use charts::candle::Chart;
 use chrono_tz::Asia::Tokyo;
 use common::sources::binance::fetch_binance_kline_data;
 use common::Kline;

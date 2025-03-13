@@ -32,12 +32,14 @@ pub fn parse_timeframe_duration(timeframe: &str) -> Duration {
     }
 }
 
+type VisibleRange = (DateTime<Tz>, DateTime<Tz>, Vec<Kline>);
+
 pub fn get_visible_range_and_data(
     past_data: &[Kline],
     timezone: &Tz,
     candle_width: u32,
     final_width: u32,
-) -> Result<(DateTime<Tz>, DateTime<Tz>, Vec<Kline>), Box<dyn Error>> {
+) -> Result<VisibleRange, Box<dyn Error>> {
     let total_candles = past_data.len();
     if total_candles == 0 {
         return Err("No candle data available".into());
@@ -59,68 +61,4 @@ pub fn get_visible_range_and_data(
         .collect();
 
     Ok((first_visible_time, last_visible_time, visible_data))
-}
-
-pub fn calculate_sma(close_prices: &[f32], period: usize) -> Result<Vec<f32>, Box<dyn Error>> {
-    if period == 0 {
-        return Err("Period must be greater than 0".into());
-    }
-    if close_prices.len() < period {
-        return Err(format!("Not enough data: need at least {} prices", period).into());
-    }
-
-    let mut sma = Vec::with_capacity(close_prices.len());
-    for i in 0..close_prices.len() {
-        if i < period - 1 {
-            sma.push(0.0); // Not enough data yet
-        } else {
-            let sum: f32 = close_prices[i - (period - 1)..=i].iter().sum();
-            sma.push(sum / period as f32);
-        }
-    }
-    Ok(sma)
-}
-
-pub fn extract_signals(
-    klines: &[Kline],
-    ma_short: usize,
-    ma_long: usize,
-    profit_percent: f32,
-) -> Result<(Vec<(i64, f32, f32)>, Vec<(i64, f32, f32)>), Box<dyn Error>> {
-    if ma_short >= ma_long {
-        return Err("ma_short must be less than ma_long".into());
-    }
-    if klines.len() < ma_long {
-        return Err(format!("Not enough klines: need at least {} klines", ma_long).into());
-    }
-
-    let close_prices: Vec<f32> = klines
-        .iter()
-        .map(|k| {
-            k.close_price
-                .parse::<f32>()
-                .unwrap_or_else(|_| panic!("Invalid close price"))
-        })
-        .collect();
-    let sma_short = calculate_sma(&close_prices, ma_short)?;
-    let sma_long = calculate_sma(&close_prices, ma_long)?;
-
-    let mut long_signals = Vec::new();
-    let mut short_signals = Vec::new();
-
-    for i in 1..klines.len() {
-        if sma_short[i - 1] <= sma_long[i - 1] && sma_short[i] > sma_long[i] {
-            // Buy signal (long position)
-            let entry_price = close_prices[i];
-            let target_price = entry_price * (1.0 + profit_percent);
-            long_signals.push((klines[i].open_time, entry_price, target_price));
-        } else if sma_short[i - 1] >= sma_long[i - 1] && sma_short[i] < sma_long[i] {
-            // Sell signal (short position)
-            let entry_price = close_prices[i];
-            let target_price = entry_price * (1.0 - profit_percent);
-            short_signals.push((klines[i].open_time, entry_price, target_price));
-        }
-    }
-
-    Ok((long_signals, short_signals))
 }
