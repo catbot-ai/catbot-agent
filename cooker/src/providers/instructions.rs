@@ -49,7 +49,7 @@ pub const PERPS_INSTRUCTION: &str = r#"
 "#;
 
 pub const GRAPH_INSTRUCTION: &str = r#"
-- Predict next 24 klines data for 1h timeframe from provided data after analysis.
+- Predict 24 klines value for 1h timeframe base on technical analysis and vibe.
 - Ensure that suggested long/short signals is matched predicted klines time and value.
 "#;
 
