@@ -427,6 +427,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "chrono-tz",
+ "dotenvy",
  "jup-sdk",
  "reqwest",
  "serde",

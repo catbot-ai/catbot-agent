@@ -11,7 +11,7 @@ use imageproc::rect::Rect;
 use m4rs::{bolinger_band, macd, Candlestick as M4rsCandlestick};
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
-use plotters::style::full_palette::{GREEN_100, RED_100};
+use plotters::style::full_palette::{GREEN_100, GREEN_900, RED_100, RED_900};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::error::Error;
@@ -21,6 +21,10 @@ use super::helpers::{kline_to_m4rs_candlestick, parse_kline_time};
 
 const B_RED: RGBColor = RGBColor(245, 71, 95);
 const B_GREEN: RGBColor = RGBColor(17, 203, 129);
+
+const B_GREEN_DIM: RGBColor = RGBColor(17 / 2, 203 / 2, 129 / 2);
+const B_RED_DIM: RGBColor = RGBColor(245 / 2, 71 / 2, 95 / 2);
+
 const B_BLACK: RGBColor = RGBColor(22, 26, 30);
 
 // BB
@@ -62,7 +66,7 @@ const PRICE_LINE_COLOR: Rgb<u8> = PRICE_BG_COLOR;
 pub fn draw_chart(
     root: &mut DrawingArea<BitMapBackend<'_>, plotters::coord::Shift>,
     all_candle_data: &[Kline],
-    past_data: &[Kline],
+    klines: &[Kline],
     timezone: &Tz,
     chart: &Chart,
     min_price: f32,
@@ -72,6 +76,7 @@ pub fn draw_chart(
     margin_right: u32,
     candle_width: u32,
     final_width: u32,
+    last_past_time: i64,
 ) -> Result<(), Box<dyn Error>> {
     root.fill(&B_BLACK)?;
 
@@ -85,18 +90,27 @@ pub fn draw_chart(
         &mut top_chart,
         all_candle_data,
         timezone,
-        |is_bullish| {
-            if is_bullish {
-                B_GREEN.into()
+        |is_bullish, is_predicted| {
+            let fill_color: RGBColor = if is_bullish {
+                if is_predicted {
+                    B_GREEN
+                } else {
+                    B_GREEN_DIM
+                }
+            } else if is_predicted {
+                B_RED
             } else {
-                B_RED.into()
-            }
+                B_RED_DIM
+            };
+
+            fill_color.into()
         },
         candle_width,
+        last_past_time,
     )?;
 
     if chart.bollinger_enabled {
-        draw_bollinger_bands(&mut top_chart, past_data, timezone)?;
+        draw_bollinger_bands(&mut top_chart, all_candle_data, timezone)?;
     }
 
     if chart.volume_enabled || chart.macd_enabled || chart.stoch_rsi_enabled {
@@ -136,7 +150,7 @@ pub fn draw_chart(
         if chart.volume_enabled {
             let (_idx, volume_area) = area_iter.next().unwrap();
             let (first_visible_time, last_visible_time, visible_data) =
-                get_visible_range_and_data(past_data, timezone, candle_width, final_width)?;
+                get_visible_range_and_data(all_candle_data, timezone, candle_width, final_width)?;
             let max_volume = visible_data
                 .iter()
                 .map(|k| k.volume.parse::<f32>().unwrap())
@@ -152,13 +166,14 @@ pub fn draw_chart(
                 &Some(visible_data.into_iter().collect()),
                 timezone,
                 &chart.timeframe,
+                last_past_time,
             )?;
         }
 
         if chart.macd_enabled {
             let (_idx, macd_area) = area_iter.next().unwrap();
             let (first_visible_time, last_visible_time, visible_data) =
-                get_visible_range_and_data(past_data, timezone, candle_width, final_width)?;
+                get_visible_range_and_data(all_candle_data, timezone, candle_width, final_width)?;
             let past_m4rs_candles: Vec<M4rsCandlestick> =
                 visible_data.iter().map(kline_to_m4rs_candlestick).collect();
             let macd_result = macd(&past_m4rs_candles, 12, 26, 9)?;
@@ -188,13 +203,14 @@ pub fn draw_chart(
                 &Some(visible_data.into_iter().collect()),
                 timezone,
                 &chart.timeframe,
+                last_past_time,
             )?;
         }
 
         if chart.stoch_rsi_enabled {
             let (_idx, stoch_rsi_area) = area_iter.next().unwrap();
             let (first_visible_time, last_visible_time, visible_data) =
-                get_visible_range_and_data(past_data, timezone, candle_width, final_width)?;
+                get_visible_range_and_data(all_candle_data, timezone, candle_width, final_width)?;
             let mut stoch_rsi_chart = ChartBuilder::on(&stoch_rsi_area)
                 .margin_right(margin_right)
                 .build_cartesian_2d(first_visible_time..last_visible_time, 0.0f32..100.0f32)?;
@@ -257,7 +273,7 @@ pub fn draw_chart(
 pub fn draw_axis_labels(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     font: &impl Font,
-    past_data: &[Kline],
+    klines: &[Kline],
     chart: &Chart,
     height: u32,
     final_width: u32,
@@ -306,7 +322,7 @@ pub fn draw_axis_labels(
 
     // Add current price label with refined y-position mapping
     let mut current_price_y = 0;
-    if let Some(last_candle) = past_data.last() {
+    if let Some(last_candle) = klines.last() {
         let current_price = last_candle.close_price.parse::<f32>().unwrap();
         let adjusted_min_price = min_price * 0.95;
         let adjusted_max_price = max_price * 1.05;
@@ -339,7 +355,7 @@ pub fn draw_axis_labels(
     let mut current_y = top_section_height;
 
     if chart.volume_enabled {
-        let volumes: Vec<f32> = past_data
+        let volumes: Vec<f32> = klines
             .iter()
             .map(|k| k.volume.parse::<f32>().unwrap())
             .collect();
@@ -369,7 +385,7 @@ pub fn draw_axis_labels(
 
     if chart.macd_enabled {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
-            past_data.iter().map(kline_to_m4rs_candlestick).collect();
+            klines.iter().map(kline_to_m4rs_candlestick).collect();
         let macd_result = macd(&past_m4rs_candles, 12, 26, 9)?;
         let macd_values: Vec<f32> = macd_result
             .iter()
@@ -564,9 +580,10 @@ pub fn draw_candlesticks<F>(
     timezone: &Tz,
     color_selector: F,
     candle_width: u32,
+    last_past_time: i64,
 ) -> Result<(), Box<dyn Error>>
 where
-    F: Fn(bool) -> RGBAColor,
+    F: Fn(bool, bool) -> RGBAColor,
 {
     chart.draw_series(candle_data.iter().map(|k| {
         let time = parse_kline_time(k.open_time, timezone);
@@ -575,7 +592,8 @@ where
         let low = k.low_price.parse::<f32>().unwrap();
         let close = k.close_price.parse::<f32>().unwrap();
         let is_bullish = close >= open;
-        let color = color_selector(is_bullish);
+        let is_predicted = last_past_time > k.open_time;
+        let color = color_selector(is_bullish, is_predicted);
         // Use candle_width for the width of each candlestick
         CandleStick::new(
             time,
@@ -634,12 +652,12 @@ pub fn draw_bollinger_bands(
         BitMapBackend<'_>,
         Cartesian2d<RangedDateTime<DateTime<Tz>>, RangedCoordf32>,
     >,
-    past_data: &[Kline],
+    klines: &[Kline],
     timezone: &Tz,
 ) -> Result<(), Box<dyn Error>> {
-    if !past_data.is_empty() {
+    if !klines.is_empty() {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
-            past_data.iter().map(kline_to_m4rs_candlestick).collect();
+            klines.iter().map(kline_to_m4rs_candlestick).collect();
         let past_bb_result = bolinger_band(&past_m4rs_candles, 20)?;
         let past_bb_lines: Vec<(DateTime<Tz>, f32, f32, f32)> = past_bb_result
             .iter()
@@ -672,12 +690,12 @@ pub fn draw_bollinger_bands(
 
 pub fn draw_bollinger_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
-    past_data: &[Kline],
+    klines: &[Kline],
     font: &impl Font,
 ) -> Result<(), Box<dyn Error>> {
-    if !past_data.is_empty() {
+    if !klines.is_empty() {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
-            past_data.iter().map(kline_to_m4rs_candlestick).collect();
+            klines.iter().map(kline_to_m4rs_candlestick).collect();
         let bb_result = bolinger_band(&past_m4rs_candles, 20)?;
         let latest_bb = bb_result.last().unwrap();
         let ma_7 = past_m4rs_candles
@@ -729,25 +747,37 @@ pub fn draw_volume_bars(
         BitMapBackend<'_>,
         Cartesian2d<RangedDateTime<DateTime<Tz>>, RangedCoordf32>,
     >,
-    past_candle_data: &Option<Vec<Kline>>,
+    maybe_klines: &Option<Vec<Kline>>,
     timezone: &Tz,
     timeframe: &str,
+    last_past_time: i64,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(past_data) = past_candle_data {
+    if let Some(klines) = maybe_klines {
         chart
             .configure_mesh()
             .light_line_style(BLACK)
             .x_max_light_lines(1)
             .y_max_light_lines(1)
             .draw()?;
-        chart.draw_series(past_data.iter().flat_map(|k| {
+        chart.draw_series(klines.iter().flat_map(|k| {
             let time: DateTime<Tz> = parse_kline_time(k.open_time, timezone);
             let volume = k.volume.parse::<f32>().unwrap();
             let bar_width = parse_timeframe_duration(timeframe);
             let open = k.open_price.parse::<f32>().unwrap();
             let close = k.close_price.parse::<f32>().unwrap();
             let is_bullish = close >= open;
-            let fill_color = if is_bullish { B_GREEN } else { B_RED };
+            let is_predicted = last_past_time > k.open_time;
+            let fill_color: RGBColor = if is_bullish {
+                if is_predicted {
+                    B_GREEN
+                } else {
+                    B_GREEN_DIM
+                }
+            } else if is_predicted {
+                B_RED
+            } else {
+                B_RED_DIM
+            };
             let fill_style = ShapeStyle {
                 color: fill_color.into(),
                 filled: true,
@@ -771,12 +801,12 @@ pub fn draw_volume_bars(
 
 pub fn draw_volume_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
-    past_data: &[Kline],
+    klines: &[Kline],
     font: &impl Font,
     current_y: i32,
 ) -> Result<(), Box<dyn Error>> {
-    if !past_data.is_empty() {
-        let volume_sma: f32 = past_data
+    if !klines.is_empty() {
+        let volume_sma: f32 = klines
             .iter()
             .rev()
             .take(9)
@@ -804,9 +834,10 @@ pub fn draw_macd(
         BitMapBackend<'_>,
         Cartesian2d<RangedDateTime<DateTime<Tz>>, RangedCoordf32>,
     >,
-    past_candle_data: &Option<Vec<Kline>>,
+    maybe_klines: &Option<Vec<Kline>>,
     timezone: &Tz,
     timeframe: &str,
+    last_past_time: i64,
 ) -> Result<(), Box<dyn Error>> {
     chart
         .configure_mesh()
@@ -815,9 +846,9 @@ pub fn draw_macd(
         .y_max_light_lines(1)
         .draw()?;
 
-    if let Some(past_data) = past_candle_data {
+    if let Some(klines) = maybe_klines {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
-            past_data.iter().map(kline_to_m4rs_candlestick).collect();
+            klines.iter().map(kline_to_m4rs_candlestick).collect();
         let macd_result = macd(&past_m4rs_candles, 12, 26, 9)?;
         let macd_lines: Vec<(DateTime<Tz>, f32, f32, f32)> = macd_result
             .iter()
@@ -849,8 +880,20 @@ pub fn draw_macd(
 
         for (t, _, _, h) in macd_lines.iter() {
             let is_lower = previous_h.map_or(false, |prev| *h < prev);
-
-            let fill_color = if *h > 0.0 {
+            let is_predicted = last_past_time < t.timestamp_millis();
+            let fill_color = if is_predicted {
+                if *h > 0.0 {
+                    if is_lower {
+                        B_GREEN_DIM
+                    } else {
+                        GREEN_900
+                    }
+                } else if is_lower {
+                    B_RED_DIM
+                } else {
+                    RED_900
+                }
+            } else if *h > 0.0 {
                 if is_lower {
                     B_GREEN
                 } else {
@@ -861,6 +904,7 @@ pub fn draw_macd(
             } else {
                 RED_100
             };
+
             let fill_style = ShapeStyle {
                 color: fill_color.into(),
                 filled: true,
@@ -888,13 +932,13 @@ pub fn draw_macd(
 
 pub fn draw_macd_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
-    past_data: &[Kline],
+    klines: &[Kline],
     font: &impl Font,
     current_y: i32,
 ) -> Result<(), Box<dyn Error>> {
-    if !past_data.is_empty() {
+    if !klines.is_empty() {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
-            past_data.iter().map(kline_to_m4rs_candlestick).collect();
+            klines.iter().map(kline_to_m4rs_candlestick).collect();
         let macd_result = macd(&past_m4rs_candles, 12, 26, 9)?;
         let latest_macd = macd_result.last().unwrap();
         let macd_detail = format!(
@@ -917,13 +961,13 @@ pub fn draw_macd_detail(
 
 pub fn draw_stoch_rsi_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
-    past_data: &[Kline],
+    klines: &[Kline],
     font: &impl Font,
     current_y: i32,
 ) -> Result<(), Box<dyn Error>> {
-    if !past_data.is_empty() {
+    if !klines.is_empty() {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
-            past_data.iter().map(kline_to_m4rs_candlestick).collect();
+            klines.iter().map(kline_to_m4rs_candlestick).collect();
         let stoch_rsi_result = m4rs::slow_stochastics(&past_m4rs_candles, 14, 3, 5)?;
         let latest_stoch_rsi = stoch_rsi_result.last().unwrap();
         let stoch_rsi_detail = format!(

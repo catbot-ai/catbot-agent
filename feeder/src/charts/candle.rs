@@ -43,6 +43,7 @@ pub struct Chart {
     pub timezone: Tz,
     pub timeframe: String,
     pub past_candle_data: Option<Vec<Kline>>,
+    pub predicted_candle: Option<Vec<Kline>>,
     pub metadata: ChartMetaData,
     pub font_data: Option<Vec<u8>>,
     pub candle_width: u32,
@@ -72,6 +73,11 @@ impl Chart {
 
     pub fn with_past_candle(mut self, past_candle_data: Vec<Kline>) -> Self {
         self.past_candle_data = Some(past_candle_data);
+        self
+    }
+
+    pub fn with_predicted_candle(mut self, predicted_candle: Vec<Kline>) -> Self {
+        self.predicted_candle = Some(predicted_candle);
         self
     }
 
@@ -199,7 +205,17 @@ impl Chart {
         let font = FontArc::try_from_vec(font_data)?;
         let timezone = &self.timezone;
 
-        let all_candle_data = &self.past_candle_data.clone().unwrap();
+        // Combine past_candle_data and predicted_candle into all_candle_data
+        let mut all_candle_data = self.past_candle_data.clone().unwrap();
+        let last_past_time = all_candle_data
+            .last()
+            .map(|kline| kline.open_time)
+            .ok_or("No past candle data available")?;
+
+        if let Some(predicted_candles) = self.predicted_candle.clone() {
+            all_candle_data.extend(predicted_candles);
+        }
+
         let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
 
         let total_candles = all_candle_data.len();
@@ -241,7 +257,7 @@ impl Chart {
             let mut root = BitMapBackend::with_buffer(&mut buffer, bar).into_drawing_area();
             draw_chart(
                 &mut root,
-                all_candle_data,
+                &all_candle_data,
                 past_data,
                 timezone,
                 &self,
@@ -252,6 +268,7 @@ impl Chart {
                 margin_right,
                 candle_width,
                 root_width,
+                last_past_time,
             )?;
 
             let mut top_chart = ChartBuilder::on(&root.split_vertically((50).percent()).0)
@@ -349,19 +366,23 @@ mod test {
     use chrono_tz::Asia::Tokyo;
     use common::binance::fetch_binance_kline_data;
     use common::binance::fetch_orderbook_depth;
+    use common::cooker::get_mock_graph_prediction;
+    use common::RefinedGraphPredictionResponse;
 
     #[tokio::test]
     async fn entry_point() {
-        let pair_symbol = "SOLUSDT";
+        let binance_pair_symbol = "SOLUSDT";
         let timeframe = "1h";
         let font_data = include_bytes!("../../RobotoMono-Regular.ttf").to_vec();
 
         let limit = 24 * 10; // 240 candles, enough for iteration
-        let candle_data = fetch_binance_kline_data::<Kline>(pair_symbol, timeframe, limit)
+        let candle_data = fetch_binance_kline_data::<Kline>(binance_pair_symbol, timeframe, limit)
             .await
             .unwrap();
 
-        let orderbook = fetch_orderbook_depth(pair_symbol, 1000).await.unwrap();
+        let orderbook = fetch_orderbook_depth(binance_pair_symbol, 1000)
+            .await
+            .unwrap();
 
         // Generate mock signals based on fixed candle ranges
         let mut long_signals = Vec::new();
@@ -416,10 +437,21 @@ mod test {
             );
         }
 
+        // Get the mock prediction
+        let predicted_klines_string = get_mock_graph_prediction().await;
+        let predicted_klines = serde_json::from_str::<RefinedGraphPredictionResponse>(
+            &predicted_klines_string.clone(),
+        )
+        .unwrap()
+        .klines;
+
+        println!("{predicted_klines:#?}");
+
         let png = Chart::new(timeframe, Tokyo)
             .with_candle_width(6)
             .with_past_candle(candle_data)
-            .with_title(pair_symbol)
+            .with_predicted_candle(predicted_klines)
+            .with_title(binance_pair_symbol)
             .with_font_data(font_data)
             .with_volume()
             .with_macd()

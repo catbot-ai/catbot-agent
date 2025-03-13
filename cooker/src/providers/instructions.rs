@@ -48,6 +48,7 @@ pub const PERPS_INSTRUCTION: &str = r#"
     - For shorts, set stop_loss 1-2% above the entry_price or nearest resistance (e.g., above the upper Bollinger Band or 9-day SMA).
 "#;
 
+// TODO: maybe_timeframe
 pub const GRAPH_INSTRUCTION: &str = r#"
 - Predict 24 klines value for 1h timeframe base on technical analysis and vibe.
 - Ensure that suggested long/short signals is matched predicted klines time and value.
@@ -58,7 +59,10 @@ pub const SUFFIX_INSTRUCTION: &str = r#"
 - Must generate valid JSON output.
 "#;
 
-pub fn get_instruction(prediction_type: &PredictionType) -> String {
+pub fn get_instruction(
+    prediction_type: &PredictionType,
+    maybe_timeframe: Option<String>,
+) -> String {
     match prediction_type {
         PredictionType::Suggestions => {
             format!(r#"{TRADE_INSTRUCTION}{PERPS_INSTRUCTION}{SUFFIX_INSTRUCTION}"#)

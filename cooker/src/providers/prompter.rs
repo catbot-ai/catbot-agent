@@ -16,6 +16,7 @@ use super::core::PriceHistory;
 
 #[allow(clippy::too_many_arguments, unused)]
 pub fn build_prompt<T>(
+    prediction_type: &PredictionType,
     model: &T,
     fund_usd: f64,
     pair_symbol: &str,
@@ -23,12 +24,13 @@ pub fn build_prompt<T>(
     price_history: Option<PriceHistory>,
     orderbook: OrderBook,
     maybe_preps_positions: Option<Vec<PerpsPosition>>,
-    prediction_type: &PredictionType,
+    maybe_timeframe: Option<String>,
 ) -> String {
     let now_utc = Utc::now();
     let current_datetime = now_utc.format("%Y-%m-%dT%H:%M:%SZ").to_string();
     let current_timestamp = now_utc.timestamp_millis();
 
+    // TODO: Better handle binance_pair_symbol
     let pair_symbol = pair_symbol.replace("_", "");
     let symbol = pair_symbol.split("USDT").next().unwrap_or(&pair_symbol);
 
@@ -49,7 +51,7 @@ pub fn build_prompt<T>(
         get_perps_position_schema(maybe_preps_positions);
 
     // Instructions
-    let instruction = get_instruction(prediction_type);
+    let instruction = get_instruction(prediction_type, maybe_timeframe);
     let schema_instruction = get_schema_instruction(
         prediction_type,
         current_price,
@@ -115,13 +117,16 @@ mod tests {
     async fn test_build_prompt_stage1_empty_price_history() -> Result<(), Box<dyn std::error::Error>>
     {
         // Define pair symbol
-        let pair_symbol = "SOLUSDT";
+        let binance_pair_symbol = "SOLUSDT";
+        let maybe_timeframe = Some("1h".to_string());
 
         // Fetch 1-second kline data to get current price
-        let kline_data_1s = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1s", 1).await?;
+        let kline_data_1s =
+            fetch_binance_kline_data::<ConciseKline>(binance_pair_symbol, "1s", 1).await?;
         let current_price = kline_data_1s[0].close;
 
-        let kline_data_1h = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1h", 1).await?;
+        let kline_data_1h =
+            fetch_binance_kline_data::<ConciseKline>(binance_pair_symbol, "1h", 1).await?;
         let price_history_1h_string = serde_json::to_string_pretty(&kline_data_1h)?;
 
         // Create an empty PriceHistory struct (all fields None)
@@ -146,14 +151,15 @@ mod tests {
 
         // Call the refactored build_prompt with Option<PriceHistory>
         let prompt = build_prompt(
+            &PredictionType::Suggestions,
             &model,                // Reference to GeminiModel
             1000f64,               // fund_usd
-            pair_symbol,           // pair_symbol (e.g., "SOLUSDT")
+            binance_pair_symbol,   // pair_symbol (e.g., "SOLUSDT")
             current_price,         // current_price
             Some(price_history),   // Option<PriceHistory> with empty data
             orderbook,             // OrderBook
             maybe_preps_positions, // Option<Vec<PerpsPosition>>
-            &PredictionType::Suggestions,
+            maybe_timeframe,
         );
 
         // Print the prompt for verification
@@ -166,13 +172,16 @@ mod tests {
     async fn test_build_prompt_predict_signal_and_candles() -> Result<(), Box<dyn std::error::Error>>
     {
         // Define pair symbol
-        let pair_symbol = "SOLUSDT";
+        let binance_pair_symbol = "SOLUSDT";
+        let maybe_timeframe = Some("1h".to_string());
 
         // Fetch 1-second kline data to get current price
-        let kline_data_1s = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1s", 1).await?;
+        let kline_data_1s =
+            fetch_binance_kline_data::<ConciseKline>(binance_pair_symbol, "1s", 1).await?;
         let current_price = kline_data_1s[0].close;
 
-        let kline_data_1h = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1h", 1).await?;
+        let kline_data_1h =
+            fetch_binance_kline_data::<ConciseKline>(binance_pair_symbol, "1h", 1).await?;
         let price_history_1h_string = serde_json::to_string_pretty(&kline_data_1h)?;
 
         // Create an empty PriceHistory struct (all fields None)
@@ -185,21 +194,22 @@ mod tests {
         };
 
         // Fetch orderbook (assuming fetch_orderbook_depth returns OrderBook)
-        let orderbook = fetch_orderbook_depth("SOLUSDT", 100).await?;
+        let orderbook = fetch_orderbook_depth(binance_pair_symbol, 100).await?;
 
         // Create a default GeminiModel
         let model = GeminiModel::default();
 
         // Call the refactored build_prompt with Option<PriceHistory>
         let prompt = build_prompt(
+            &PredictionType::GraphPredictions,
             &model,              // Reference to GeminiModel
             1000f64,             // fund_usd
-            pair_symbol,         // pair_symbol (e.g., "SOLUSDT")
+            binance_pair_symbol, // pair_symbol (e.g., "SOLUSDT")
             current_price,       // current_price
             Some(price_history), // Option<PriceHistory> with empty data
             orderbook,           // OrderBook
             None,                // Option<Vec<PerpsPosition>>
-            &PredictionType::GraphPredictions,
+            maybe_timeframe,
         );
 
         // Print the prompt for verification

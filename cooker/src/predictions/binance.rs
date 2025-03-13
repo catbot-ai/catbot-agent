@@ -7,11 +7,12 @@ use common::{
 use jup_sdk::perps::PerpsPosition;
 
 pub async fn get_binance_prompt(
+    prediction_type: &PredictionType,
     pair_symbol: &str,
     model: &GeminiModel,
     orderbook_limit: i32,
     maybe_preps_positions: Option<Vec<PerpsPosition>>,
-    prediction_type: &PredictionType,
+    maybe_timeframe: Option<String>,
 ) -> anyhow::Result<String> {
     let kline_data_1s = fetch_binance_kline_data::<ConciseKline>(pair_symbol, "1s", 1).await?;
     let current_price = kline_data_1s[0].close;
@@ -51,6 +52,7 @@ pub async fn get_binance_prompt(
     // --- Build Prompt for Gemini API ---
     println!("Building prompt for Gemini API...");
     let prompt = build_prompt(
+        prediction_type,
         model,
         1000f64,
         pair_symbol,
@@ -58,7 +60,7 @@ pub async fn get_binance_prompt(
         Some(price_history),
         orderbook,
         maybe_preps_positions,
-        prediction_type,
+        maybe_timeframe,
     );
 
     println!("{prompt:?}");

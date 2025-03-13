@@ -126,6 +126,19 @@ pub struct RefinedGraphPredictionOutput {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
+pub struct RefinedGraphPredictionResponse {
+    pub timestamp: i64,
+    pub current_datetime: String,
+    pub current_datetime_local: String,
+    pub signals: Vec<LongShortSignal>,
+    pub klines: Vec<Kline>,
+    // Stats
+    pub model_name: String,
+    pub prompt_hash: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
 pub struct SuggestionOutput {
     pub summary: Summary,
     pub signals: Vec<PredictedLongShortSignal>,

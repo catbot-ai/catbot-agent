@@ -15,7 +15,7 @@ pub enum Route {
 }
 
 pub async fn handle_root(_req: Request, _ctx: RouteContext<()>) -> worker::Result<Response> {
-    Response::from_html(r#"<a href="/api/v1/predict/SOL_USDT">PREDICT</a>"#)
+    Response::from_html(r#"<a href="/api/v1/predict/SOL_USDT/1h">PREDICT</a>"#)
 }
 
 #[event(fetch)]
@@ -34,30 +34,33 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
 
     // Shared handler logic
     async fn handle_prediction_request(
+        route: Route,
         gemini_api_key: &str,
         orderbook_limit: i32,
         pair_symbol: String,
         maybe_wallet_address: Option<String>,
-        route: Route,
+        maybe_timeframe: Option<String>,
     ) -> Result<Response> {
         let output_result = match route {
             Route::SUGGESTIONS => {
                 predict_with_gemini(
+                    &PredictionType::Suggestions,
                     gemini_api_key.to_owned(),
                     pair_symbol,
                     orderbook_limit,
                     maybe_wallet_address,
-                    &PredictionType::Suggestions,
+                    maybe_timeframe,
                 )
                 .await
             }
             Route::PREDICTIONS => {
                 predict_with_gemini(
+                    &PredictionType::GraphPredictions,
                     gemini_api_key.to_owned(),
                     pair_symbol,
                     orderbook_limit,
                     maybe_wallet_address,
-                    &PredictionType::GraphPredictions,
+                    maybe_timeframe,
                 )
                 .await
             }
@@ -86,11 +89,12 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                 };
                 let maybe_wallet_address = ctx.param("wallet_address").cloned();
                 handle_prediction_request(
+                    Route::SUGGESTIONS,
                     gemini_api_key,
                     orderbook_limit,
                     pair_symbol,
                     maybe_wallet_address,
-                    Route::SUGGESTIONS,
+                    None,
                 )
                 .await
             },
@@ -102,39 +106,49 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                 None => return Response::error("Bad Request - Missing Token", 400),
             };
             handle_prediction_request(
-                gemini_api_key,
-                orderbook_limit,
-                pair_symbol,
-                None,
                 Route::SUGGESTIONS,
-            )
-            .await
-        })
-        // Endpoint: /api/v1/predict/:token
-        .get_async("/api/v1/predict/:token", |_req, ctx| async move {
-            let pair_symbol = match ctx.param("token") {
-                Some(token) => token.to_owned(),
-                None => return Response::error("Bad Request - Missing Token", 400),
-            };
-            handle_prediction_request(
                 gemini_api_key,
                 orderbook_limit,
                 pair_symbol,
                 None,
-                Route::PREDICTIONS,
+                None,
             )
             .await
         })
+        // Endpoint: /api/v1/predict/:token/:timeframe
+        .get_async(
+            "/api/v1/predict/:token/:timeframe",
+            |_req, ctx| async move {
+                let pair_symbol = match ctx.param("token") {
+                    Some(token) => token.to_owned(),
+                    None => return Response::error("Bad Request - Missing Token", 400),
+                };
+
+                // Get timeframe
+                let timeframe = ctx.param("timeframe");
+
+                handle_prediction_request(
+                    Route::PREDICTIONS,
+                    gemini_api_key,
+                    orderbook_limit,
+                    pair_symbol,
+                    None,
+                    timeframe.cloned(),
+                )
+                .await
+            },
+        )
         .run(req, env)
         .await
 }
 
 pub async fn predict_with_gemini(
+    prediction_type: &PredictionType,
     gemini_api_key: String,
     pair_symbol: String,
     orderbook_limit: i32,
     maybe_wallet_address: Option<String>,
-    prediction_type: &PredictionType,
+    maybe_timeframe: Option<String>,
 ) -> anyhow::Result<String, String> {
     let gemini_model = GeminiModel::default();
     let provider = GeminiProvider::new_v1beta(&gemini_api_key);
@@ -152,11 +166,12 @@ pub async fn predict_with_gemini(
     };
 
     let prompt = get_binance_prompt(
+        prediction_type,
         &pair_symbol,
         &gemini_model,
         orderbook_limit,
         maybe_preps_positions,
-        prediction_type,
+        maybe_timeframe,
     )
     .await
     .map_err(|e| e.to_string())?;
@@ -192,15 +207,16 @@ mod tests {
         dotenvy::from_filename(".env").expect("No .env file");
 
         let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
-        let symbol = "SOLUSDT";
+        let pair_symbol = "SOL_USDT";
         let wallet_address = std::env::var("WALLET_ADDRESS").ok();
 
         let result = predict_with_gemini(
+            &PredictionType::Suggestions,
             gemini_api_key,
-            symbol.to_string(),
+            pair_symbol.to_string(),
             100,
             wallet_address,
-            &PredictionType::Suggestions,
+            None,
         )
         .await
         .unwrap();
@@ -215,14 +231,15 @@ mod tests {
         dotenvy::from_filename(".env").expect("No .env file");
 
         let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
-        let symbol = "SOLUSDT";
+        let pair_symbol = "SOL_USDT";
 
         let result = predict_with_gemini(
+            &PredictionType::Suggestions,
             gemini_api_key,
-            symbol.to_string(),
+            pair_symbol.to_string(),
             100,
             None,
-            &PredictionType::Suggestions,
+            None,
         )
         .await
         .unwrap();
@@ -237,14 +254,15 @@ mod tests {
         dotenvy::from_filename(".env").expect("No .env file");
 
         let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
-        let symbol = "SOLUSDT";
+        let pair_symbol = "SOL_USDT";
 
         let result = predict_with_gemini(
+            &PredictionType::GraphPredictions,
             gemini_api_key,
-            symbol.to_string(),
+            pair_symbol.to_string(),
             100,
             None,
-            &PredictionType::GraphPredictions,
+            None,
         )
         .await
         .unwrap();
