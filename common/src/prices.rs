@@ -9,10 +9,15 @@ pub struct Kline {
     pub close_price: String,
     pub volume: String,
     pub close_time: i64,
+    #[serde(default)]
     pub quote_asset_volume: String,
+    #[serde(default)]
     pub number_of_trades: i64,
+    #[serde(default)]
     pub taker_buy_base_asset_volume: String,
+    #[serde(default)]
     pub taker_buy_quote_asset_volume: String,
+    #[serde(default)]
     pub ignore: String,
 }
 

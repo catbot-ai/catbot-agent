@@ -14,6 +14,10 @@ pub enum Route {
     PREDICTIONS,
 }
 
+pub async fn handle_root(_req: Request, _ctx: RouteContext<()>) -> worker::Result<Response> {
+    Response::from_html(r#"<a href="/api/v1/predict/SOL_USDT">PREDICT</a>"#)
+}
+
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
     console_error_panic_hook::set_once();
@@ -71,6 +75,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
     }
 
     router
+        .get_async("/", handle_root)
         // Endpoint: /api/v1/suggest/:token/:wallet_address
         .get_async(
             "/api/v1/suggest/:token/:wallet_address",

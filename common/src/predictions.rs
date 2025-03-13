@@ -4,9 +4,10 @@ use chrono::{DateTime, Utc};
 use chrono_tz::{Asia::Tokyo, Tz};
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::ConciseKline;
+use crate::Kline;
 
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
 pub enum PredictionOutput {
     Suggestions(RefinedSuggestionOutput),
     GraphPredictions(RefinedGraphPredictionOutput),
@@ -21,7 +22,7 @@ pub trait Refinable {
 #[serde(rename_all = "snake_case")]
 pub struct GraphPredictionOutput {
     pub signals: Vec<PredictedLongShortSignal>,
-    pub klines: Vec<ConciseKline>,
+    pub klines: Vec<Kline>,
 }
 
 pub struct GraphPredictionOutputWithTimeStampBuilder {
@@ -56,7 +57,13 @@ impl GraphPredictionOutputWithTimeStampBuilder {
             .map(LongShortSignal::from)
             .collect();
 
-        let klines = self.graph_response.klines;
+        // Convert Vec<Kline> to Vec<Vec<KlineValue>>
+        let klines = self
+            .graph_response
+            .klines
+            .into_iter()
+            .map(|kline| kline.to_kline_values())
+            .collect();
 
         let timestamp = now_utc.timestamp_millis();
 
@@ -80,6 +87,30 @@ impl Refinable for GraphPredictionOutput {
     }
 }
 
+impl Kline {
+    fn to_kline_values(&self) -> Vec<KlineValue> {
+        vec![
+            KlineValue::Int64(self.open_time),
+            KlineValue::String(self.open_price.clone()),
+            KlineValue::String(self.high_price.clone()),
+            KlineValue::String(self.low_price.clone()),
+            KlineValue::String(self.close_price.clone()),
+            KlineValue::String(self.volume.clone()),
+            KlineValue::Int64(self.close_time),
+        ]
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum KlineValue {
+    Int64(i64),     // For signed integers (e.g., timestamps)
+    UInt64(u64),    // For unsigned integers (if needed)
+    String(String), // For prices and volumes
+    Float64(f64),   // For floating-point numbers (optional)
+    UInt32(u32),    // For smaller unsigned integers (e.g., number of trades)
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct RefinedGraphPredictionOutput {
@@ -87,7 +118,7 @@ pub struct RefinedGraphPredictionOutput {
     pub current_datetime: String,
     pub current_datetime_local: String,
     pub signals: Vec<LongShortSignal>,
-    pub klines: Vec<ConciseKline>,
+    pub klines: Vec<Vec<KlineValue>>,
     // Stats
     pub model_name: String,
     pub prompt_hash: String,

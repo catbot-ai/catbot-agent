@@ -125,13 +125,17 @@ pub fn get_schema_instruction(
         "target_datetime": "string", // ISO time prediction when to take profit.
         "rationale": "string" // Rationale about this signal e.g., "4h momentum up, bids outpace asks", "1h rejection at xxx, high ask volume"
     }}],
-    "klines": [{{ // Predicted next 24 klines in 1h timeframe
-        "close_time": number, // Unix timestamp e.g. 1741737600000
-        "high": number, // Predicted high price
-        "low": number, // Predicted low price
-        "close": number, // Predicted close price
-        "volume": number // Predicted volume
-    }}]
+    "klines": [
+        [
+            1741843286000,  // Open time: Timestamp in milliseconds when the K-line opens
+            "123.45", // Open price: The price at the start of the time interval
+            "123.45", // High price: The highest price during the time interval
+            "123.45", // Low price: The lowest price during the time interval
+            "123.45", // Close price: The price at the end of the time interval
+            "0",   // Volume: The total trading volume during the time interval
+            1741843286999,  // Close time: Timestamp in milliseconds when the K-line closes
+        ]
+    ]
 }}
 "#
         ),
