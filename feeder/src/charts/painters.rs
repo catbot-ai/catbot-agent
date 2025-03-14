@@ -13,7 +13,7 @@ use imageproc::rect::Rect;
 use m4rs::{bolinger_band, macd, Candlestick as M4rsCandlestick};
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
-use plotters::style::full_palette::{GREEN_100, GREEN_200, GREEN_900, RED_100, RED_200, RED_900};
+use plotters::style::full_palette::{GREEN_200, GREEN_900, RED_200, RED_900};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::error::Error;
@@ -27,8 +27,11 @@ const B_RED_DIM: RGBColor = RGBColor(245 / 2, 71 / 2, 95 / 2);
 const B_BLACK: RGBColor = RGBColor(22, 26, 30);
 
 // BB
-const BB_BOUND: RGBColor = RGBColor(33, 88, 243);
+const BB_UPPER_BOUND: RGBColor = RGBColor(34, 150, 243);
+const BB_LOWER_BOUND: RGBColor = RGBColor(255, 109, 1);
 const BB_MIDDLE: RGBColor = RGBColor(255, 185, 2);
+const BB_UPPER_BOUND_LABEL: Rgb<u8> = Rgb([34, 150, 243]);
+const BB_LOWER_BOUND_LABEL: Rgb<u8> = Rgb([255, 109, 1]);
 
 // MCAD
 const MCAD: RGBColor = RGBColor(34, 150, 243);
@@ -76,7 +79,7 @@ pub fn draw_chart(
     final_width: u32,
     last_past_time: i64,
     timeframe: &str,
-) -> Result<(u32), Box<dyn Error>> {
+) -> Result<(f32, f32), Box<dyn Error>> {
     root.fill(&B_BLACK)?;
 
     let (top, bottom) = root.split_vertically((50).percent());
@@ -110,8 +113,12 @@ pub fn draw_chart(
         candle_width,
     )?;
 
+    let (mut lower_bound, mut upper_bound) = (0.0, 0.0);
     if chart.bollinger_enabled {
-        draw_bollinger_bands(&mut top_chart, all_candle_data, timezone)?;
+        let (new_lower_bound, new_upper_bound) =
+            draw_bollinger_bands(&mut top_chart, all_candle_data, timezone)?;
+        lower_bound = new_lower_bound;
+        upper_bound = new_upper_bound;
     }
 
     if chart.volume_enabled || chart.macd_enabled || chart.stoch_rsi_enabled {
@@ -274,7 +281,7 @@ pub fn draw_chart(
         }
     }
 
-    Ok(candle_width)
+    Ok((lower_bound, upper_bound))
 }
 
 #[allow(clippy::too_many_arguments, unused)]
@@ -288,7 +295,7 @@ pub fn draw_axis_labels(
     margin_right: u32,
     min_price: f32,
     max_price: f32,
-) -> Result<(i32), Box<dyn Error>> {
+) -> Result<f32, Box<dyn Error>> {
     let white = Rgb([255u8, 255u8, 255u8]);
     let label_scale = AXIS_SCALE;
     let font_metrics = font.as_scaled(label_scale);
@@ -457,7 +464,7 @@ pub fn draw_axis_labels(
         }
     }
 
-    Ok(current_price_y)
+    Ok(current_price_y as f32)
 }
 
 pub fn draw_lines(
@@ -688,38 +695,51 @@ pub fn draw_bollinger_bands(
     >,
     klines: &[Kline],
     timezone: &Tz,
-) -> Result<(), Box<dyn Error>> {
-    if !klines.is_empty() {
-        let past_m4rs_candles: Vec<M4rsCandlestick> =
-            klines.iter().map(kline_to_m4rs_candlestick).collect();
-        let past_bb_result = bolinger_band(&past_m4rs_candles, 20)?;
-        let past_bb_lines: Vec<(DateTime<Tz>, f32, f32, f32)> = past_bb_result
-            .iter()
-            .map(|entry| {
-                let t = parse_kline_time(entry.at as i64, timezone);
-                let avg = entry.avg as f32;
-                let upper = (entry.avg + 2.0 * entry.sigma) as f32;
-                let lower = (entry.avg - 2.0 * entry.sigma) as f32;
-                (t, avg, upper, lower)
-            })
-            .collect();
-
-        let bound_style = ShapeStyle::from(&BB_BOUND).stroke_width(1);
-        let avg_style = ShapeStyle::from(&BB_MIDDLE).stroke_width(1);
-        chart.draw_series(LineSeries::new(
-            past_bb_lines.iter().map(|(t, avg, _, _)| (*t, *avg)),
-            avg_style,
-        ))?;
-        chart.draw_series(LineSeries::new(
-            past_bb_lines.iter().map(|(t, _, upper, _)| (*t, *upper)),
-            bound_style,
-        ))?;
-        chart.draw_series(LineSeries::new(
-            past_bb_lines.iter().map(|(t, _, _, lower)| (*t, *lower)),
-            bound_style,
-        ))?;
+) -> Result<(f32, f32), Box<dyn Error>> {
+    if klines.is_empty() {
+        // Handle empty case: return an error or default bounds
+        return Err("No kline data provided to calculate Bollinger Bands".into());
     }
-    Ok(())
+
+    let past_m4rs_candles: Vec<M4rsCandlestick> =
+        klines.iter().map(kline_to_m4rs_candlestick).collect();
+    let past_bb_result = bolinger_band(&past_m4rs_candles, 20)?;
+    let past_bb_lines: Vec<(DateTime<Tz>, f32, f32, f32)> = past_bb_result
+        .iter()
+        .map(|entry| {
+            let t = parse_kline_time(entry.at as i64, timezone);
+            let avg = entry.avg as f32;
+            let upper = (entry.avg + 2.0 * entry.sigma) as f32;
+            let lower = (entry.avg - 2.0 * entry.sigma) as f32;
+            (t, avg, upper, lower)
+        })
+        .collect();
+
+    let upper_bound_style = ShapeStyle::from(&BB_UPPER_BOUND).stroke_width(1);
+    let lower_bound_style = ShapeStyle::from(&BB_LOWER_BOUND).stroke_width(1);
+    let avg_style = ShapeStyle::from(&BB_MIDDLE).stroke_width(1);
+    chart.draw_series(LineSeries::new(
+        past_bb_lines.iter().map(|(t, avg, _, _)| (*t, *avg)),
+        avg_style,
+    ))?;
+    chart.draw_series(LineSeries::new(
+        past_bb_lines.iter().map(|(t, _, upper, _)| (*t, *upper)),
+        upper_bound_style,
+    ))?;
+    chart.draw_series(LineSeries::new(
+        past_bb_lines.iter().map(|(t, _, _, lower)| (*t, *lower)),
+        lower_bound_style,
+    ))?;
+
+    // Get the last upper and lower bounds (default to 0.0 if no data, though this won't happen due to early return)
+    let (_, _, upper_bound, lower_bound) = past_bb_lines.last().copied().unwrap_or((
+        DateTime::<Tz>::MIN_UTC.with_timezone(timezone),
+        0.0,
+        0.0,
+        0.0,
+    ));
+
+    Ok((lower_bound, upper_bound))
 }
 
 pub fn draw_bollinger_detail(
@@ -1086,10 +1106,12 @@ pub fn draw_order_book(
     max_price: f32,
     width: u32,
     height: u32,
-    current_price_y: i32,
-    parent_offset_x: u32,
+    parent_offset_x: f32,
+    current_price_y: f32,
+    lower_bound: f32,
+    upper_bound: f32,
 ) -> Result<(), Box<dyn Error>> {
-    let parent_offset_x = parent_offset_x + 80;
+    let parent_offset_x = parent_offset_x + 80.0;
     let price_rect_height = 20;
     let price_rect_height_half = price_rect_height / 2;
 
@@ -1124,10 +1146,9 @@ pub fn draw_order_book(
     let rect_height = 8u32;
     let gap = 8i32;
     let bar_height = rect_height as i32 + gap;
-    // let offset_y = bar_height - gap / 2 + current_price_y
-    //     - bar_height * (bid_data.len() as i32 + ask_data.len() as i32) / 2;
-    let offset_y =
-        current_price_y - bar_height * (ask_data.len() as i32) + bar_height - bar_height / 4 - 1;
+    let offset_y = current_price_y as i32 - bar_height * (ask_data.len() as i32) + bar_height
+        - bar_height / 4
+        - 1;
 
     let max_bar_width = 64;
     let current_x = 32u32;
@@ -1144,7 +1165,9 @@ pub fn draw_order_book(
     let max_volume_width = max_bid_volume.max(max_ask_volume) as i32;
 
     let max_rect_width = (max_volume_width as f32 / max_bar_width as f32) as i32;
-    let offset_x = parent_offset_x + current_x + 72u32;
+    let offset_x = parent_offset_x as u32 + current_x + 72u32;
+
+    current_y += gap / 2;
 
     {
         let root = BitMapBackend::with_buffer(img, (width, height)).into_drawing_area();
@@ -1153,38 +1176,49 @@ pub fn draw_order_book(
         for (price, volume) in ask_data.iter() {
             if price.is_finite() && volume.is_finite() {
                 let rect_width = (*volume / max_rect_width as f32) as i32;
+                let color = if price.round() == upper_bound.round() {
+                    BB_UPPER_BOUND
+                } else {
+                    ASK_COLOR
+                };
 
                 root.draw(&Rectangle::new(
                     [
-                        (offset_x as i32, offset_y + current_y + 6),
+                        (offset_x as i32, offset_y + current_y),
                         (
                             offset_x as i32 + rect_width,
-                            offset_y + current_y + rect_height as i32 + 6,
+                            offset_y + current_y + rect_height as i32,
                         ),
                     ],
-                    ShapeStyle::from(&ASK_COLOR).filled(),
+                    ShapeStyle::from(color).filled(),
                 ))?;
 
                 current_y += (rect_height + gap as u32) as i32;
             }
         }
 
+        current_y += gap / 4;
         current_y += bar_height / 2;
 
         // Draw the bid histograms
         for (price, volume) in bid_data.iter() {
             if price.is_finite() && volume.is_finite() {
                 let rect_width = (*volume / max_rect_width as f32) as i32;
+                let color = if price.round() == lower_bound.round() {
+                    BB_LOWER_BOUND
+                } else {
+                    BID_COLOR
+                };
 
                 root.draw(&Rectangle::new(
                     [
-                        (offset_x as i32, offset_y + current_y + 6),
+                        (offset_x as i32, offset_y + current_y),
                         (
                             offset_x as i32 + rect_width,
-                            offset_y + current_y + rect_height as i32 + 6,
+                            offset_y + current_y + rect_height as i32,
                         ),
                     ],
-                    ShapeStyle::from(&BID_COLOR).filled(),
+                    ShapeStyle::from(color).filled(),
                 ))?;
 
                 current_y += (rect_height + gap as u32) as i32;
@@ -1198,7 +1232,18 @@ pub fn draw_order_book(
 
     // Draw label
     for (price, volume) in ask_data.iter() {
+        let bg_color = if price.round() == upper_bound.round() {
+            BB_UPPER_BOUND_LABEL
+        } else {
+            TRANSPARENT_BLACK_50
+        };
+
         if price.is_finite() && volume.is_finite() {
+            let font_color = if price.round() == upper_bound.round() {
+                NUM_WHITE
+            } else {
+                NUM_RED
+            };
             draw_label(
                 img,
                 font,
@@ -1206,19 +1251,19 @@ pub fn draw_order_book(
                 offset_x as i32,
                 offset_y + current_y,
                 ORDER_LABEL_SCALE,
-                NUM_RED,
-                TRANSPARENT_BLACK_50,
+                font_color,
+                bg_color,
             )?;
 
             draw_label(
                 img,
                 font,
                 &format!("{:.2}", volume),
-                (current_x + offset_x) as i32,
+                (current_x + offset_x as u32) as i32,
                 offset_y + current_y,
                 ORDER_LABEL_SCALE,
                 NUM_WHITE,
-                TRANSPARENT_BLACK_50,
+                bg_color,
             )?;
 
             current_y += rect_height as i32 + gap;
@@ -1227,7 +1272,18 @@ pub fn draw_order_book(
     current_y += price_rect_height_half;
 
     for (price, volume) in bid_data.iter() {
+        let bg_color = if price.round() == lower_bound.round() {
+            BB_LOWER_BOUND_LABEL
+        } else {
+            TRANSPARENT_BLACK_50
+        };
+
         if price.is_finite() && volume.is_finite() {
+            let font_color = if price.round() == lower_bound.round() {
+                NUM_WHITE
+            } else {
+                NUM_GREEN
+            };
             draw_label(
                 img,
                 font,
@@ -1235,19 +1291,19 @@ pub fn draw_order_book(
                 offset_x as i32,
                 offset_y + current_y,
                 ORDER_LABEL_SCALE,
-                NUM_GREEN,
-                TRANSPARENT_BLACK_50,
+                font_color,
+                bg_color,
             )?;
 
             draw_label(
                 img,
                 font,
                 &format!("{:.2}", volume),
-                (current_x + offset_x) as i32,
+                (current_x as i32 + offset_x as i32),
                 offset_y + current_y,
                 ORDER_LABEL_SCALE,
                 NUM_WHITE,
-                TRANSPARENT_BLACK_50,
+                bg_color,
             )?;
 
             current_y += (rect_height + gap as u32) as i32;
@@ -1255,10 +1311,10 @@ pub fn draw_order_book(
     }
 
     // Draw price line
-    let price_line_y = current_price_y as f32 + price_rect_height_half as f32;
+    let price_line_y = current_price_y + price_rect_height_half as f32;
     draw_line_segment_mut(
         img,
-        (parent_offset_x as f32 - 16f32, price_line_y),
+        (parent_offset_x - 16f32, price_line_y),
         (width as f32, price_line_y),
         PRICE_LINE_COLOR,
     );

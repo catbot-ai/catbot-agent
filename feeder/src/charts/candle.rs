@@ -243,11 +243,13 @@ impl Chart {
         let min_price = prices.iter().fold(f32::INFINITY, |a, &b| a.min(b));
         let max_price = prices.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
 
+        let mut lower_bound = 0.0;
+        let mut upper_bound = 0.0;
         // Scope for drawing operations
         {
             let mut root = BitMapBackend::with_buffer(&mut buffer, bar).into_drawing_area();
 
-             draw_chart(
+             let (  new_lower_bound, new_upper_bound) = draw_chart(
                 &mut root,
                 &all_candle_data,
                 past_data,
@@ -262,6 +264,8 @@ impl Chart {
                 last_past_time,
                 &self.timeframe,
             )?;
+            lower_bound = new_lower_bound;
+            upper_bound = new_upper_bound;
 
             let mut top_chart = ChartBuilder::on(&root.split_vertically((50).percent()).0)
                 .margin_right(margin_right)
@@ -269,7 +273,7 @@ impl Chart {
 
             draw_signals(&mut top_chart, timezone, &self.signals)?;
         } // `root` goes out of scope here, ending the borrow of `buffer`
-
+ 
         // Create imgbuf after root is dropped
         let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(plot_width, root_height);
         imgbuf.copy_from_slice(buffer.as_slice());
@@ -336,8 +340,10 @@ impl Chart {
                 max_price,
                 root_width,
                 root_height,
+                right_offset_x as f32,
                 current_price_y,
-                right_offset_x,
+                lower_bound,
+                upper_bound,
             )?;
         }
 
