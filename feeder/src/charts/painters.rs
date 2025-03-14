@@ -13,7 +13,7 @@ use imageproc::rect::Rect;
 use m4rs::{bolinger_band, macd, Candlestick as M4rsCandlestick};
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
-use plotters::style::full_palette::{GREEN_100, GREEN_900, RED_100, RED_900};
+use plotters::style::full_palette::{GREEN_100, GREEN_200, GREEN_900, RED_100, RED_200, RED_900};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::error::Error;
@@ -931,12 +931,12 @@ pub fn draw_macd(
                 if is_lower {
                     B_GREEN
                 } else {
-                    GREEN_100
+                    GREEN_200
                 }
             } else if is_lower {
                 B_RED
             } else {
-                RED_100
+                RED_200
             };
 
             let fill_style = ShapeStyle {
