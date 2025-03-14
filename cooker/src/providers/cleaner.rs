@@ -69,8 +69,8 @@ fn test_fix_trailing_comma_and_deserialize() {
                 "target_price": 159.72,
                 "stop_loss": 167.82,
                 "timeframe": "1h",
-                "entry_datetime": "2025-03-03T13:16:33Z",
-                "target_datetime": "2025-03-03T16:16:33Z",
+                "entry_time": 1741007793000,
+                "target_time": 1741018593000,
                 "rationale": "1m and 5m price is moving down after breaking support. The 1h chart volume has been increasing.",
             }
         ],

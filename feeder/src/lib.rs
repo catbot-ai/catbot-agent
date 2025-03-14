@@ -77,19 +77,21 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
             }
         };
 
-        let predicted_klines: Vec<Kline> =
-            match get_predictions(api_url, pair_symbol.clone(), timeframe.clone()).await {
-                Ok(predicted_candle_data) => predicted_candle_data.klines,
-                Err(error) => {
-                    return Response::error(format!("Bad Request - Missing Data: {error}"), 400)
-                }
-            };
+        // TODO: Extract signal for plot the chart
+        let predicted = match get_predictions(api_url, pair_symbol.clone(), timeframe.clone()).await
+        {
+            Ok(predicted_candle_data) => predicted_candle_data,
+            Err(error) => {
+                return Response::error(format!("Bad Request - Missing Data: {error}"), 400)
+            }
+        };
 
         // Get image
         let buffer_result = Chart::new(timeframe, Tokyo)
             .with_candle_width(6)
             .with_past_candle(candle_data)
-            .with_predicted_candle(predicted_klines)
+            // So sad this didn't work as expected due to poor results
+            // .with_predicted_candle(predicted_klines)
             .with_title(&pair_symbol)
             .with_font_data(font_data)
             .with_volume()
@@ -97,8 +99,7 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
             .with_stoch_rsi()
             .with_orderbook(orderbook)
             .with_bollinger_band()
-            // .with_long_signals(long_signals)
-            // .with_short_signals(short_signals)
+            .with_signals(predicted.signals)
             .build();
 
         // Handle

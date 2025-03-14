@@ -1,7 +1,7 @@
 use crate::predictions::prediction_types::PredictionType;
 pub const TRADE_INSTRUCTION: &str = r#"
 - Perform technical analysis on available price histories (1m, 5m, 1h, 4h, 1d) and order book volume. Weight 1m, 5m, and 1h equally for intraday signals unless rapid momentum shifts are detected, in which case prioritize 1m for entry timing. Use 4h and 1d data only to confirm long-term trends, never to override short-term bullish or bearish signals unless long-term volume exceeds 2x the 10-period average.
-- For 1h signals (target_datetime within 1–2 hours), prioritize 1m, 5m, and 1h price history to detect short-term momentum shifts. Use 4h and 1d data only if long-term volume is extreme (as defined above).
+- For 1h signals (target_time within 1–2 hours), prioritize 1m, 5m, and 1h price history to detect short-term momentum shifts. Use 4h and 1d data only if long-term volume is extreme (as defined above).
 - Detect potential reversals and momentum shifts using these indicators, focusing on short-term data (1m, 5m, 1h):
   - Bullish reversals: Stochastic RSI <20, price near lower Bollinger Band (z-score < -2), or strong support with rising bid volume and price-volume divergence.
   - Bearish reversals: Stochastic RSI >80, price near upper Bollinger Band (z-score > 2), or strong resistance with rising ask volume and price rejection.

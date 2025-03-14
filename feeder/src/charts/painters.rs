@@ -1,10 +1,12 @@
+use super::candle::*;
+use super::helpers::{kline_to_m4rs_candlestick, parse_kline_time};
 use crate::charts::helpers::{get_visible_range_and_data, parse_timeframe_duration};
 use ab_glyph::ScaleFont;
 use ab_glyph::{Font, PxScale};
 use chrono::DateTime;
 use chrono_tz::Tz;
 use common::numbers::{convert_grouped_data, group_by_fractional_part_f32, FractionalPart};
-use common::{Kline, OrderBook};
+use common::{Kline, LongShortSignal, OrderBook};
 use image::{ImageBuffer, Rgb};
 use imageproc::drawing::{draw_filled_rect_mut, draw_line_segment_mut, draw_text_mut, text_size};
 use imageproc::rect::Rect;
@@ -15,9 +17,6 @@ use plotters::style::full_palette::{GREEN_100, GREEN_900, RED_100, RED_900};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::error::Error;
-
-use super::candle::*;
-use super::helpers::{kline_to_m4rs_candlestick, parse_kline_time};
 
 const B_RED: RGBColor = RGBColor(245, 71, 95);
 const B_GREEN: RGBColor = RGBColor(17, 203, 129);
@@ -995,68 +994,55 @@ pub fn draw_point_on_candle(
         Cartesian2d<RangedDateTime<DateTime<Tz>>, RangedCoordf32>,
     >,
     timezone: &Tz,
-    long_signals: &[(i64, i64, f32, f32)], // (entry_time, target_time, entry_price, target_price)
-    short_signals: &[(i64, i64, f32, f32)], // (entry_time, target_time, entry_price, target_price)
+    signals: &Vec<LongShortSignal>,
 ) -> Result<(), Box<dyn Error>> {
     // Draw long signals (green)
     let long_circle_style = ShapeStyle::from(&GREEN).filled();
     let long_line_style = ShapeStyle::from(&GREEN).stroke_width(2);
-    for &(entry_time, target_time, entry_price, target_price) in long_signals {
-        let entry_dt = parse_kline_time(entry_time, timezone);
-        let target_dt = parse_kline_time(target_time, timezone);
+
+    let short_circle_style = ShapeStyle::from(&GREEN).filled();
+    let short_line_style = ShapeStyle::from(&GREEN).stroke_width(2);
+
+    for signal in signals {
+        let entry_dt = parse_kline_time(signal.entry_time, timezone);
+        let target_dt = parse_kline_time(signal.target_time, timezone);
 
         // Draw circle at the entry point
         chart.draw_series(std::iter::once(Circle::new(
-            (entry_dt, entry_price),
+            (entry_dt, signal.entry_price as f32),
             5, // Radius of 5 pixels
             long_circle_style,
         )))?;
 
         // Draw circle at the target point
         chart.draw_series(std::iter::once(Circle::new(
-            (target_dt, target_price),
+            (target_dt, signal.target_price as f32),
             5, // Radius of 5 pixels
-            long_circle_style,
+            if signal.direction == "long" {
+                long_circle_style
+            } else {
+                short_circle_style
+            },
         )))?;
 
         // Draw line connecting entry and target points
         chart.draw_series(LineSeries::new(
-            vec![(entry_dt, entry_price), (target_dt, target_price)],
-            long_line_style,
-        ))?;
-    }
-
-    // Draw short signals (red)
-    let short_circle_style = ShapeStyle::from(&RED).filled();
-    let short_line_style = ShapeStyle::from(&RED).stroke_width(2);
-    for &(entry_time, target_time, entry_price, target_price) in short_signals {
-        let entry_dt = parse_kline_time(entry_time, timezone);
-        let target_dt = parse_kline_time(target_time, timezone);
-
-        // Draw circle at the entry point
-        chart.draw_series(std::iter::once(Circle::new(
-            (entry_dt, entry_price),
-            5, // Radius of 5 pixels
-            short_circle_style,
-        )))?;
-
-        // Draw circle at the target point
-        chart.draw_series(std::iter::once(Circle::new(
-            (target_dt, target_price),
-            5, // Radius of 5 pixels
-            short_circle_style,
-        )))?;
-
-        // Draw line connecting entry and target points
-        chart.draw_series(LineSeries::new(
-            vec![(entry_dt, entry_price), (target_dt, target_price)],
-            short_line_style,
+            vec![
+                (entry_dt, signal.entry_price as f32),
+                (target_dt, signal.target_price as f32),
+            ],
+            if signal.direction == "long" {
+                long_line_style
+            } else {
+                short_line_style
+            },
         ))?;
     }
 
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments, unused)]
 pub fn draw_order_book(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     font: &impl Font,

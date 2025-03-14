@@ -68,9 +68,8 @@ impl GraphPredictionOutputWithTimeStampBuilder {
         let timestamp = now_utc.timestamp_millis();
 
         RefinedGraphPredictionOutput {
-            timestamp,
-            current_datetime: iso_utc,
-            current_datetime_local: iso_local,
+            current_time: timestamp,
+            current_datetime: iso_local,
             signals,
             klines,
             model_name,
@@ -114,9 +113,8 @@ pub enum KlineValue {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct RefinedGraphPredictionOutput {
-    pub timestamp: i64,
+    pub current_time: i64,
     pub current_datetime: String,
-    pub current_datetime_local: String,
     pub signals: Vec<LongShortSignal>,
     pub klines: Vec<Vec<KlineValue>>,
     // Stats
@@ -127,9 +125,8 @@ pub struct RefinedGraphPredictionOutput {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct RefinedGraphPredictionResponse {
-    pub timestamp: i64,
+    pub current_time: i64,
     pub current_datetime: String,
-    pub current_datetime_local: String,
     pub signals: Vec<LongShortSignal>,
     pub klines: Vec<Kline>,
     // Stats
@@ -148,9 +145,8 @@ pub struct SuggestionOutput {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct RefinedSuggestionOutput {
-    pub timestamp: i64,
+    pub current_time: i64,
     pub current_datetime: String,
-    pub current_datetime_local: String,
     pub summary: Summary,
     pub signals: Vec<LongShortSignal>,
     pub positions: Option<Vec<PredictedPosition>>,
@@ -193,9 +189,8 @@ impl SuggestionOutputWithTimeStampBuilder {
         let timestamp = now_utc.timestamp_millis();
 
         RefinedSuggestionOutput {
-            timestamp,
-            current_datetime: iso_utc,
-            current_datetime_local: iso_local,
+            current_time: timestamp,
+            current_datetime: iso_local,
             summary: self.gemini_response.summary,
             signals,
             positions,
@@ -248,8 +243,8 @@ pub struct PredictedLongShortSignal {
     pub target_price: f64,
     pub stop_loss: f64,
     pub timeframe: String,
-    pub entry_datetime: String,
-    pub target_datetime: String,
+    pub entry_time: i64,
+    pub target_time: i64,
     pub rationale: String,
 }
 
@@ -264,25 +259,25 @@ pub struct LongShortSignal {
     pub target_price: f64,
     pub stop_loss: f64,
     pub timeframe: String,
-    pub entry_datetime: String,
-    pub target_datetime: String,
-    pub entry_datetime_local: String,
-    pub target_datetime_local: String,
+    pub entry_time: i64,
+    pub target_time: i64,
+    pub entry_time_local: String,
+    pub target_time_local: String,
     pub rationale: String,
 }
 
 impl From<PredictedLongShortSignal> for LongShortSignal {
     fn from(signal: PredictedLongShortSignal) -> Self {
         println!("{signal:#?}");
-        let utc_datetime = DateTime::parse_from_rfc3339(&signal.target_datetime)
+        let utc_datetime = DateTime::from_timestamp(signal.target_time / 1000, 0)
             .expect("Failed to parse datetime");
         let tokyo_datetime: DateTime<Tz> = utc_datetime.with_timezone(&Tokyo);
-        let target_datetime_local = tokyo_datetime.to_rfc3339();
+        let target_time_local = tokyo_datetime.to_rfc3339();
 
-        let utc_datetime =
-            DateTime::parse_from_rfc3339(&signal.entry_datetime).expect("Failed to parse datetime");
+        let utc_datetime = DateTime::from_timestamp(signal.entry_time / 1000, 0)
+            .expect("Failed to parse datetime");
         let tokyo_datetime: DateTime<Tz> = utc_datetime.with_timezone(&Tokyo);
-        let entry_datetime_local = tokyo_datetime.to_rfc3339();
+        let entry_time_local = tokyo_datetime.to_rfc3339();
 
         LongShortSignal {
             direction: signal.direction,
@@ -293,10 +288,10 @@ impl From<PredictedLongShortSignal> for LongShortSignal {
             target_price: signal.target_price,
             stop_loss: signal.stop_loss,
             timeframe: signal.timeframe,
-            target_datetime: signal.target_datetime,
-            entry_datetime: signal.entry_datetime,
-            entry_datetime_local,
-            target_datetime_local,
+            target_time: signal.target_time,
+            entry_time: signal.entry_time,
+            entry_time_local,
+            target_time_local,
             rationale: signal.rationale,
         }
     }

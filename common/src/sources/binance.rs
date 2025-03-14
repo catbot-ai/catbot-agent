@@ -14,14 +14,14 @@ pub async fn fetch_binance_kline_data<T>(
 where
     T: serde::de::DeserializeOwned + Send + std::convert::From<Kline>,
 {
-    let pair_symbol = pair_symbol.replace("_", "");
+    let binance_pair_symbol = pair_symbol.replace("_", "");
     let client = Client::new();
     // let current_time = Utc::now().timestamp_millis();
     // https://adversely-amazing-wildcat.edgecompute.app/?url=https://data-api.binance.vision/api/v3/uiKlines?limit=1&symbol=SOLUSDT&interval=1s
 
     let url = format!(
         "https://adversely-amazing-wildcat.edgecompute.app/?url={BINANCE_API_URL}/uiKlines?limit={}&symbol={}&interval={}",
-        limit, pair_symbol, interval
+        limit, binance_pair_symbol, interval
     );
 
     println!("Fetching data from: {}", url);
@@ -47,13 +47,13 @@ where
 }
 
 pub async fn fetch_orderbook_depth(pair_symbol: &str, limit: i32) -> Result<OrderBook> {
-    let pair_symbol = pair_symbol.replace("_", "");
-    println!("fetch_orderbook_depth: {}", pair_symbol);
+    let binance_pair_symbol = pair_symbol.replace("_", "");
+    println!("fetch_orderbook_depth: {}", binance_pair_symbol);
     let client = Client::new();
     // https://adversely-amazing-wildcat.edgecompute.app/?url=https://api.binance.com/api/v3/depth?symbol=SOLUSDT&limit=1
     let url = format!(
         "https://adversely-amazing-wildcat.edgecompute.app/?url={BINANCE_API_URL}/depth?symbol={}&limit={}",
-        pair_symbol, limit
+        binance_pair_symbol, limit
     );
     let response = client.get(&url).send().await?;
     let orderbook_data: OrderBook = response.json().await?;

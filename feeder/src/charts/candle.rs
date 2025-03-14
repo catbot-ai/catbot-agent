@@ -5,6 +5,7 @@ use ab_glyph::FontArc;
 use ab_glyph::PxScale;
 use chrono_tz::Tz;
 use common::Kline;
+use common::LongShortSignal;
 use common::OrderBook;
 use image::{ImageBuffer, Rgb};
 use plotters::prelude::*;
@@ -58,8 +59,7 @@ pub struct Chart {
     pub bollinger_enabled: bool,
     pub volume_enabled: bool,
     pub stoch_rsi_enabled: bool,
-    pub long_signals: Vec<(i64, i64, f32, f32)>, // (entry_time, target_time, entry_price, target_price)
-    pub short_signals: Vec<(i64, i64, f32, f32)>, // (entry_time, target_time, entry_price, target_price)
+    pub signals: Vec<LongShortSignal>,
 }
 
 impl Chart {
@@ -181,14 +181,8 @@ impl Chart {
     }
 
     #[allow(dead_code)]
-    pub fn with_long_signals(mut self, signals: Vec<(i64, i64, f32, f32)>) -> Self {
-        self.long_signals = signals;
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn with_short_signals(mut self, signals: Vec<(i64, i64, f32, f32)>) -> Self {
-        self.short_signals = signals;
+    pub fn with_signals(mut self, signals: Vec<LongShortSignal>) -> Self {
+        self.signals = signals;
         self
     }
 
@@ -275,12 +269,7 @@ impl Chart {
                 .margin_right(margin_right)
                 .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
 
-            draw_point_on_candle(
-                &mut top_chart,
-                timezone,
-                &self.long_signals,
-                &self.short_signals,
-            )?;
+            draw_point_on_candle(&mut top_chart, timezone, &self.signals)?;
         } // `root` goes out of scope here, ending the borrow of `buffer`
 
         // Create imgbuf after root is dropped
@@ -370,99 +359,127 @@ mod test {
     use common::RefinedGraphPredictionResponse;
 
     #[tokio::test]
-    async fn entry_point() {
-        let binance_pair_symbol = "SOLUSDT";
-        let timeframe = "1h";
-        let font_data = include_bytes!("../../RobotoMono-Regular.ttf").to_vec();
+async fn entry_point() {
+    let binance_pair_symbol = "SOLUSDT";
+    let timeframe = "1h";
+    let font_data = include_bytes!("../../RobotoMono-Regular.ttf").to_vec();
 
-        let limit = 24 * 10; // 240 candles, enough for iteration
-        let candle_data = fetch_binance_kline_data::<Kline>(binance_pair_symbol, timeframe, limit)
-            .await
-            .unwrap();
+    let limit = 24 * 10; // 240 candles, enough for iteration
+    let candle_data = fetch_binance_kline_data::<Kline>(binance_pair_symbol, timeframe, limit)
+        .await
+        .unwrap();
 
-        let orderbook = fetch_orderbook_depth(binance_pair_symbol, 1000)
-            .await
-            .unwrap();
+    let orderbook = fetch_orderbook_depth(binance_pair_symbol, 1000)
+        .await
+        .unwrap();
 
-        // Generate mock signals based on fixed candle ranges
-        let mut long_signals = Vec::new();
-        let mut short_signals = Vec::new();
+    // Generate mock signals based on fixed candle ranges
+    let mut signals = Vec::new();
 
-        if candle_data.len() >= 31 {
-            // Long signal: entry at last - 10, target at last
-            let last_candle = &candle_data[candle_data.len() - 1];
-            let last_minus_10_candle = &candle_data[candle_data.len() - 11]; // last - 10
+    if candle_data.len() >= 31 {
+        // Long signal: entry at last - 10, target at last
+        let last_candle = &candle_data[candle_data.len() - 1];
+        let last_minus_10_candle = &candle_data[candle_data.len() - 11]; // last - 10
 
-            let long_entry_time = last_minus_10_candle.open_time;
-            let long_entry_price = last_minus_10_candle.close_price.parse::<f32>().unwrap();
-            let long_target_time = last_candle.open_time;
-            let long_target_price = last_candle.close_price.parse::<f32>().unwrap();
+        let long_entry_time = last_minus_10_candle.open_time;
+        let long_entry_price = last_minus_10_candle.close_price.parse::<f64>().unwrap();
+        let long_target_time = last_candle.open_time;
+        let long_target_price = last_candle.close_price.parse::<f64>().unwrap();
 
-            long_signals.push((
-                long_entry_time,
-                long_target_time,
-                long_entry_price,
-                long_target_price,
-            ));
+        signals.push(LongShortSignal {
+            direction: "long".to_string(),
+            symbol: binance_pair_symbol.to_string(),
+            confidence: 0.85, // Mock confidence value
+            current_price: long_target_price, // Using target as current for mock
+            entry_price: long_entry_price  ,
+            target_price: long_target_price  ,
+            stop_loss: long_entry_price * 0.95, // 5% below entry as mock stop loss
+            timeframe: timeframe.to_string(),
+            entry_time: long_entry_time,
+            target_time: long_target_time,
+            entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(long_entry_time / 1000, 0)
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
+            target_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(long_target_time / 1000, 0)
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
+            rationale: "Mock long signal based on price movement".to_string(),
+        });
 
-            // Short signal: entry at last - 30, target at last - 20
-            let last_minus_30_candle = &candle_data[candle_data.len() - 31]; // last - 30
-            let last_minus_20_candle = &candle_data[candle_data.len() - 21]; // last - 20
+        // Short signal: entry at last - 30, target at last - 20
+        let last_minus_30_candle = &candle_data[candle_data.len() - 31]; // last - 30
+        let last_minus_20_candle = &candle_data[candle_data.len() - 21]; // last - 20
 
-            let short_entry_time = last_minus_30_candle.open_time;
-            let short_entry_price = last_minus_30_candle.close_price.parse::<f32>().unwrap();
-            let short_target_time = last_minus_20_candle.open_time;
-            let short_target_price = last_minus_20_candle.close_price.parse::<f32>().unwrap();
+        let short_entry_time = last_minus_30_candle.open_time;
+        let short_entry_price = last_minus_30_candle.close_price.parse::<f64>().unwrap();
+        let short_target_time = last_minus_20_candle.open_time;
+        let short_target_price = last_minus_20_candle.close_price.parse::<f64>().unwrap();
 
-            short_signals.push((
-                short_entry_time,
-                short_target_time,
-                short_entry_price,
-                short_target_price,
-            ));
+        signals.push(LongShortSignal {
+            direction: "short".to_string(),
+            symbol: binance_pair_symbol.to_string(),
+            confidence: 0.82, // Mock confidence value
+            current_price: short_target_price, // Using target as current for mock
+            entry_price: short_entry_price  ,
+            target_price: short_target_price  ,
+            stop_loss: short_entry_price * 1.05, // 5% above entry as mock stop loss
+            timeframe: timeframe.to_string(),
+            entry_time: short_entry_time,
+            target_time: short_target_time,
+            entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(short_entry_time / 1000, 0)
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
+            target_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(short_target_time / 1000, 0)
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
+            rationale: "Mock short signal based on price movement".to_string(),
+        });
 
-            // Debug prints to verify
+        // Debug prints to verify
+        for signal in &signals {
             println!(
-                "Long Signal: Entry Time: {}, Entry Price: {}, Target Time: {}, Target Price: {}",
-                long_entry_time, long_entry_price, long_target_time, long_target_price
-            );
-            println!(
-                "Short Signal: Entry Time: {}, Entry Price: {}, Target Time: {}, Target Price: {}",
-                short_entry_time, short_entry_price, short_target_time, short_target_price
-            );
-        } else {
-            println!(
-                "Not enough candles to generate mock signals. Need at least 31 candles, got {}",
-                candle_data.len()
+                "{} Signal: Entry Time: {}, Entry Price: {}, Target Time: {}, Target Price: {}, Stop Loss: {}",
+                signal.direction, signal.entry_time_local, signal.entry_price, 
+                signal.target_time_local, signal.target_price, signal.stop_loss
             );
         }
-
-        // Get the mock prediction
-        let predicted_klines_string = get_mock_graph_prediction().await;
-        let predicted_klines = serde_json::from_str::<RefinedGraphPredictionResponse>(
-            &predicted_klines_string.clone(),
-        )
-        .unwrap()
-        .klines;
-
-        println!("{predicted_klines:#?}");
-
-        let png = Chart::new(timeframe, Tokyo)
-            .with_candle_width(6)
-            .with_past_candle(candle_data)
-            .with_predicted_candle(predicted_klines)
-            .with_title(binance_pair_symbol)
-            .with_font_data(font_data)
-            .with_volume()
-            .with_macd()
-            .with_stoch_rsi()
-            .with_orderbook(orderbook)
-            .with_bollinger_band()
-            .with_long_signals(long_signals)
-            .with_short_signals(short_signals)
-            .build()
-            .unwrap();
-
-        std::fs::write("test.png", png).unwrap();
+    } else {
+        println!(
+            "Not enough candles to generate mock signals. Need at least 31 candles, got {}",
+            candle_data.len()
+        );
     }
+
+    // Get the mock prediction
+    let predicted_klines_string = get_mock_graph_prediction().await;
+    let predicted_klines = serde_json::from_str::<RefinedGraphPredictionResponse>(
+        &predicted_klines_string.clone(),
+    )
+    .unwrap()
+    .klines;
+
+    println!("{predicted_klines:#?}");
+
+    let png = Chart::new(timeframe, Tokyo)
+        .with_candle_width(6)
+        .with_past_candle(candle_data)
+        // So sad this didn't work as expected due to poor results
+        // .with_predicted_candle(predicted_klines)
+        .with_title(binance_pair_symbol)
+        .with_font_data(font_data)
+        .with_volume()
+        .with_macd()
+        .with_stoch_rsi()
+        .with_orderbook(orderbook)
+        .with_bollinger_band()
+        .with_signals(signals)
+        .build()
+        .unwrap();
+
+    std::fs::write("test.png", png).unwrap();
+}
 }

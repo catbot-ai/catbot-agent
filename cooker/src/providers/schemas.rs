@@ -59,7 +59,7 @@ pub fn get_perps_position_schema(
         if !positions.is_empty() {
             positions_string.push_str(&positions.join(","));
         }
-        positions_string.push_str("]");
+        positions_string.push(']');
         positions_string
     } else {
         String::from(
@@ -103,8 +103,8 @@ pub fn get_schema_instruction(
         "target_price": number, // >2.5% above entry, beyond first resistance or support
         "stop_loss": number, // The value should less than profit.
         "timeframe": "string", // Time in minutes or hours e.g. 5m,15m,1h,2h,3h,...
-        "entry_datetime": "string", // ISO time prediction when to make a trade for this signal, Can be now or in the future date time.
-        "target_datetime": "string", // ISO time prediction when to take profit.
+        "entry_time": number, // Timestamp prediction when to make a trade for this signal, Can be now or in the future date time.
+        "target_time": number, // Timestamp prediction when to take profit.
         "rationale": "string" // Rationale about this signal e.g., "4h momentum up, bids outpace asks", "1h rejection at xxx, high ask volume"
     }}]{maybe_position_schema}
 }}
@@ -121,8 +121,8 @@ pub fn get_schema_instruction(
         "target_price": number, // >2.5% above entry, beyond first resistance or support
         "stop_loss": number, // The value should less than profit.
         "timeframe": "string", // Time in minutes or hours e.g. 5m,15m,1h,2h,3h,...
-        "entry_datetime": "string", // ISO time prediction when to make a trade for this signal, Can be now or in the future date time.
-        "target_datetime": "string", // ISO time prediction when to take profit.
+        "entry_time": number, // Timestamp prediction when to make a trade for this signal, Can be now or in the future date time.
+        "target_time": number, // Timestamp prediction when to take profit.
         "rationale": "string" // Rationale about this signal e.g., "4h momentum up, bids outpace asks", "1h rejection at xxx, high ask volume"
     }}],
     "klines": [

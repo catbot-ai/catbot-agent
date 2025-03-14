@@ -31,8 +31,11 @@ pub fn build_prompt<T>(
     let current_timestamp = now_utc.timestamp_millis();
 
     // TODO: Better handle binance_pair_symbol
-    let pair_symbol = pair_symbol.replace("_", "");
-    let symbol = pair_symbol.split("USDT").next().unwrap_or(&pair_symbol);
+    let binance_pair_symbol = pair_symbol.replace("_", "");
+    let symbol = binance_pair_symbol
+        .split("USDT")
+        .next()
+        .unwrap_or(&binance_pair_symbol);
 
     let (grouped_one_bids, grouped_one_asks) =
         group_by_fractional_part(&orderbook, FractionalPart::One);
