@@ -94,14 +94,14 @@ pub fn draw_chart(
         |is_bullish, is_predicted| {
             let fill_color: RGBColor = if is_bullish {
                 if is_predicted {
-                    B_GREEN
-                } else {
                     B_GREEN_DIM
+                } else {
+                    B_GREEN
                 }
             } else if is_predicted {
-                B_RED
-            } else {
                 B_RED_DIM
+            } else {
+                B_RED
             };
 
             fill_color.into()
@@ -803,14 +803,14 @@ pub fn draw_volume_bars(
             let is_predicted = last_past_time > k.open_time;
             let fill_color: RGBColor = if is_bullish {
                 if is_predicted {
-                    B_GREEN
-                } else {
                     B_GREEN_DIM
+                } else {
+                    B_GREEN
                 }
             } else if is_predicted {
-                B_RED
-            } else {
                 B_RED_DIM
+            } else {
+                B_RED
             };
             let fill_style = ShapeStyle {
                 color: fill_color.into(),
@@ -914,7 +914,7 @@ pub fn draw_macd(
 
         for (t, _, _, h) in macd_lines.iter() {
             let is_lower = previous_h.map_or(false, |prev| *h < prev);
-            let is_predicted = last_past_time < t.timestamp_millis();
+            let is_predicted = last_past_time > t.timestamp_millis();
             let fill_color = if is_predicted {
                 if *h > 0.0 {
                     if is_lower {

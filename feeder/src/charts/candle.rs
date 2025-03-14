@@ -195,14 +195,18 @@ impl Chart {
 
         // Combine past_candle_data and predicted_candle into all_candle_data
         let mut all_candle_data = self.past_candle_data.clone().unwrap();
-        let last_past_time = all_candle_data
-            .last()
-            .map(|kline| kline.open_time)
-            .ok_or("No past candle data available")?;
+        let last_past_time = 
 
         if let Some(predicted_candles) = self.predicted_candle.clone() {
             all_candle_data.extend(predicted_candles);
-        }
+
+            all_candle_data
+            .last()
+            .map(|kline| kline.open_time)
+            .ok_or("No past candle data available")?
+        } else {
+            0i64
+        };
 
         let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
 
