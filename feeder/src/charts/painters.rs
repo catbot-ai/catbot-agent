@@ -987,7 +987,7 @@ pub fn draw_stoch_rsi_detail(
     Ok(())
 }
 
-pub fn draw_point_on_candle(
+pub fn draw_signals(
     chart: &mut ChartContext<
         '_,
         BitMapBackend<'_>,

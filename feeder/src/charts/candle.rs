@@ -269,7 +269,7 @@ impl Chart {
                 .margin_right(margin_right)
                 .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
 
-            draw_point_on_candle(&mut top_chart, timezone, &self.signals)?;
+            draw_signals(&mut top_chart, timezone, &self.signals)?;
         } // `root` goes out of scope here, ending the borrow of `buffer`
 
         // Create imgbuf after root is dropped
