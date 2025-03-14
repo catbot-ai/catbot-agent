@@ -175,7 +175,7 @@ impl Chart {
     }
 
     #[allow(dead_code)]
-    pub fn with_signals(mut self, signals: Vec<LongShortSignal>) -> Self {
+    pub fn with_past_signals(mut self, signals: Vec<LongShortSignal>) -> Self {
         self.signals = signals;
         self
     }
@@ -271,7 +271,7 @@ impl Chart {
                 .margin_right(margin_right)
                 .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
 
-            draw_signals(&mut top_chart, timezone, &self.signals)?;
+            draw_past_signals(&mut top_chart, timezone, &self.signals)?;
         } // `root` goes out of scope here, ending the borrow of `buffer`
  
         // Create imgbuf after root is dropped
@@ -377,6 +377,9 @@ async fn entry_point() {
         .await
         .unwrap();
 
+    // TODO
+    let past_signals = Vec::new();
+
     // Generate mock signals based on fixed candle ranges
     let mut signals = Vec::new();
 
@@ -479,7 +482,7 @@ async fn entry_point() {
         .with_stoch_rsi()
         .with_orderbook(orderbook)
         .with_bollinger_band()
-        // .with_signals(signals)
+        .with_past_signals(past_signals)
         .build()
         .unwrap();
 

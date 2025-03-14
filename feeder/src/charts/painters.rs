@@ -1042,7 +1042,7 @@ pub fn draw_stoch_rsi_detail(
     Ok(())
 }
 
-pub fn draw_signals(
+pub fn draw_past_signals(
     chart: &mut ChartContext<
         '_,
         BitMapBackend<'_>,
