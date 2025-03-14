@@ -3,7 +3,7 @@ use super::helpers::{kline_to_m4rs_candlestick, parse_kline_time};
 use crate::charts::helpers::{get_visible_range_and_data, parse_timeframe_duration};
 use ab_glyph::ScaleFont;
 use ab_glyph::{Font, PxScale};
-use chrono::DateTime;
+use chrono::{DateTime, TimeZone};
 use chrono_tz::Tz;
 use common::numbers::{convert_grouped_data, group_by_fractional_part_f32, FractionalPart};
 use common::{Kline, LongShortSignal, OrderBook};
@@ -73,10 +73,10 @@ pub fn draw_chart(
     first_time: DateTime<Tz>,
     last_time: DateTime<Tz>,
     margin_right: u32,
-    candle_width: u32,
     final_width: u32,
     last_past_time: i64,
-) -> Result<(), Box<dyn Error>> {
+    timeframe: &str,
+) -> Result<(u32), Box<dyn Error>> {
     root.fill(&B_BLACK)?;
 
     let (top, bottom) = root.split_vertically((50).percent());
@@ -84,6 +84,8 @@ pub fn draw_chart(
     let mut top_chart = ChartBuilder::on(&top)
         .margin_right(margin_right)
         .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
+
+    let candle_width = calculate_candle_width(&top_chart, timeframe);
 
     draw_candlesticks(
         &mut top_chart,
@@ -104,8 +106,8 @@ pub fn draw_chart(
 
             fill_color.into()
         },
-        candle_width,
         last_past_time,
+        candle_width,
     )?;
 
     if chart.bollinger_enabled {
@@ -145,6 +147,9 @@ pub fn draw_chart(
         }
 
         let mut area_iter = areas.into_iter().enumerate();
+
+        println!("candle_width:{candle_width}");
+        println!("final_width:{final_width}");
 
         if chart.volume_enabled {
             let (_idx, volume_area) = area_iter.next().unwrap();
@@ -208,8 +213,12 @@ pub fn draw_chart(
 
         if chart.stoch_rsi_enabled {
             let (_idx, stoch_rsi_area) = area_iter.next().unwrap();
-            let (first_visible_time, last_visible_time, visible_data) =
-                get_visible_range_and_data(all_candle_data, timezone, candle_width, final_width)?;
+            let (first_visible_time, last_visible_time, visible_data) = get_visible_range_and_data(
+                all_candle_data,
+                timezone,
+                candle_width,
+                final_width * 2,
+            )?;
             let mut stoch_rsi_chart = ChartBuilder::on(&stoch_rsi_area)
                 .margin_right(margin_right)
                 .build_cartesian_2d(first_visible_time..last_visible_time, 0.0f32..100.0f32)?;
@@ -265,7 +274,7 @@ pub fn draw_chart(
         }
     }
 
-    Ok(())
+    Ok(candle_width)
 }
 
 #[allow(clippy::too_many_arguments, unused)]
@@ -569,6 +578,31 @@ pub fn draw_label<F: Font>(
 }
 
 // Drawing helpers
+pub fn calculate_candle_width<Tz: TimeZone>(
+    chart: &ChartContext<
+        impl DrawingBackend,
+        Cartesian2d<RangedDateTime<DateTime<Tz>>, RangedCoordf32>,
+    >,
+    timeframe: &str,
+) -> u32 {
+    // Get drawing area dimensions and x-axis range
+    let drawing_area = chart.plotting_area();
+    let pixel_width = drawing_area.dim_in_pixel().0 as f32; // Total width in pixels
+    let x_range = chart.plotting_area().get_x_range();
+    let total_time_ms = (x_range.end.timestamp_millis() - x_range.start.timestamp_millis()) as f32;
+
+    // Calculate the number of candles that fit in the time range
+    let timeframe_ms = parse_timeframe_duration(timeframe).num_milliseconds() as f32;
+    let num_candles = (total_time_ms / timeframe_ms).ceil() as usize;
+
+    // Estimate candle width in pixels: distribute total pixel width across candles
+    if num_candles > 0 {
+        (pixel_width / num_candles as f32).clamp(1.0, 20.0) as u32
+    } else {
+        6u32 // Fallback for empty data
+    }
+}
+
 pub fn draw_candlesticks<F>(
     chart: &mut ChartContext<
         '_,
@@ -578,8 +612,8 @@ pub fn draw_candlesticks<F>(
     candle_data: &[Kline],
     timezone: &Tz,
     color_selector: F,
-    candle_width: u32,
     last_past_time: i64,
+    candle_width: u32,
 ) -> Result<(), Box<dyn Error>>
 where
     F: Fn(bool, bool) -> RGBAColor,
@@ -593,6 +627,7 @@ where
         let is_bullish = close >= open;
         let is_predicted = last_past_time > k.open_time;
         let color = color_selector(is_bullish, is_predicted);
+
         // Use candle_width for the width of each candlestick
         CandleStick::new(
             time,

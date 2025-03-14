@@ -1,4 +1,5 @@
 use super::helpers::parse_kline_time;
+use super::helpers::parse_timeframe_duration;
 use super::painters::*;
 use crate::charts::png::encode_png;
 use ab_glyph::FontArc;
@@ -47,7 +48,6 @@ pub struct Chart {
     pub predicted_candle: Option<Vec<Kline>>,
     pub metadata: ChartMetaData,
     pub font_data: Option<Vec<u8>>,
-    pub candle_width: u32,
     pub points: Vec<(f32, f32)>,
     pub orderbook_data: Option<OrderBook>,
     pub point_style: Option<PointStyle>,
@@ -87,12 +87,6 @@ impl Chart {
     }
     pub fn with_font_data(mut self, font_data: Vec<u8>) -> Self {
         self.font_data = Some(font_data);
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn with_candle_width(mut self, width: u32) -> Self {
-        self.candle_width = width;
         self
     }
 
@@ -213,8 +207,7 @@ impl Chart {
         let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
 
         let total_candles = all_candle_data.len();
-        let candle_width = self.candle_width;
-        let total_width = total_candles as u32 * candle_width;
+        let total_width = total_candles as u32 * 10;
         let root_width = 1024;
         let root_height = 1024;
 
@@ -249,7 +242,8 @@ impl Chart {
         // Scope for drawing operations
         {
             let mut root = BitMapBackend::with_buffer(&mut buffer, bar).into_drawing_area();
-            draw_chart(
+
+             draw_chart(
                 &mut root,
                 &all_candle_data,
                 past_data,
@@ -260,9 +254,9 @@ impl Chart {
                 first_time,
                 last_time,
                 margin_right,
-                candle_width,
-                root_width,
+                plot_width,
                 last_past_time,
+                &self.timeframe,
             )?;
 
             let mut top_chart = ChartBuilder::on(&root.split_vertically((50).percent()).0)
@@ -358,7 +352,7 @@ mod test {
     use common::cooker::get_mock_graph_prediction;
     use common::RefinedGraphPredictionResponse;
 
-    #[tokio::test]
+#[tokio::test]
 async fn entry_point() {
     let binance_pair_symbol = "SOLUSDT";
     let timeframe = "1h";
@@ -465,7 +459,6 @@ async fn entry_point() {
     println!("{predicted_klines:#?}");
 
     let png = Chart::new(timeframe, Tokyo)
-        .with_candle_width(6)
         .with_past_candle(candle_data)
         // So sad this didn't work as expected due to poor results
         // .with_predicted_candle(predicted_klines)
@@ -476,7 +469,7 @@ async fn entry_point() {
         .with_stoch_rsi()
         .with_orderbook(orderbook)
         .with_bollinger_band()
-        .with_signals(signals)
+        // .with_signals(signals)
         .build()
         .unwrap();
 

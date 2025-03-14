@@ -88,7 +88,6 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
 
         // Get image
         let buffer_result = Chart::new(timeframe, Tokyo)
-            .with_candle_width(6)
             .with_past_candle(candle_data)
             // So sad this didn't work as expected due to poor results
             // .with_predicted_candle(predicted_klines)
