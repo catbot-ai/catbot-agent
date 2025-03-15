@@ -1389,21 +1389,35 @@ pub fn draw_signals(
         let h = price_bounding_rect.height() as f32;
         // let factor_y = (y / current_price as f32) as f32;
 
+        let entry_percent = ((signal.entry_price - current_price) / current_price) * 100.0;
+        let target_percent = ((signal.target_price - current_price) / current_price) * 100.0;
+        let stop_percent = ((signal.stop_loss - current_price) / current_price) * 100.0;
+
         // Mark position
         let stop_y = if signal.direction == "long" {
             y - 2.0 * h
         } else {
             y + 2.0 * h
         };
-        let entry_y = if signal.direction == "long" {
+        let stop_percent_y = if signal.direction == "long" {
             y - 3.0 * h
         } else {
             y + 3.0 * h
         };
-        let target_y = if signal.direction == "long" {
+        let entry_y = if signal.direction == "long" {
+            y - 4.0 * h
+        } else {
+            y + 4.0 * h
+        };
+        let target_percent_y = if signal.direction == "long" {
             y - 5.0 * h
         } else {
             y + 5.0 * h
+        };
+        let target_y = if signal.direction == "long" {
+            y - 6.0 * h
+        } else {
+            y + 6.0 * h
         };
 
         // Draw line
@@ -1436,6 +1450,23 @@ pub fn draw_signals(
             color,
         );
 
+        // stop_percent
+        let mut stop_percent = stop_percent;
+        if signal.direction == "short" {
+            stop_percent *= -1.0;
+        }
+        let prefix = if stop_percent > 0.0 { "+" } else { "" };
+        let _ = draw_label(
+            img,
+            font,
+            &format!("{}{:.2}%", prefix, stop_percent),
+            x + 1.0,
+            stop_percent_y,
+            label_scale,
+            color,
+            Rgb([BLACK.0, BLACK.1, BLACK.2]),
+        );
+
         // entry
         let _ = draw_label(
             img,
@@ -1450,6 +1481,23 @@ pub fn draw_signals(
             label_scale,
             Rgb([BLACK.0, BLACK.1, BLACK.2]),
             color,
+        );
+
+        // target_percent
+        let mut target_percent = target_percent;
+        if signal.direction == "short" {
+            target_percent *= -1.0;
+        }
+        let prefix = if target_percent > 0.0 { "+" } else { "" };
+        let _ = draw_label(
+            img,
+            font,
+            &format!("{}{:.2}%", prefix, target_percent),
+            x + 1.0,
+            target_percent_y,
+            label_scale,
+            color,
+            Rgb([BLACK.0, BLACK.1, BLACK.2]),
         );
 
         // target
