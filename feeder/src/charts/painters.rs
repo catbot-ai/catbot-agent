@@ -1159,7 +1159,7 @@ pub fn draw_order_book(
     let mut bids_asks_y_map = HashMap::new();
 
     // Position
-    let padding_right = 100.0;
+    let padding_right = 110.0;
     let parent_offset_x = parent_offset_x + padding_right;
     let price_rect_height = 20;
     let price_rect_height_half = price_rect_height / 2;
@@ -1199,7 +1199,7 @@ pub fn draw_order_book(
         - bar_height / 4
         - 1) as f32;
 
-    let max_bar_width = 64;
+    let max_bar_width = 50;
     let current_x = 32u32;
 
     let max_bid_volume = bid_data
@@ -1214,7 +1214,7 @@ pub fn draw_order_book(
     let max_volume_width = max_bid_volume.max(max_ask_volume) as i32;
 
     let max_rect_width = (max_volume_width as f32 / max_bar_width as f32) as i32;
-    let offset_x = parent_offset_x as u32 + current_x + 72u32;
+    let offset_x = parent_offset_x as u32 + current_x + 56u32;
 
     current_y += gap / 2;
 
@@ -1305,7 +1305,7 @@ pub fn draw_order_book(
             draw_label(
                 img,
                 font,
-                &format!("{:.2}", volume),
+                &format_short_number(*volume as i64).to_string(),
                 (current_x + offset_x as u32) as i32 as f32,
                 offset_y + current_y as f32,
                 ORDER_LABEL_SCALE,

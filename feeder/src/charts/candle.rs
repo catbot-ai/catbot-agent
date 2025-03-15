@@ -494,20 +494,20 @@ async fn entry_point() {
         let last_time = last_candle.open_time;
         let hour_ms = 3_600_000; // 1 hour in milliseconds
 
-        // Mock Long Signal: 5% profit from last candle, starting 1 hour after last candle
-        let long_entry_time = last_time + hour_ms; // 1 hour after last candle
+        // Mock Long Signal: unchanged from original
+        let long_entry_time = last_time + hour_ms;
         let long_entry_price = last_close_price - 1.0;
         let long_target_price = long_entry_price * 1.10;
-        let long_target_time = long_entry_time + hour_ms; // 1 hour after entry
+        let long_target_time = long_entry_time + hour_ms;
 
         signals.push(LongShortSignal {
             direction: "long".to_string(),
             symbol: binance_pair_symbol.to_string(),
             confidence: 0.9,
-            current_price: long_entry_price, // Current price at entry
+            current_price: long_entry_price,
             entry_price: long_entry_price,
             target_price: long_target_price,
-            stop_loss: long_entry_price * 0.97, // 3% below entry
+            stop_loss: long_entry_price * 0.97,
             timeframe: timeframe.to_string(),
             entry_time: long_entry_time,
             target_time: long_target_time,
@@ -522,11 +522,12 @@ async fn entry_point() {
             rationale: "Mock long signal expecting 5% upward movement".to_string(),
         });
 
-        // Mock Short Signal: Starts after long target, aiming for reversal to entry price
-        let short_entry_time = long_target_time; // Start at long signal's target time
-        let short_entry_price = long_target_price; // Entry at long's target
-        let short_target_price = long_entry_price; // Target back to original price (reversal)
-        let short_target_time = short_entry_time + hour_ms; // 1 hour after short entry
+        // Modified Mock Short Signal: 
+        // Entry at current_price - 1%, targeting 20% profit downward
+        let short_entry_time = long_target_time;
+        let short_entry_price = last_close_price * 0.99; // Current price - 1%
+        let short_target_price = short_entry_price * 0.80; // 20% profit (price decreases)
+        let short_target_time = short_entry_time + hour_ms;
 
         signals.push(LongShortSignal {
             direction: "short".to_string(),
@@ -547,7 +548,7 @@ async fn entry_point() {
                 .unwrap()
                 .with_timezone(&chrono_tz::Asia::Tokyo)
                 .to_string(),
-            rationale: "Mock short signal anticipating reversal after long target".to_string(),
+            rationale: "Mock short signal targeting 20% profit from 1% below current price".to_string(),
         });
 
         // Debug prints for mock signals
