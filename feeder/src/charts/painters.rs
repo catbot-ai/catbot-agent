@@ -134,7 +134,6 @@ pub fn draw_chart(
         .filter(|&&enabled| enabled)
         .count() as f32;
         let section_height_percent = (100.0 / num_indicators).round() as u32;
-        println!("section_height_percent: {:?}", section_height_percent);
 
         let mut remaining_area = bottom;
         let mut areas = Vec::new();
@@ -157,9 +156,6 @@ pub fn draw_chart(
         }
 
         let mut area_iter = areas.into_iter().enumerate();
-
-        println!("candle_width:{candle_width}");
-        println!("final_width:{final_width}");
 
         if chart.volume_enabled {
             let (_idx, volume_area) = area_iter.next().unwrap();
@@ -600,7 +596,6 @@ pub fn draw_hallow_label<F: Font>(
     font_color: Rgb<u8>,
     border_color: Rgb<u8>,
 ) -> anyhow::Result<()> {
-    println!("🔥 draw_hallow_label: {:#?} {:#?}", x, y);
     let font_metrics = font.as_scaled(scale);
     let (text_width, text_height) = text_size(scale, font, text);
     let padding = 2f32 * scale.x / text_height as f32;
@@ -1380,10 +1375,6 @@ pub fn draw_signals(
     price_bounding_rect: Rect,
 ) -> Result<(), Box<dyn Error>> {
     signals.iter().for_each(|signal| {
-        println!(
-            "🔥 entry_price: {:#?} | target_price: {:#?}",
-            signal.entry_price, signal.target_price
-        );
         let x = price_bounding_rect.left() as f32;
         let y = price_bounding_rect.top() as f32 + (AXIS_SCALE.y - ORDER_LABEL_SCALE.y) / 2.0;
         let h = price_bounding_rect.height() as f32;

@@ -569,7 +569,7 @@ async fn entry_point() {
     .unwrap()
     .klines;
 
-    println!("{predicted_klines:#?}");
+    // println!("{predicted_klines:#?}");
 
     let png = Chart::new(timeframe, Tokyo)
         .with_past_candle(candle_data)
