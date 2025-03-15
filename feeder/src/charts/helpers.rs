@@ -62,3 +62,18 @@ pub fn get_visible_range_and_data(
 
     Ok((first_visible_time, last_visible_time, visible_data))
 }
+
+pub fn format_short_number(num: i64) -> String {
+    if num < 1000 {
+        return num.to_string();
+    }
+
+    let float_num = num as f64;
+    if num < 1_000_000 {
+        let result = float_num / 1000.0;
+        format!("{:.2}K", result)
+    } else {
+        let result = float_num / 1_000_000.0;
+        format!("{:.2}M", result)
+    }
+}

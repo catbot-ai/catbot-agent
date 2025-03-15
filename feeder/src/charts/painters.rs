@@ -1,5 +1,5 @@
 use super::candle::*;
-use super::helpers::{kline_to_m4rs_candlestick, parse_kline_time};
+use super::helpers::{format_short_number, kline_to_m4rs_candlestick, parse_kline_time};
 use crate::charts::helpers::{get_visible_range_and_data, parse_timeframe_duration};
 use ab_glyph::ScaleFont;
 use ab_glyph::{Font, PxScale};
@@ -8,12 +8,15 @@ use chrono_tz::Tz;
 use common::numbers::{convert_grouped_data, group_by_fractional_part_f32, FractionalPart};
 use common::{Kline, LongShortSignal, OrderBook};
 use image::{ImageBuffer, Rgb};
-use imageproc::drawing::{draw_filled_rect_mut, draw_line_segment_mut, draw_text_mut, text_size};
+use imageproc::drawing::{
+    draw_filled_rect_mut, draw_hollow_rect_mut, draw_line_segment_mut, draw_text_mut, text_size,
+};
 use imageproc::rect::Rect;
 use m4rs::{bolinger_band, macd, Candlestick as M4rsCandlestick};
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
 use plotters::style::full_palette::{GREEN_200, GREEN_900, RED_200, RED_900};
+use serde_json::to_string;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::error::Error;
@@ -295,11 +298,11 @@ pub fn draw_axis_labels(
     margin_right: u32,
     min_price: f32,
     max_price: f32,
-) -> Result<f32, Box<dyn Error>> {
+) -> Result<Option<Rect>, Box<dyn Error>> {
     let white = Rgb([255u8, 255u8, 255u8]);
     let label_scale = AXIS_SCALE;
     let font_metrics = font.as_scaled(label_scale);
-    let text_x = (final_width - margin_right + 6) as i32;
+    let text_x = (final_width - margin_right + 6) as f32;
     let text_height = (font_metrics.ascent() - font_metrics.descent()).ceil() as i32;
 
     let num_indicators = [
@@ -328,7 +331,7 @@ pub fn draw_axis_labels(
             font,
             &format!("{:.2}", price),
             text_x,
-            *y as i32,
+            *y,
             label_scale,
             white,
             TRANSPARENT_BLACK_50,
@@ -336,8 +339,8 @@ pub fn draw_axis_labels(
     }
 
     // Add current price label with refined y-position mapping
-    let mut current_price_y = 0;
-    if let Some(last_candle) = klines.last() {
+    let mut current_price_y = 0.0;
+    let maybe_bounding_rect = if let Some(last_candle) = klines.last() {
         let current_price = last_candle.close_price.parse::<f32>().unwrap();
         let adjusted_min_price = min_price * 0.95;
         let adjusted_max_price = max_price * 1.05;
@@ -353,19 +356,24 @@ pub fn draw_axis_labels(
             .max(0)
             .min((top_section_height - text_height as f32) as i32);
 
-        current_price_y = y_position_clamped;
+        current_price_y = y_position_clamped as f32;
 
-        draw_label(
+        // Draw current_price
+        let price_bounding_rect = draw_label(
             img,
             font,
             &format!("{:.2}", current_price),
             text_x,
-            y_position_clamped,
+            y_position_clamped as f32,
             label_scale,
             PRICE_TEXT_COLOR,
             PRICE_BG_COLOR,
         )?;
-    }
+
+        Some(price_bounding_rect)
+    } else {
+        None
+    };
 
     let mut current_y = top_section_height;
 
@@ -389,7 +397,7 @@ pub fn draw_axis_labels(
                 font,
                 &format!("{:.0}k", volume / 1000.0),
                 text_x,
-                *y as i32,
+                { *y },
                 label_scale,
                 white,
                 TRANSPARENT_BLACK_50,
@@ -433,7 +441,7 @@ pub fn draw_axis_labels(
                 font,
                 &format!("{:.2}", macd_value),
                 text_x,
-                *y as i32,
+                *y,
                 label_scale,
                 white,
                 TRANSPARENT_BLACK_50,
@@ -456,7 +464,7 @@ pub fn draw_axis_labels(
                 font,
                 &format!("{:.0}", stoch_rsi_value),
                 text_x,
-                *y as i32,
+                *y,
                 label_scale,
                 white,
                 TRANSPARENT_BLACK_50,
@@ -464,7 +472,7 @@ pub fn draw_axis_labels(
         }
     }
 
-    Ok(current_price_y as f32)
+    Ok(maybe_bounding_rect)
 }
 
 pub fn draw_lines(
@@ -529,8 +537,8 @@ pub fn draw_labels(
         });
 
         for (x, y, text) in chart.labels.iter() {
-            let x_pos = (*x * final_width as f32) as i32 + style.offset_x;
-            let y_pos = (*y * height as f32) as i32 + style.offset_y;
+            let x_pos = (*x * final_width as f32) + style.offset_x as f32;
+            let y_pos = (*y * height as f32) + style.offset_y as f32;
             draw_label(
                 img,
                 font,
@@ -552,30 +560,65 @@ pub fn draw_label<F: Font>(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     font: &F,
     text: &str,
-    x: i32,
-    y: i32,
+    x: f32,
+    y: f32,
     scale: PxScale,
     color: Rgb<u8>,
     background_color: Rgb<u8>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Rect> {
     let font_metrics = font.as_scaled(scale);
     let (text_width, text_height) = text_size(scale, font, text);
     let padding = 2f32 * scale.x / text_height as f32;
-
-    draw_filled_rect_mut(
-        img,
-        Rect::at(x, y).of_size(
-            text_width + 2 * padding as u32,
-            text_height + 2 * padding as u32,
-        ),
-        background_color,
+    let bounding_rect = Rect::at(x as i32, y as i32).of_size(
+        text_width + 2 * padding as u32,
+        text_height + 2 * padding as u32,
     );
+
+    draw_filled_rect_mut(img, bounding_rect, background_color);
 
     draw_text_mut(
         img,
         color,
-        (x as f32 + padding) as i32,
-        (y as f32 + padding + font_metrics.descent() / text_height as f32 * scale.y * 0.6) as i32,
+        (x + padding) as i32,
+        (y + padding + font_metrics.descent() / text_height as f32 * scale.y * 0.6) as i32,
+        scale,
+        font,
+        text,
+    );
+
+    Ok(bounding_rect)
+}
+
+#[allow(clippy::too_many_arguments, unused)]
+pub fn draw_hallow_label<F: Font>(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    font: &F,
+    text: &str,
+    x: f32,
+    y: f32,
+    scale: PxScale,
+    font_color: Rgb<u8>,
+    border_color: Rgb<u8>,
+) -> anyhow::Result<()> {
+    println!("🔥 draw_hallow_label: {:#?} {:#?}", x, y);
+    let font_metrics = font.as_scaled(scale);
+    let (text_width, text_height) = text_size(scale, font, text);
+    let padding = 2f32 * scale.x / text_height as f32;
+
+    draw_hollow_rect_mut(
+        img,
+        Rect::at(x as i32, y as i32).of_size(
+            text_width + 2 * padding as u32,
+            text_height + 2 * padding as u32,
+        ),
+        border_color,
+    );
+
+    draw_text_mut(
+        img,
+        font_color,
+        (x + padding) as i32,
+        (y + padding + font_metrics.descent() / text_height as f32 * scale.y * 0.6) as i32,
         scale,
         font,
         text,
@@ -632,7 +675,7 @@ where
         let low = k.low_price.parse::<f32>().unwrap();
         let close = k.close_price.parse::<f32>().unwrap();
         let is_bullish = close >= open;
-        let is_predicted = last_past_time > k.open_time;
+        let is_predicted = last_past_time < k.open_time;
         let color = color_selector(is_bullish, is_predicted);
 
         // Use candle_width for the width of each candlestick
@@ -677,8 +720,8 @@ pub fn draw_candle_detail(
             img,
             font,
             &candle_detail,
-            10,
-            10,
+            10.0,
+            10.0,
             HEAD_SCALE,
             LABEL_COLOR,
             TRANSPARENT_BLACK_50,
@@ -777,19 +820,19 @@ pub fn draw_bollinger_detail(
             "MA 7 close 0 SMA 9 {:.2}\nMA 25 close 0 SMA 9 {:.2}\nMA 99 close 0 SMA 9 {:.2}\nBB 20 2 {:.2} {:.2} {:.2}",
             ma_7, ma_25, ma_99, latest_bb.avg, latest_bb.avg + 2.0 * latest_bb.sigma, latest_bb.avg - 2.0 * latest_bb.sigma
         );
-        let mut y_offset = 50;
+        let mut y_offset = 50.0;
         for line in ta_detail.lines() {
             draw_label(
                 img,
                 font,
                 line,
-                10,
+                10.0,
                 y_offset,
                 LABEL_SCALE,
                 LABEL_COLOR,
                 TRANSPARENT_BLACK_50,
             )?;
-            y_offset += 25;
+            y_offset += 25.0;
         }
     }
     Ok(())
@@ -820,7 +863,7 @@ pub fn draw_volume_bars(
             let open = k.open_price.parse::<f32>().unwrap();
             let close = k.close_price.parse::<f32>().unwrap();
             let is_bullish = close >= open;
-            let is_predicted = last_past_time > k.open_time;
+            let is_predicted = last_past_time < k.open_time;
             let fill_color: RGBColor = if is_bullish {
                 if is_predicted {
                     B_GREEN_DIM
@@ -857,7 +900,7 @@ pub fn draw_volume_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     klines: &[Kline],
     font: &impl Font,
-    current_y: i32,
+    current_y: f32,
 ) -> Result<(), Box<dyn Error>> {
     if !klines.is_empty() {
         let volume_sma: f32 = klines
@@ -872,7 +915,7 @@ pub fn draw_volume_detail(
             img,
             font,
             &volume_detail,
-            10,
+            10.0,
             current_y,
             LABEL_SCALE,
             LABEL_COLOR,
@@ -934,7 +977,7 @@ pub fn draw_macd(
 
         for (t, _, _, h) in macd_lines.iter() {
             let is_lower = previous_h.map_or(false, |prev| *h < prev);
-            let is_predicted = last_past_time > t.timestamp_millis();
+            let is_predicted = last_past_time < t.timestamp_millis();
             let fill_color = if is_predicted {
                 if *h > 0.0 {
                     if is_lower {
@@ -988,7 +1031,7 @@ pub fn draw_macd_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     klines: &[Kline],
     font: &impl Font,
-    current_y: i32,
+    current_y: f32,
 ) -> Result<(), Box<dyn Error>> {
     if !klines.is_empty() {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
@@ -1003,7 +1046,7 @@ pub fn draw_macd_detail(
             img,
             font,
             &macd_detail,
-            10,
+            10.0,
             current_y,
             LABEL_SCALE,
             LABEL_COLOR,
@@ -1017,7 +1060,7 @@ pub fn draw_stoch_rsi_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     klines: &[Kline],
     font: &impl Font,
-    current_y: i32,
+    current_y: f32,
 ) -> Result<(), Box<dyn Error>> {
     if !klines.is_empty() {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
@@ -1032,7 +1075,7 @@ pub fn draw_stoch_rsi_detail(
             img,
             font,
             &stoch_rsi_detail,
-            10,
+            10.0,
             current_y,
             LABEL_SCALE,
             LABEL_COLOR,
@@ -1110,8 +1153,14 @@ pub fn draw_order_book(
     current_price_y: f32,
     lower_bound: f32,
     upper_bound: f32,
-) -> Result<(), Box<dyn Error>> {
-    let parent_offset_x = parent_offset_x + 80.0;
+    price_bounding_rect: Rect,
+) -> Result<(HashMap<String, f32>), Box<dyn Error>> {
+    // Output items y
+    let mut bids_asks_y_map = HashMap::new();
+
+    // Position
+    let padding_right = 100.0;
+    let parent_offset_x = parent_offset_x + padding_right;
     let price_rect_height = 20;
     let price_rect_height_half = price_rect_height / 2;
 
@@ -1142,13 +1191,13 @@ pub fn draw_order_book(
     bid_data.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
 
     // Prepare position for the histogram
-    let mut current_y = -{ price_rect_height_half } / 2i32;
+    let mut current_y = (-{ price_rect_height_half } / 2i32);
     let rect_height = 8u32;
     let gap = 8i32;
     let bar_height = rect_height as i32 + gap;
-    let offset_y = current_price_y as i32 - bar_height * (ask_data.len() as i32) + bar_height
+    let offset_y = (current_price_y as i32 - bar_height * (ask_data.len() as i32) + bar_height
         - bar_height / 4
-        - 1;
+        - 1) as f32;
 
     let max_bar_width = 64;
     let current_x = 32u32;
@@ -1182,18 +1231,17 @@ pub fn draw_order_book(
                     ASK_COLOR
                 };
 
+                let y = offset_y as i32 + current_y + rect_height as i32;
                 root.draw(&Rectangle::new(
                     [
-                        (offset_x as i32, offset_y + current_y),
-                        (
-                            offset_x as i32 + rect_width,
-                            offset_y + current_y + rect_height as i32,
-                        ),
+                        (offset_x as i32, offset_y as i32 + current_y),
+                        (offset_x as i32 + rect_width, y),
                     ],
                     ShapeStyle::from(color).filled(),
                 ))?;
 
                 current_y += (rect_height + gap as u32) as i32;
+                bids_asks_y_map.insert(price.to_string(), y as f32);
             }
         }
 
@@ -1210,18 +1258,17 @@ pub fn draw_order_book(
                     BID_COLOR
                 };
 
+                let y = offset_y as i32 + current_y + rect_height as i32;
                 root.draw(&Rectangle::new(
                     [
-                        (offset_x as i32, offset_y + current_y),
-                        (
-                            offset_x as i32 + rect_width,
-                            offset_y + current_y + rect_height as i32,
-                        ),
+                        (offset_x as i32, offset_y as i32 + current_y),
+                        (offset_x as i32 + rect_width, y),
                     ],
                     ShapeStyle::from(color).filled(),
                 ))?;
 
                 current_y += (rect_height + gap as u32) as i32;
+                bids_asks_y_map.insert(price.to_string(), y as f32);
             }
         }
     }
@@ -1248,8 +1295,8 @@ pub fn draw_order_book(
                 img,
                 font,
                 &format!("{:.0}", price),
-                offset_x as i32,
-                offset_y + current_y,
+                offset_x,
+                offset_y + current_y as f32,
                 ORDER_LABEL_SCALE,
                 font_color,
                 bg_color,
@@ -1259,8 +1306,8 @@ pub fn draw_order_book(
                 img,
                 font,
                 &format!("{:.2}", volume),
-                (current_x + offset_x as u32) as i32,
-                offset_y + current_y,
+                (current_x + offset_x as u32) as i32 as f32,
+                offset_y + current_y as f32,
                 ORDER_LABEL_SCALE,
                 NUM_WHITE,
                 bg_color,
@@ -1288,8 +1335,8 @@ pub fn draw_order_book(
                 img,
                 font,
                 &format!("{:.0}", price),
-                offset_x as i32,
-                offset_y + current_y,
+                offset_x,
+                offset_y + current_y as f32,
                 ORDER_LABEL_SCALE,
                 font_color,
                 bg_color,
@@ -1298,9 +1345,9 @@ pub fn draw_order_book(
             draw_label(
                 img,
                 font,
-                &format!("{:.2}", volume),
-                (current_x as i32 + offset_x as i32),
-                offset_y + current_y,
+                &format_short_number(*volume as i64).to_string(),
+                (current_x as f32 + offset_x),
+                offset_y + current_y as f32,
                 ORDER_LABEL_SCALE,
                 NUM_WHITE,
                 bg_color,
@@ -1314,10 +1361,109 @@ pub fn draw_order_book(
     let price_line_y = current_price_y + price_rect_height_half as f32;
     draw_line_segment_mut(
         img,
-        (parent_offset_x - 16f32, price_line_y),
+        (
+            parent_offset_x - padding_right + price_bounding_rect.width() as f32,
+            price_line_y,
+        ),
         (width as f32, price_line_y),
         PRICE_LINE_COLOR,
     );
+
+    Ok(bids_asks_y_map)
+}
+
+pub fn draw_signals(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    font: &impl Font,
+    signals: &[LongShortSignal],
+    current_price: f64,
+    price_bounding_rect: Rect,
+) -> Result<(), Box<dyn Error>> {
+    signals.iter().for_each(|signal| {
+        println!(
+            "🔥 entry_price: {:#?} | target_price: {:#?}",
+            signal.entry_price, signal.target_price
+        );
+        let x = price_bounding_rect.left() as f32;
+        let y = price_bounding_rect.top() as f32 + (AXIS_SCALE.y - ORDER_LABEL_SCALE.y) / 2.0;
+        let h = price_bounding_rect.height() as f32;
+        // let factor_y = (y / current_price as f32) as f32;
+
+        // Mark position
+        let stop_y = if signal.direction == "long" {
+            y - 2.0 * h
+        } else {
+            y + 2.0 * h
+        };
+        let entry_y = if signal.direction == "long" {
+            y - 3.0 * h
+        } else {
+            y + 3.0 * h
+        };
+        let target_y = if signal.direction == "long" {
+            y - 5.0 * h
+        } else {
+            y + 5.0 * h
+        };
+
+        // Draw line
+        let line_color = if signal.direction == "long" {
+            Rgb([GREEN.0, GREEN.1, GREEN.2])
+        } else {
+            Rgb([RED.0, RED.1, RED.2])
+        };
+
+        draw_line_segment_mut(img, (x, entry_y), (x, target_y), line_color);
+
+        // Draw predicted price label
+        let label_scale = ORDER_LABEL_SCALE;
+
+        let color = if signal.direction == "long" {
+            Rgb([GREEN.0, GREEN.1, GREEN.2])
+        } else {
+            Rgb([RED.0, RED.1, RED.2])
+        };
+
+        // stop
+        let _ = draw_hallow_label(
+            img,
+            font,
+            &format!("STOP:{:.2}", signal.stop_loss),
+            x,
+            stop_y,
+            label_scale,
+            color,
+            color,
+        );
+
+        // entry
+        let _ = draw_label(
+            img,
+            font,
+            &format!(
+                "{}:{:.2}",
+                signal.direction.to_uppercase(),
+                signal.entry_price
+            ),
+            x,
+            entry_y,
+            label_scale,
+            Rgb([BLACK.0, BLACK.1, BLACK.2]),
+            color,
+        );
+
+        // target
+        let _ = draw_hallow_label(
+            img,
+            font,
+            &format!("TAKE:{:.2}", signal.target_price),
+            x,
+            target_y,
+            label_scale,
+            color,
+            color,
+        );
+    });
 
     Ok(())
 }

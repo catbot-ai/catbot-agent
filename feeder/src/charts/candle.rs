@@ -1,5 +1,4 @@
 use super::helpers::parse_kline_time;
-use super::helpers::parse_timeframe_duration;
 use super::painters::*;
 use crate::charts::png::encode_png;
 use ab_glyph::FontArc;
@@ -10,6 +9,7 @@ use common::LongShortSignal;
 use common::OrderBook;
 use image::{ImageBuffer, Rgb};
 use plotters::prelude::*;
+use std::collections::HashMap;
 use std::error::Error;
 
 // Styling structures
@@ -59,7 +59,8 @@ pub struct Chart {
     pub bollinger_enabled: bool,
     pub volume_enabled: bool,
     pub stoch_rsi_enabled: bool,
-    pub signals: Vec<LongShortSignal>,
+    pub signals: Option<Vec<LongShortSignal>>,
+    pub past_signals: Option<Vec<LongShortSignal>>,
 }
 
 impl Chart {
@@ -175,8 +176,14 @@ impl Chart {
     }
 
     #[allow(dead_code)]
-    pub fn with_past_signals(mut self, signals: Vec<LongShortSignal>) -> Self {
-        self.signals = signals;
+    pub fn with_past_signals(mut self, past_signals: Vec<LongShortSignal>) -> Self {
+        self.past_signals = Some(past_signals);
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_signals(mut self, signals: Vec<LongShortSignal>) -> Self {
+        self.signals = Some(signals);
         self
     }
 
@@ -195,9 +202,8 @@ impl Chart {
 
         // Combine past_candle_data and predicted_candle into all_candle_data
         let mut all_candle_data = self.past_candle_data.clone().unwrap();
-        let last_past_time = 
-
-        if let Some(predicted_candles) = self.predicted_candle.clone() {
+        let last_candle =self.past_candle_data.iter().last().expect("No data").last().expect("No data");
+        let last_past_time =  if let Some(predicted_candles) = self.predicted_candle.clone() {
             all_candle_data.extend(predicted_candles);
 
             all_candle_data
@@ -205,8 +211,9 @@ impl Chart {
             .map(|kline| kline.open_time)
             .ok_or("No past candle data available")?
         } else {
-            0i64
+            last_candle.close_time
         };
+        let current_price = last_candle.close_price.parse::<f64>().expect("No data");
 
         let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
 
@@ -271,7 +278,9 @@ impl Chart {
                 .margin_right(margin_right)
                 .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
 
-            draw_past_signals(&mut top_chart, timezone, &self.signals)?;
+         if let Some(ref past_signals) = self.past_signals  {
+            draw_past_signals(&mut top_chart, timezone, past_signals)?;
+         }
         } // `root` goes out of scope here, ending the borrow of `buffer`
  
         // Create imgbuf after root is dropped
@@ -301,24 +310,22 @@ impl Chart {
             let section_height = root_height as f32 * 0.5 / num_indicators;
             let top_section_height = root_height as f32 * 0.5;
 
-            let mut current_y = top_section_height as i32;
+            let mut current_y = top_section_height  ;
 
             if self.volume_enabled {
-                draw_volume_detail(&mut cropped_img, past_data, &font, current_y)?;
-                current_y += section_height as i32;
+                draw_volume_detail(&mut cropped_img, past_data, &font, current_y   )?;
+                current_y += section_height ;
             }
             if self.macd_enabled {
-                draw_macd_detail(&mut cropped_img, past_data, &font, current_y)?;
-                current_y += section_height as i32;
+                draw_macd_detail(&mut cropped_img, past_data, &font, current_y  )?;
+                current_y += section_height ;
             }
             if self.stoch_rsi_enabled {
-                draw_stoch_rsi_detail(&mut cropped_img, past_data, &font, current_y)?;
+                draw_stoch_rsi_detail(&mut cropped_img, past_data, &font, current_y   )?;
             }
         }
 
-        draw_lines(&mut cropped_img, &self, root_width, root_height)?;
-
-        let current_price_y = draw_axis_labels(
+        let price_bounding_rect = draw_axis_labels(
             &mut cropped_img,
             &font.clone(),
             past_data,
@@ -330,9 +337,12 @@ impl Chart {
             max_price,
         )?;
 
+        let mut bids_asks_y_map = HashMap::new();
+
         // Draw order book
         if let Some(orderbook_data) = &self.orderbook_data {
-            draw_order_book(
+            if let Some(price_bounding_rect) = price_bounding_rect{
+            let new_bids_asks_y_map = draw_order_book(
                 &mut cropped_img,
                 &font,
                 orderbook_data,
@@ -341,13 +351,33 @@ impl Chart {
                 root_width,
                 root_height,
                 right_offset_x as f32,
-                current_price_y,
+                price_bounding_rect.top() as f32,
                 lower_bound,
                 upper_bound,
+                price_bounding_rect,
             )?;
+
+            bids_asks_y_map = new_bids_asks_y_map;
+ }
         }
 
+        // Draw signals if has
+        if let Some(ref signals) = &self.signals {
+
+            if let Some(price_bounding_rect) = price_bounding_rect{
+            draw_signals( &mut cropped_img,
+                &font,
+                signals,
+                current_price,
+                price_bounding_rect,
+            )?;}
+        }
+
+        // Draw labels if has
         draw_labels(&mut cropped_img, &font, &self, root_width, root_height)?;
+
+        // Draw lines if has
+        draw_lines(&mut cropped_img, &self, root_width, root_height)?;
 
         Ok(encode_png(&cropped_img)?)
     }
@@ -377,30 +407,26 @@ async fn entry_point() {
         .await
         .unwrap();
 
-    // TODO
-    let past_signals = Vec::new();
-
-    // Generate mock signals based on fixed candle ranges
-    let mut signals = Vec::new();
-
+    // Past signals (unchanged from your code)
+    let mut past_signals = Vec::new();
     if candle_data.len() >= 31 {
         // Long signal: entry at last - 10, target at last
         let last_candle = &candle_data[candle_data.len() - 1];
-        let last_minus_10_candle = &candle_data[candle_data.len() - 11]; // last - 10
+        let last_minus_10_candle = &candle_data[candle_data.len() - 11];
 
         let long_entry_time = last_minus_10_candle.open_time;
         let long_entry_price = last_minus_10_candle.close_price.parse::<f64>().unwrap();
         let long_target_time = last_candle.open_time;
         let long_target_price = last_candle.close_price.parse::<f64>().unwrap();
 
-        signals.push(LongShortSignal {
+        past_signals.push(LongShortSignal {
             direction: "long".to_string(),
             symbol: binance_pair_symbol.to_string(),
-            confidence: 0.85, // Mock confidence value
-            current_price: long_target_price, // Using target as current for mock
-            entry_price: long_entry_price  ,
-            target_price: long_target_price  ,
-            stop_loss: long_entry_price * 0.95, // 5% below entry as mock stop loss
+            confidence: 0.85,
+            current_price: long_target_price,
+            entry_price: long_entry_price,
+            target_price: long_target_price,
+            stop_loss: long_entry_price * 0.95,
             timeframe: timeframe.to_string(),
             entry_time: long_entry_time,
             target_time: long_target_time,
@@ -416,22 +442,22 @@ async fn entry_point() {
         });
 
         // Short signal: entry at last - 30, target at last - 20
-        let last_minus_30_candle = &candle_data[candle_data.len() - 31]; // last - 30
-        let last_minus_20_candle = &candle_data[candle_data.len() - 21]; // last - 20
+        let last_minus_30_candle = &candle_data[candle_data.len() - 31];
+        let last_minus_20_candle = &candle_data[candle_data.len() - 21];
 
         let short_entry_time = last_minus_30_candle.open_time;
         let short_entry_price = last_minus_30_candle.close_price.parse::<f64>().unwrap();
         let short_target_time = last_minus_20_candle.open_time;
         let short_target_price = last_minus_20_candle.close_price.parse::<f64>().unwrap();
 
-        signals.push(LongShortSignal {
+        past_signals.push(LongShortSignal {
             direction: "short".to_string(),
             symbol: binance_pair_symbol.to_string(),
-            confidence: 0.82, // Mock confidence value
-            current_price: short_target_price, // Using target as current for mock
-            entry_price: short_entry_price  ,
-            target_price: short_target_price  ,
-            stop_loss: short_entry_price * 1.05, // 5% above entry as mock stop loss
+            confidence: 0.82,
+            current_price: short_target_price,
+            entry_price: short_entry_price,
+            target_price: short_target_price,
+            stop_loss: short_entry_price * 1.05,
             timeframe: timeframe.to_string(),
             entry_time: short_entry_time,
             target_time: short_target_time,
@@ -446,8 +472,7 @@ async fn entry_point() {
             rationale: "Mock short signal based on price movement".to_string(),
         });
 
-        // Debug prints to verify
-        for signal in &signals {
+        for signal in &past_signals {
             println!(
                 "{} Signal: Entry Time: {}, Entry Price: {}, Target Time: {}, Target Price: {}, Stop Loss: {}",
                 signal.direction, signal.entry_time_local, signal.entry_price, 
@@ -459,6 +484,80 @@ async fn entry_point() {
             "Not enough candles to generate mock signals. Need at least 31 candles, got {}",
             candle_data.len()
         );
+    }
+
+    // Generate mock signals based on last candle
+    let mut signals = Vec::new();
+    if !candle_data.is_empty() {
+        let last_candle = &candle_data[candle_data.len() - 1];
+        let last_close_price = last_candle.close_price.parse::<f64>().unwrap();
+        let last_time = last_candle.open_time;
+        let hour_ms = 3_600_000; // 1 hour in milliseconds
+
+        // Mock Long Signal: 5% profit from last candle, starting 1 hour after last candle
+        let long_entry_time = last_time + hour_ms; // 1 hour after last candle
+        let long_entry_price = last_close_price - 1.0;
+        let long_target_price = long_entry_price * 1.10;
+        let long_target_time = long_entry_time + hour_ms; // 1 hour after entry
+
+        signals.push(LongShortSignal {
+            direction: "long".to_string(),
+            symbol: binance_pair_symbol.to_string(),
+            confidence: 0.9,
+            current_price: long_entry_price, // Current price at entry
+            entry_price: long_entry_price,
+            target_price: long_target_price,
+            stop_loss: long_entry_price * 0.97, // 3% below entry
+            timeframe: timeframe.to_string(),
+            entry_time: long_entry_time,
+            target_time: long_target_time,
+            entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(long_entry_time / 1000, 0)
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
+            target_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(long_target_time / 1000, 0)
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
+            rationale: "Mock long signal expecting 5% upward movement".to_string(),
+        });
+
+        // Mock Short Signal: Starts after long target, aiming for reversal to entry price
+        let short_entry_time = long_target_time; // Start at long signal's target time
+        let short_entry_price = long_target_price; // Entry at long's target
+        let short_target_price = long_entry_price; // Target back to original price (reversal)
+        let short_target_time = short_entry_time + hour_ms; // 1 hour after short entry
+
+        signals.push(LongShortSignal {
+            direction: "short".to_string(),
+            symbol: binance_pair_symbol.to_string(),
+            confidence: 0.87,
+            current_price: short_entry_price,
+            entry_price: short_entry_price,
+            target_price: short_target_price,
+            stop_loss: short_entry_price * 1.03, // 3% above entry
+            timeframe: timeframe.to_string(),
+            entry_time: short_entry_time,
+            target_time: short_target_time,
+            entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(short_entry_time / 1000, 0)
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
+            target_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(short_target_time / 1000, 0)
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
+            rationale: "Mock short signal anticipating reversal after long target".to_string(),
+        });
+
+        // Debug prints for mock signals
+        for signal in &signals {
+            println!(
+                "{} Signal: Entry Time: {}, Entry Price: {:.2}, Target Time: {}, Target Price: {:.2}, Stop Loss: {:.2}",
+                signal.direction, signal.entry_time_local, signal.entry_price, 
+                signal.target_time_local, signal.target_price, signal.stop_loss
+            );
+        }
     }
 
     // Get the mock prediction
@@ -473,8 +572,7 @@ async fn entry_point() {
 
     let png = Chart::new(timeframe, Tokyo)
         .with_past_candle(candle_data)
-        // So sad this didn't work as expected due to poor results
-        // .with_predicted_candle(predicted_klines)
+        // .with_predicted_candle(predicted_klines) // Commented out as per original
         .with_title(binance_pair_symbol)
         .with_font_data(font_data)
         .with_volume()
@@ -482,7 +580,8 @@ async fn entry_point() {
         .with_stoch_rsi()
         .with_orderbook(orderbook)
         .with_bollinger_band()
-        .with_past_signals(past_signals)
+        // .with_past_signals(past_signals.clone()) 
+        .with_signals(signals)
         .build()
         .unwrap();
 
