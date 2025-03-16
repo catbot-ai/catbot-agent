@@ -1,6 +1,8 @@
 use super::candle::*;
 use super::helpers::{format_short_number, kline_to_m4rs_candlestick, parse_kline_time};
+use super::image::draw_dashed_line_segment_mut;
 use crate::charts::helpers::{get_visible_range_and_data, parse_timeframe_duration};
+use crate::charts::rsi::calculate_stoch_rsi;
 use ab_glyph::ScaleFont;
 use ab_glyph::{Font, PxScale};
 use chrono::{DateTime, TimeZone};
@@ -16,7 +18,6 @@ use m4rs::{bolinger_band, macd, Candlestick as M4rsCandlestick};
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
 use plotters::style::full_palette::{GREEN_200, GREEN_900, RED_200, RED_900};
-use serde_json::to_string;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::error::Error;
@@ -228,26 +229,41 @@ pub fn draw_chart(
             let mut stoch_rsi_chart = ChartBuilder::on(&stoch_rsi_area)
                 .margin_right(margin_right)
                 .build_cartesian_2d(first_visible_time..last_visible_time, 0.0f32..100.0f32)?;
+
+            // Convert visible_data to M4rsCandlestick and calculate Stoch RSI
             let past_m4rs_candles: Vec<M4rsCandlestick> =
                 visible_data.iter().map(kline_to_m4rs_candlestick).collect();
-            let stoch_rsi_result = m4rs::stochastics(&past_m4rs_candles, 14, 3)?;
-            let stoch_rsi_lines: Vec<(DateTime<Tz>, f32, f32)> = stoch_rsi_result
+            let (stoch_rsi_k, stoch_rsi_d) = calculate_stoch_rsi(&past_m4rs_candles, 14, 14, 3, 3)?;
+
+            // Align Stoch RSI values with timestamps
+            let stoch_rsi_lines: Vec<(DateTime<Tz>, f32, f32)> = visible_data
                 .iter()
-                .map(|entry| {
-                    let t = parse_kline_time(entry.at as i64, timezone);
-                    (t, entry.k as f32, entry.d as f32)
+                .enumerate()
+                .filter_map(|(i, kline)| {
+                    if i < stoch_rsi_k.len() && i < stoch_rsi_d.len() {
+                        let t = parse_kline_time(kline.open_time, timezone);
+                        Some((t, stoch_rsi_k[i] as f32, stoch_rsi_d[i] as f32))
+                    } else {
+                        None
+                    }
                 })
                 .collect();
+
+            // Draw %K line
             let k_style = ShapeStyle::from(&SRSI_K).stroke_width(1);
-            let d_style = ShapeStyle::from(&SRSI_D).stroke_width(1);
             stoch_rsi_chart.draw_series(LineSeries::new(
                 stoch_rsi_lines.iter().map(|(t, k, _)| (*t, *k)),
                 k_style,
             ))?;
+
+            // Draw %D line
+            let d_style = ShapeStyle::from(&SRSI_D).stroke_width(1);
             stoch_rsi_chart.draw_series(LineSeries::new(
                 stoch_rsi_lines.iter().map(|(t, _, d)| (*t, *d)),
                 d_style,
             ))?;
+
+            // Draw upper and lower dashed lines
             let upper_line = 80.0f32;
             let lower_line = 20.0f32;
             let dash_style = ShapeStyle {
@@ -320,19 +336,20 @@ pub fn draw_axis_labels(
         top_section_height * 0.5,
         top_section_height - text_height as f32,
     ];
-    for (i, y) in price_y_positions.iter().enumerate() {
-        let price = max_price * 1.05 - (i as f32 * price_step);
-        draw_label(
-            img,
-            font,
-            &format!("{:.2}", price),
-            text_x,
-            *y,
-            label_scale,
-            white,
-            TRANSPARENT_BLACK_50,
-        )?;
-    }
+    // TODO: maybe too much here
+    // for (i, y) in price_y_positions.iter().enumerate() {
+    //     let price = max_price * 1.05 - (i as f32 * price_step);
+    //     draw_label(
+    //         img,
+    //         font,
+    //         &format!("{:.2}", price),
+    //         text_x,
+    //         *y,
+    //         label_scale,
+    //         white,
+    //         TRANSPARENT_BLACK_50,
+    //     )?;
+    // }
 
     // Add current price label with refined y-position mapping
     let mut current_price_y = 0.0;
@@ -1060,11 +1077,11 @@ pub fn draw_stoch_rsi_detail(
     if !klines.is_empty() {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
             klines.iter().map(kline_to_m4rs_candlestick).collect();
-        let stoch_rsi_result = m4rs::slow_stochastics(&past_m4rs_candles, 14, 3, 5)?;
-        let latest_stoch_rsi = stoch_rsi_result.last().unwrap();
+        let (stoch_rsi_k, stoch_rsi_d) = calculate_stoch_rsi(&past_m4rs_candles, 14, 14, 3, 3)?;
         let stoch_rsi_detail = format!(
             "Stoch RSI 14 14 3 {:.2} {:.2}",
-            latest_stoch_rsi.k, latest_stoch_rsi.d
+            stoch_rsi_k.last().unwrap(),
+            stoch_rsi_d.last().unwrap()
         );
         draw_label(
             img,
@@ -1419,6 +1436,8 @@ pub fn draw_signals(
         };
 
         draw_line_segment_mut(img, (x, entry_y), (x, target_y), line_color);
+
+        draw_dashed_line_segment_mut(img, (x, stop_y), (x, entry_y), 4.0, 4.0, line_color);
 
         // Draw predicted price label
         let label_scale = ORDER_LABEL_SCALE;
