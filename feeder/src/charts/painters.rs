@@ -680,6 +680,13 @@ pub fn draw_candlesticks<F>(
 where
     F: Fn(bool, bool) -> RGBAColor,
 {
+    chart
+        .configure_mesh()
+        .light_line_style(BLACK)
+        .x_max_light_lines(1)
+        .y_max_light_lines(1)
+        .draw()?;
+
     chart.draw_series(candle_data.iter().map(|k| {
         let time = parse_kline_time(k.open_time, timezone);
         let open = k.open_price.parse::<f32>().unwrap();
