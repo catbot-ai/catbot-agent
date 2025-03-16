@@ -525,11 +525,9 @@ impl Chart {
             max_price,
         )?;
 
-        let mut bids_asks_y_map = HashMap::new();
-
         if let Some(orderbook_data) = &self.orderbook_data {
             if let Some(price_bounding_rect) = price_bounding_rect {
-                let new_bids_asks_y_map = draw_order_book(
+                draw_orderbook(
                     &mut cropped_img,
                     &font,
                     orderbook_data,
@@ -543,7 +541,6 @@ impl Chart {
                     upper_bound,
                     price_bounding_rect,
                 )?;
-                bids_asks_y_map = new_bids_asks_y_map;
             }
         }
 

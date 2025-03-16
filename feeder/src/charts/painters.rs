@@ -1157,7 +1157,7 @@ pub fn draw_past_signals(
 }
 
 #[allow(clippy::too_many_arguments, unused)]
-pub fn draw_order_book(
+pub fn draw_orderbook(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     font: &impl Font,
     orderbook_data: &OrderBook,
