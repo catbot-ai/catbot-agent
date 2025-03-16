@@ -1079,7 +1079,7 @@ pub fn draw_stoch_rsi_detail(
             klines.iter().map(kline_to_m4rs_candlestick).collect();
         let (stoch_rsi_k, stoch_rsi_d) = calculate_stoch_rsi(&past_m4rs_candles, 14, 14, 3, 3)?;
         let stoch_rsi_detail = format!(
-            "Stoch RSI 14 14 3 {:.2} {:.2}",
+            "Stoch RSI 14 14 3 3 {:.2} {:.2}",
             stoch_rsi_k.last().unwrap(),
             stoch_rsi_d.last().unwrap()
         );
