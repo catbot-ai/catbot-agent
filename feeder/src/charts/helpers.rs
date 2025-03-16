@@ -45,7 +45,7 @@ pub fn get_visible_range_and_data(
         return Err("No candle data available".into());
     }
 
-    let visible_candles = (final_width / candle_width) as usize;
+    let visible_candles = (final_width as f32 / candle_width as f32).ceil() as usize;
     let start_index = total_candles.saturating_sub(visible_candles);
 
     let first_visible_time = parse_kline_time(past_data[start_index].open_time, timezone);

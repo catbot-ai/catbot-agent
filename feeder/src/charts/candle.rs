@@ -1,13 +1,16 @@
+use super::helpers::get_visible_range_and_data;
 use super::helpers::parse_kline_time;
 use super::painters::*;
 use crate::charts::png::encode_png;
 use ab_glyph::FontArc;
 use ab_glyph::PxScale;
+use chrono::DateTime;
 use chrono_tz::Tz;
 use common::Kline;
 use common::LongShortSignal;
 use common::OrderBook;
 use image::{ImageBuffer, Rgb};
+use imageproc::drawing::text_size;
 use plotters::prelude::*;
 use std::collections::HashMap;
 use std::error::Error;
@@ -191,7 +194,7 @@ impl Chart {
         if self.past_candle_data.is_none() {
             return Err("Candle data set is required".into());
         };
-
+    
         let font_data = self
             .font_data
             .as_ref()
@@ -199,43 +202,42 @@ impl Chart {
             .clone();
         let font = FontArc::try_from_vec(font_data)?;
         let timezone = &self.timezone;
-
+    
         // Combine past_candle_data and predicted_candle into all_candle_data
         let mut all_candle_data = self.past_candle_data.clone().unwrap();
-        let last_candle =self.past_candle_data.iter().last().expect("No data").last().expect("No data");
-        let last_past_time =  if let Some(predicted_candles) = self.predicted_candle.clone() {
+        let last_candle = self.past_candle_data.iter().last().expect("No data").last().expect("No data");
+        let last_past_time = if let Some(predicted_candles) = self.predicted_candle.clone() {
             all_candle_data.extend(predicted_candles);
-
             all_candle_data
-            .last()
-            .map(|kline| kline.open_time)
-            .ok_or("No past candle data available")?
+                .last()
+                .map(|kline| kline.open_time)
+                .ok_or("No past candle data available")?
         } else {
             last_candle.close_time
         };
         let current_price = last_candle.close_price.parse::<f64>().expect("No data");
-
+    
         let past_data = self.past_candle_data.as_deref().unwrap_or(&[]);
-
+    
         let total_candles = all_candle_data.len();
         let total_width = total_candles as u32 * 10;
         let root_width = 1024;
         let root_height = 1024;
-
+    
         let chart_width = 768;
-        let margin_right = 1024 - chart_width;
+        let margin_right = root_width - chart_width;
         let right_offset_x = chart_width;
-
+    
         let plot_width = total_width.max(root_width);
         let bar: (u32, u32) = (plot_width, root_height);
         let mut buffer = vec![0; (plot_width * root_height * 3) as usize];
-
+    
         let first_time = parse_kline_time(all_candle_data[0].open_time, timezone);
         let last_time = parse_kline_time(
             all_candle_data[all_candle_data.len() - 1].open_time,
             timezone,
         );
-
+    
         let prices: Vec<f32> = all_candle_data
             .iter()
             .flat_map(|k| {
@@ -249,14 +251,23 @@ impl Chart {
             .collect();
         let min_price = prices.iter().fold(f32::INFINITY, |a, &b| a.min(b));
         let max_price = prices.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
-
+    
         let mut lower_bound = 0.0;
         let mut upper_bound = 0.0;
+    
+        // Variables to store lowest and highest prices and their timestamps
+        let mut lowest_price: f32 = f32::INFINITY;
+        let mut highest_price: f32 = f32::NEG_INFINITY;
+        let mut lowest_price_time: i64 = 0;
+        let mut highest_price_time: i64 = 0;
+        let mut start_visible_time: DateTime<Tz> = first_time;
+        let mut end_visible_time: DateTime<Tz> = last_time;
+    
         // Scope for drawing operations
         {
             let mut root = BitMapBackend::with_buffer(&mut buffer, bar).into_drawing_area();
-
-             let (  new_lower_bound, new_upper_bound) = draw_chart(
+    
+            let (new_lower_bound, new_upper_bound) = draw_chart(
                 &mut root,
                 &all_candle_data,
                 past_data,
@@ -273,30 +284,150 @@ impl Chart {
             )?;
             lower_bound = new_lower_bound;
             upper_bound = new_upper_bound;
-
+    
             let mut top_chart = ChartBuilder::on(&root.split_vertically((50).percent()).0)
                 .margin_right(margin_right)
                 .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
-
-         if let Some(ref past_signals) = self.past_signals  {
-            draw_past_signals(&mut top_chart, timezone, past_signals)?;
-         }
+    
+            // Step 1: Find lowest and highest prices in the visible range
+            let (first_visible_time, last_visible_time, visible_data) = get_visible_range_and_data(
+                &all_candle_data,
+                timezone,
+                9, // candle_width (assumed as 10 based on total_width calculation)
+                chart_width, // Use chart_width instead of plot_width * 2 to match visible area
+            )?;
+            start_visible_time = first_visible_time;
+            end_visible_time = last_visible_time;
+    
+            for kline in visible_data.iter() {
+                let low = kline.low_price.parse::<f32>().unwrap();
+                let high = kline.high_price.parse::<f32>().unwrap();
+    
+                if low < lowest_price {
+                    lowest_price = low;
+                    lowest_price_time = kline.open_time; // Use open_time as the reference
+                }
+                if high > highest_price {
+                    highest_price = high;
+                    highest_price_time = kline.open_time;
+                }
+            }
+    
+            if let Some(ref past_signals) = self.past_signals {
+                draw_past_signals(&mut top_chart, timezone, past_signals)?;
+            }
         } // `root` goes out of scope here, ending the borrow of `buffer`
- 
+    
         // Create imgbuf after root is dropped
         let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(plot_width, root_height);
         imgbuf.copy_from_slice(buffer.as_slice());
+    
+        // Step 2: Draw hallow labels for lowest and highest prices
+        // Map timestamps to x-coordinates using visible range
+        let visible_time_range = end_visible_time.timestamp() as f64 - start_visible_time.timestamp() as f64;
+        let chart_width_f32 = chart_width as f64;
+    
+        let lowest_x = if visible_time_range != 0.0 {
+            ((parse_kline_time(lowest_price_time, timezone).timestamp() as f64 - start_visible_time.timestamp() as f64) / visible_time_range * chart_width_f32) as f32
+        } else {
+            0.0
+        };
+        let highest_x = if visible_time_range != 0.0 {
+            ((parse_kline_time(highest_price_time, timezone).timestamp() as f64 - start_visible_time.timestamp() as f64) / visible_time_range * chart_width_f32) as f32
+        } else {
+            0.0
+        };
+
+        // Prevent overdraw
+        let high_low_width = 128.0;
+        let highest_x= if highest_x + high_low_width < chart_width as f32 { highest_x } else { highest_x - high_low_width };
+        let highest_x= if highest_x > 0.0 { highest_x } else { highest_x + high_low_width };
+        let lowest_x= if lowest_x + high_low_width < chart_width as f32 { lowest_x } else { lowest_x - high_low_width };
+        let lowest_x= if lowest_x > 0.0 { lowest_x } else { lowest_x + high_low_width };
+    
+        // Map prices to y-coordinates
+        let price_range = (max_price * 1.05 - min_price * 0.95) as f64;
+        let chart_height = (root_height as f32 * 0.5) as f64; // Top chart is 50% of height
+        let lowest_y = if price_range != 0.0 {
+            (chart_height * (1.0 - ((lowest_price - min_price * 0.95) as f64 / price_range))) as f32
+        } else {
+            chart_height as f32 / 2.0
+        };
+        let highest_y = if price_range != 0.0 {
+            (chart_height * (1.0 - ((highest_price - min_price * 0.95) as f64 / price_range))) as f32
+        } else {
+            chart_height as f32 / 2.0
+        };
 
         let crop_x = plot_width.saturating_sub(root_width);
         let mut cropped_img: ImageBuffer<Rgb<u8>, Vec<u8>> =
             image::imageops::crop_imm(&imgbuf, crop_x, 0, root_width, root_height).to_image();
+    
+        // Draw hallow labels
+        let label_scale = PxScale { x: 20.0, y: 20.0 };
+        let font_color = Rgb([255, 255, 255]);
+        let border_color = Rgb([255, 255, 255]);
+        draw_hallow_label(
+            &mut cropped_img,
+            &font,
+            &format!("LOW:{:.2}", lowest_price),
+            lowest_x,
+            lowest_y + 8.0,
+            label_scale,
+            font_color,
+            border_color,
+        )?;
 
+        draw_hallow_label(
+            &mut cropped_img,
+            &font,
+            &format!("HIGH:{:.2}", highest_price),
+            highest_x,
+            highest_y - 20.0 - 8.0,
+            label_scale,
+            font_color,
+            border_color,
+        )?;
+    
+        // Step 3 & 4: Draw time labels at the bottom left and right corners
+        let label_scale = PxScale { x: 20.0, y: 20.0 };
+        let label_color = Rgb([255, 255, 255]);
+        let background_color = Rgb([0, 0, 0]);
+        let chart_bottom_y = (root_height as f32 * 0.5) - 20.0;
+
+        // Bottom left: start_visible_time
+        let start_label = start_visible_time.format("%Y-%m-%d %H:%M").to_string();
+        draw_label(
+            &mut cropped_img,
+            &font,
+            &start_label,
+            8.0,
+            chart_bottom_y,
+            label_scale,
+            label_color,
+            background_color,
+        )?;
+    
+        // Bottom right: end_visible_time
+        let end_label = end_visible_time.format("%Y-%m-%d %H:%M").to_string();
+        let (end_label_width, _) = text_size(label_scale, &font, &end_label);
+        draw_label(
+            &mut cropped_img,
+            &font,
+            &end_label,
+            (chart_width - end_label_width  - 8) as f32,
+            chart_bottom_y,
+            label_scale,
+            label_color,
+            background_color,
+        )?;
+    
         // Add header details on the cropped image
         draw_candle_detail(&mut cropped_img, &self, &font)?;
         if self.bollinger_enabled {
             draw_bollinger_detail(&mut cropped_img, past_data, &font)?;
         }
-
+    
         if self.volume_enabled || self.macd_enabled || self.stoch_rsi_enabled {
             let num_indicators = [
                 self.volume_enabled,
@@ -306,25 +437,25 @@ impl Chart {
             .iter()
             .filter(|&&enabled| enabled)
             .count() as f32;
-
+    
             let section_height = root_height as f32 * 0.5 / num_indicators;
             let top_section_height = root_height as f32 * 0.5;
-
-            let mut current_y = top_section_height  ;
-
+    
+            let mut current_y = top_section_height;
+    
             if self.volume_enabled {
-                draw_volume_detail(&mut cropped_img, past_data, &font, current_y   )?;
-                current_y += section_height ;
+                draw_volume_detail(&mut cropped_img, past_data, &font, current_y)?;
+                current_y += section_height;
             }
             if self.macd_enabled {
-                draw_macd_detail(&mut cropped_img, past_data, &font, current_y  )?;
-                current_y += section_height ;
+                draw_macd_detail(&mut cropped_img, past_data, &font, current_y)?;
+                current_y += section_height;
             }
             if self.stoch_rsi_enabled {
-                draw_stoch_rsi_detail(&mut cropped_img, past_data, &font, current_y   )?;
+                draw_stoch_rsi_detail(&mut cropped_img, past_data, &font, current_y)?;
             }
         }
-
+    
         let price_bounding_rect = draw_axis_labels(
             &mut cropped_img,
             &font.clone(),
@@ -336,49 +467,49 @@ impl Chart {
             min_price,
             max_price,
         )?;
-
+    
         let mut bids_asks_y_map = HashMap::new();
-
+    
         // Draw order book
         if let Some(orderbook_data) = &self.orderbook_data {
-            if let Some(price_bounding_rect) = price_bounding_rect{
-            let new_bids_asks_y_map = draw_order_book(
-                &mut cropped_img,
-                &font,
-                orderbook_data,
-                min_price,
-                max_price,
-                root_width,
-                root_height,
-                right_offset_x as f32,
-                price_bounding_rect.top() as f32,
-                lower_bound,
-                upper_bound,
-                price_bounding_rect,
-            )?;
-
-            bids_asks_y_map = new_bids_asks_y_map;
- }
+            if let Some(price_bounding_rect) = price_bounding_rect {
+                let new_bids_asks_y_map = draw_order_book(
+                    &mut cropped_img,
+                    &font,
+                    orderbook_data,
+                    min_price,
+                    max_price,
+                    root_width,
+                    root_height,
+                    right_offset_x as f32,
+                    price_bounding_rect.top() as f32,
+                    lower_bound,
+                    upper_bound,
+                    price_bounding_rect,
+                )?;
+                bids_asks_y_map = new_bids_asks_y_map;
+            }
         }
-
+    
         // Draw signals if has
         if let Some(ref signals) = &self.signals {
-
-            if let Some(price_bounding_rect) = price_bounding_rect{
-            draw_signals( &mut cropped_img,
-                &font,
-                signals,
-                current_price,
-                price_bounding_rect,
-            )?;}
+            if let Some(price_bounding_rect) = price_bounding_rect {
+                draw_signals(
+                    &mut cropped_img,
+                    &font,
+                    signals,
+                    current_price,
+                    price_bounding_rect,
+                )?;
+            }
         }
-
+    
         // Draw labels if has
         draw_labels(&mut cropped_img, &font, &self, root_width, root_height)?;
-
+    
         // Draw lines if has
         draw_lines(&mut cropped_img, &self, root_width, root_height)?;
-
+    
         Ok(encode_png(&cropped_img)?)
     }
 }
