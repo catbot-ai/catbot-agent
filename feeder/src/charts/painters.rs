@@ -612,19 +612,16 @@ pub fn draw_hallow_label<F: Font>(
     scale: PxScale,
     font_color: Rgb<u8>,
     border_color: Rgb<u8>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Rect> {
     let font_metrics = font.as_scaled(scale);
     let (text_width, text_height) = text_size(scale, font, text);
     let padding = 2f32 * scale.x / text_height as f32;
 
-    draw_hollow_rect_mut(
-        img,
-        Rect::at(x as i32, y as i32).of_size(
-            text_width + 2 * padding as u32,
-            text_height + 2 * padding as u32,
-        ),
-        border_color,
+    let rect = Rect::at(x as i32, y as i32).of_size(
+        text_width + 2 * padding as u32,
+        text_height + 2 * padding as u32,
     );
+    draw_hollow_rect_mut(img, rect, border_color);
 
     draw_text_mut(
         img,
@@ -636,7 +633,7 @@ pub fn draw_hallow_label<F: Font>(
         text,
     );
 
-    Ok(())
+    Ok(rect)
 }
 
 // Drawing helpers
