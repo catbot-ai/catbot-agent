@@ -59,9 +59,9 @@ const PRICE_BG_COLOR: Rgb<u8> = Rgb([255, 255, 0]);
 const PRICE_TEXT_COLOR: Rgb<u8> = Rgb([22, 26, 30]);
 
 // Order
-const BID_COLOR: RGBColor = B_GREEN;
-const ASK_COLOR: RGBColor = B_RED;
-const ORDER_LABEL_SCALE: PxScale = PxScale { x: 17.0, y: 17.0 };
+const BID_COLOR: RGBColor = B_GREEN_DIM;
+const ASK_COLOR: RGBColor = B_RED_DIM;
+const ORDER_LABEL_SCALE: PxScale = PxScale { x: 18.0, y: 18.0 };
 const NUM_WHITE: Rgb<u8> = Rgb([255, 255, 255]);
 const NUM_RED: Rgb<u8> = Rgb([B_RED.0, B_RED.1, B_RED.2]);
 const NUM_GREEN: Rgb<u8> = Rgb([B_GREEN.0, B_GREEN.1, B_GREEN.2]);
@@ -380,7 +380,7 @@ pub fn draw_axis_labels(
             y_position_clamped as f32,
             label_scale,
             PRICE_TEXT_COLOR,
-            PRICE_BG_COLOR,
+            Some(PRICE_BG_COLOR),
         )?;
 
         Some(price_bounding_rect)
@@ -413,7 +413,7 @@ pub fn draw_axis_labels(
                 { *y },
                 label_scale,
                 white,
-                TRANSPARENT_BLACK_50,
+                Some(TRANSPARENT_BLACK_50),
             )?;
         }
         current_y += section_height;
@@ -457,7 +457,7 @@ pub fn draw_axis_labels(
                 *y,
                 label_scale,
                 white,
-                TRANSPARENT_BLACK_50,
+                Some(TRANSPARENT_BLACK_50),
             )?;
         }
         current_y += section_height;
@@ -480,7 +480,7 @@ pub fn draw_axis_labels(
                 *y,
                 label_scale,
                 white,
-                TRANSPARENT_BLACK_50,
+                Some(TRANSPARENT_BLACK_50),
             )?;
         }
     }
@@ -560,7 +560,7 @@ pub fn draw_labels(
                 y_pos,
                 style.scale,
                 style.color,
-                style.background_color,
+                Some(style.background_color),
             )?;
         }
     }
@@ -577,7 +577,7 @@ pub fn draw_label<F: Font>(
     y: f32,
     scale: PxScale,
     color: Rgb<u8>,
-    background_color: Rgb<u8>,
+    background_color: Option<Rgb<u8>>,
 ) -> anyhow::Result<Rect> {
     let font_metrics = font.as_scaled(scale);
     let (text_width, text_height) = text_size(scale, font, text);
@@ -587,7 +587,9 @@ pub fn draw_label<F: Font>(
         text_height + 2 * padding as u32,
     );
 
-    draw_filled_rect_mut(img, bounding_rect, background_color);
+    if let Some(background_color) = background_color {
+        draw_filled_rect_mut(img, bounding_rect, background_color);
+    };
 
     draw_text_mut(
         img,
@@ -740,7 +742,7 @@ pub fn draw_candle_detail(
             10.0,
             HEAD_SCALE,
             LABEL_COLOR,
-            TRANSPARENT_BLACK_50,
+            Some(TRANSPARENT_BLACK_50),
         )?;
     }
     Ok(())
@@ -846,7 +848,7 @@ pub fn draw_bollinger_detail(
                 y_offset,
                 LABEL_SCALE,
                 LABEL_COLOR,
-                TRANSPARENT_BLACK_50,
+                Some(TRANSPARENT_BLACK_50),
             )?;
             y_offset += 25.0;
         }
@@ -935,7 +937,7 @@ pub fn draw_volume_detail(
             current_y,
             LABEL_SCALE,
             LABEL_COLOR,
-            TRANSPARENT_BLACK_50,
+            Some(TRANSPARENT_BLACK_50),
         )?;
     }
     Ok(())
@@ -1066,7 +1068,7 @@ pub fn draw_macd_detail(
             current_y,
             LABEL_SCALE,
             LABEL_COLOR,
-            TRANSPARENT_BLACK_50,
+            Some(TRANSPARENT_BLACK_50),
         )?;
     }
     Ok(())
@@ -1095,7 +1097,7 @@ pub fn draw_stoch_rsi_detail(
             current_y,
             LABEL_SCALE,
             LABEL_COLOR,
-            TRANSPARENT_BLACK_50,
+            Some(TRANSPARENT_BLACK_50),
         )?;
     }
     Ok(())
@@ -1175,7 +1177,7 @@ pub fn draw_orderbook(
     let mut bids_asks_y_map = HashMap::new();
 
     // Position
-    let padding_right = 110.0;
+    let padding_right = 120.0;
     let parent_offset_x = parent_offset_x + padding_right;
     let price_rect_height = 20;
     let price_rect_height_half = price_rect_height / 2;
@@ -1208,15 +1210,14 @@ pub fn draw_orderbook(
 
     // Prepare position for the histogram
     let mut current_y = (-{ price_rect_height_half } / 2i32);
-    let rect_height = 8u32;
-    let gap = 8i32;
+    let rect_height = 17u32;
+    let gap = 4i32;
     let bar_height = rect_height as i32 + gap;
     let offset_y = (current_price_y as i32 - bar_height * (ask_data.len() as i32) + bar_height
-        - bar_height / 4
-        - 1) as f32;
+        - gap / 2) as f32;
 
-    let max_bar_width = 50;
-    let current_x = 32u32;
+    let max_bar_width = 80;
+    let current_x = 40u32;
 
     let max_bid_volume = bid_data
         .iter()
@@ -1230,9 +1231,7 @@ pub fn draw_orderbook(
     let max_volume_width = max_bid_volume.max(max_ask_volume) as i32;
 
     let max_rect_width = (max_volume_width as f32 / max_bar_width as f32) as i32;
-    let offset_x = parent_offset_x as u32 + current_x + 56u32;
-
-    current_y += gap / 2;
+    let offset_x = parent_offset_x as u32 + current_x;
 
     {
         let root = BitMapBackend::with_buffer(img, (width, height)).into_drawing_area();
@@ -1261,8 +1260,7 @@ pub fn draw_orderbook(
             }
         }
 
-        current_y += gap / 4;
-        current_y += bar_height / 2;
+        current_y += bar_height / 2 - gap / 2 + 2;
 
         // Draw the bid histograms
         for (price, volume) in bid_data.iter() {
@@ -1290,7 +1288,10 @@ pub fn draw_orderbook(
     }
 
     // Reset
-    let mut current_y = -{ price_rect_height_half } / 2i32;
+    let mut current_y = (-{ price_rect_height_half } / 2i32);
+    let offset_y = (current_price_y as i32 - bar_height * (ask_data.len() as i32) + bar_height
+        - gap / 2) as f32;
+
     let offset_x = parent_offset_x;
 
     // Draw label
@@ -1315,7 +1316,7 @@ pub fn draw_orderbook(
                 offset_y + current_y as f32,
                 ORDER_LABEL_SCALE,
                 font_color,
-                bg_color,
+                Some(bg_color),
             )?;
 
             draw_label(
@@ -1326,7 +1327,7 @@ pub fn draw_orderbook(
                 offset_y + current_y as f32,
                 ORDER_LABEL_SCALE,
                 NUM_WHITE,
-                bg_color,
+                None,
             )?;
 
             current_y += rect_height as i32 + gap;
@@ -1355,7 +1356,7 @@ pub fn draw_orderbook(
                 offset_y + current_y as f32,
                 ORDER_LABEL_SCALE,
                 font_color,
-                bg_color,
+                Some(bg_color),
             )?;
 
             draw_label(
@@ -1366,7 +1367,7 @@ pub fn draw_orderbook(
                 offset_y + current_y as f32,
                 ORDER_LABEL_SCALE,
                 NUM_WHITE,
-                bg_color,
+                None,
             )?;
 
             current_y += (rect_height + gap as u32) as i32;
@@ -1478,7 +1479,7 @@ pub fn draw_signals(
             stop_percent_y,
             label_scale,
             color,
-            Rgb([BLACK.0, BLACK.1, BLACK.2]),
+            Some(Rgb([BLACK.0, BLACK.1, BLACK.2])),
         );
 
         // entry
@@ -1494,7 +1495,7 @@ pub fn draw_signals(
             entry_y,
             label_scale,
             Rgb([BLACK.0, BLACK.1, BLACK.2]),
-            color,
+            Some(color),
         );
 
         // target_percent
@@ -1511,7 +1512,7 @@ pub fn draw_signals(
             target_percent_y,
             label_scale,
             color,
-            Rgb([BLACK.0, BLACK.1, BLACK.2]),
+            Some(Rgb([BLACK.0, BLACK.1, BLACK.2])),
         );
 
         // target

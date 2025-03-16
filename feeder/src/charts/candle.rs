@@ -464,7 +464,7 @@ impl Chart {
             chart_bottom_y,
             label_scale,
             label_color,
-            background_color,
+            Some(background_color),
         )?;
 
         let end_label = end_visible.format("%Y-%m-%d %H:%M").to_string();
@@ -477,7 +477,7 @@ impl Chart {
             chart_bottom_y,
             label_scale,
             label_color,
-            background_color,
+            Some(background_color),
         )?;
 
         draw_candle_detail(&mut cropped_img, &self, &font)?;
