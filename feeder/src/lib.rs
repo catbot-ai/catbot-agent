@@ -98,7 +98,8 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
             .with_stoch_rsi()
             .with_orderbook(orderbook)
             .with_bollinger_band()
-            .with_past_signals(predicted.signals)
+            // .with_past_signals(predicted.signals)
+            .with_signals(predicted.signals)
             .build();
 
         // Handle
