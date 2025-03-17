@@ -20,7 +20,12 @@ npx wrangler deploy
 ## Secret
 
 ```
+# cooker
 npx wrangler secret put GEMINI_API_KEY
+
+# feeder
+npx wrangler secret put PREDICTION_API_URL
+https://catbot-cooker.foxfox.workers.dev/api/v1/predict
 ```
 
 ## TODO
@@ -47,6 +52,19 @@ npx wrangler secret put GEMINI_API_KEY
   }' \
   --output "screenshot.webp"
   ```
+
+## Flow
+
+```mermaid
+graph LR;
+  I(⏱️ cranker)--"1m trigger"--> A
+  AA(🌼 binance)--"token prices"-->A
+  AB(🌸 jupiter)--"positions"-->A
+  A(🐝 cooker) --"chart 15m,1h,4h<br>ema,bb,mcad"--> B("🍯 hot storage")
+  B --"sum_signals"--> C
+  C("🤖 feeder_llm") --"sum_signals<br>text+img"--> L1("💬 trader_discord")
+  C--"sum_signals<br>text+img"--> O("🤖 trade_bot_vlm")
+```
 
 ## Features
 
