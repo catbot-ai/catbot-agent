@@ -15,7 +15,9 @@ pub enum Route {
 }
 
 pub async fn handle_root(_req: Request, _ctx: RouteContext<()>) -> worker::Result<Response> {
-    Response::from_html(r#"<a href="/api/v1/predict/SOL_USDT/1h">PREDICT</a>"#)
+    Response::from_html(
+        r#"<a href="/api/v1/suggest/SOL_USDT/1h">SUGGEST</a><br><a href="/api/v1/predict/SOL_USDT/1h">PREDICT</a><br>"#,
+    )
 }
 
 #[event(fetch)]
@@ -159,10 +161,7 @@ pub async fn predict_with_gemini(
             Ok(positions) => positions,
             Err(error) => return Err(format!("Error getting position: {:?}", error.to_string())),
         },
-        None => match get_preps_position(None).await {
-            Ok(positions) => positions,
-            Err(error) => return Err(format!("Error getting position: {:?}", error.to_string())),
-        },
+        None => None,
     };
 
     let prompt = get_binance_prompt(
