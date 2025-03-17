@@ -42,3 +42,7 @@ codegen-units = 1
 [dev-dependencies]
 tokio = { workspace = true }
 rand = "0.9.0"
+
+[features]
+default = ["service_binding"]
+service_binding = []

@@ -3,9 +3,10 @@ mod charts;
 use charts::candle::Chart;
 use chrono_tz::Asia::Tokyo;
 use common::binance::fetch_orderbook_depth;
-use common::cooker::fetch_graph_prediction;
+use common::cooker::fetch_graph_prediction_from_worker;
 use common::sources::binance::fetch_binance_kline_data;
-use common::{Kline, RefinedGraphPredictionResponse};
+use common::Kline;
+
 use std::ops::Deref;
 use worker::*;
 
@@ -15,21 +16,25 @@ async fn gen_candle(pair_symbol: String, timeframe: String) -> anyhow::Result<Ve
     Ok(kline_data_1m)
 }
 
-async fn get_predictions(
-    api_url: String,
-    pair_symbol: String,
-    timeframe: String,
-) -> anyhow::Result<RefinedGraphPredictionResponse> {
-    let prediction = fetch_graph_prediction(&api_url, &pair_symbol, &timeframe, None).await?;
-    Ok(prediction)
-}
-
 // TODO: pixel font
 const DEFAULT_FONT_NAME: &str = "RobotoMono-Regular.ttf";
 
-pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<Response> {
+pub async fn cooker(req: Request, ctx: RouteContext<()>) -> worker::Result<Response> {
+    // Fetch the response from the COOKER service
+    let fetcher = ctx.env.service("COOKER")?;
+    let http_request: worker::HttpRequest = req.try_into()?;
+    let resp = fetcher.fetch_request(http_request).await?;
+
+    // Convert to cf response
+    let cf_response: Response = resp.try_into()?;
+
+    // Convert the JSON value to a string and return it as a Response
+    Response::from_body(cf_response.body().clone())
+}
+
+pub async fn handle_chart(req: Request, ctx: RouteContext<()>) -> worker::Result<Response> {
     if let Some(pair_symbol) = ctx.param("pair_symbol") {
-        // Get url
+        // Get fetcher
         let api_url = ctx
             .env
             .secret("PREDICTION_API_URL")
@@ -39,6 +44,9 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
         // Get timeframe
         let binding = "1h".to_string();
         let timeframe = ctx.param("timeframe").unwrap_or(&binding);
+
+        // Finalize api_url
+        let api_url = format!("{api_url}/{pair_symbol}/{timeframe}");
 
         // Get font
         let kv_store = ctx.kv("ASSETS").unwrap();
@@ -60,7 +68,7 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
         let candle_data = match candle_data {
             Ok(candle_data) => candle_data,
             Err(error) => {
-                return Response::error(format!("Bad Request - Missing candle_data: {error}"), 400)
+                return Response::error(format!("Bad Request - Missing candle data: {error}"), 400)
             }
         };
 
@@ -78,11 +86,21 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
         };
 
         // TODO: Extract signal for plot the chart
-        let predicted = match get_predictions(api_url, pair_symbol.clone(), timeframe.clone()).await
-        {
+        #[cfg(not(feature = "service_binding"))]
+        let prediction = fetch_graph_prediction(&api_url, &pair_symbol, &timeframe, None).await;
+
+        #[cfg(feature = "service_binding")]
+        let fetcher = ctx.env.service("COOKER")?;
+        let prediction =
+            fetch_graph_prediction_from_worker(req, &fetcher, &pair_symbol, timeframe).await;
+
+        let predicted = match prediction {
             Ok(predicted_candle_data) => predicted_candle_data,
             Err(error) => {
-                return Response::error(format!("Bad Request - Missing Data: {error}"), 400)
+                return Response::error(
+                    format!("Bad Request - Missing prediction data from {api_url}: {error}"),
+                    400,
+                )
             }
         };
 
@@ -106,7 +124,7 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
         let buffer = match buffer_result {
             Ok(buffer) => buffer,
             Err(error) => {
-                return Response::error(format!("Bad Request - Missing Data: {error}"), 400)
+                return Response::error(format!("Bad Request - Missing image data: {error}"), 400)
             }
         };
 
@@ -120,8 +138,8 @@ pub async fn handle_chart(_: Request, ctx: RouteContext<()>) -> worker::Result<R
     }
 }
 
-pub async fn handle_root(_req: Request, _ctx: RouteContext<()>) -> worker::Result<Response> {
-    Response::from_html(r#"<a href="/api/v1/chart/SOL_USDT/1h">/api/v1/chart/SOL_USDT/1h</a>"#)
+pub async fn handle_root(_: Request, _ctx: RouteContext<()>) -> worker::Result<Response> {
+    Response::from_html("<a href=\"/api/v1/chart/SOL_USDT/1h\">/api/v1/chart/SOL_USDT/1h</a><hr>")
 }
 
 #[event(fetch)]
@@ -131,6 +149,7 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
 
     router
         .get_async("/", handle_root)
+        // .get_async("/api/v1/suggest/:pair_symbol/:timeframe", handle_hello)
         .get_async("/api/v1/chart/:pair_symbol/:timeframe", handle_chart)
         .run(req, env)
         .await

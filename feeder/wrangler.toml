@@ -1,6 +1,9 @@
 name = "catbot-feeder"
 main = "build/worker/shim.mjs"
 compatibility_date = "2025-02-13"
+services = [
+  { binding = "COOKER", service = "catbot-cooker" }
+]
 
 [[kv_namespaces]]
 binding = "ASSETS"

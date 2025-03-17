@@ -13,6 +13,13 @@ jup-sdk = { workspace = true }
 reqwest.workspace = true
 anyhow.workspace = true
 
+worker = { version="0.5.0", features=['http'], optional = true  }
+worker-macros = { version="0.5.0", features=['http'], optional = true  }
+
 [dev-dependencies]
 tokio = { workspace = true }
 dotenvy.workspace = true
+
+[features]
+default = ["service_binding"]
+service_binding = ["dep:worker", "dep:worker-macros"]

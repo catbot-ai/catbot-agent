@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use chrono::{Duration, Utc};
 use reqwest::Client;
 use serde_json::json;
@@ -7,17 +7,54 @@ use crate::{Kline, KlineValue, RefinedGraphPredictionResponse};
 
 use super::binance::fetch_binance_kline_data;
 
+#[cfg(feature = "service_binding")]
+use worker::*;
+
+pub async fn fetch_graph_prediction_from_worker(
+    req: Request,
+    fetcher: &Fetcher,
+    pair_symbol: &str,
+    timeframe: &str, // TODO
+) -> Result<RefinedGraphPredictionResponse> {
+    // Construct the new path
+    let new_path = format!("api/v1/predict/{pair_symbol}/{timeframe}");
+    println!("new_path: {new_path}");
+
+    // Convert the request to HttpRequest
+    let mut http_request: worker::HttpRequest = req.try_into()?;
+
+    // Get the original URI
+    let original_uri = http_request.uri();
+    let scheme = original_uri.scheme_str().unwrap_or("https");
+    let authority = original_uri
+        .authority()
+        .ok_or_else(|| worker::Error::RustError("No authority in URI".to_string()))?;
+
+    // Construct the new URI
+    let new_uri_str = format!("{}://{}/{}", scheme, authority, new_path);
+
+    // Update the HttpRequest URI
+    *http_request.uri_mut() = new_uri_str.parse()?;
+
+    let resp = fetcher.fetch_request(http_request).await?;
+    let mut cf_response: Response = resp.try_into()?;
+    let response_text = cf_response.text().await?;
+
+    let result = serde_json::from_str(&response_text)?;
+
+    Ok(result)
+}
+
 pub async fn fetch_graph_prediction(
     api_url: &str,
     pair_symbol: &str,
-    interval: &str, // TODO
+    timeframe: &str, // TODO
     api_key: Option<&str>,
 ) -> Result<RefinedGraphPredictionResponse> {
     let client = Client::new();
 
     // url
-    let url = format!("{api_url}/{pair_symbol}/{interval}");
-    println!("{url}");
+    let url = format!("{api_url}/{pair_symbol}/{timeframe}");
 
     // Build the request
     let mut request = client.get(url);

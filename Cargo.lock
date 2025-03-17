@@ -434,6 +434,8 @@ dependencies = [
  "serde_json",
  "strum",
  "tokio",
+ "worker",
+ "worker-macros",
 ]
 
 [[package]]
