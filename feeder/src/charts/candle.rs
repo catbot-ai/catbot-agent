@@ -311,7 +311,11 @@ impl Chart {
             border_color,
         )?;
 
-        let label_high_x = if label_high_x < chart_width2   { highest_x - label_width - candle_w2 } else { highest_x  + 16.0 };
+        let label_high_x = if label_high_x > chart_width2   { highest_x - label_width - candle_w2 } else { highest_x  + 16.0 };
+
+        // Under other label?
+        let label_high_x = if label_high_x < 300.0 { 300.0 } else { label_high_x };
+
         let high_bounding_rect = draw_hallow_label(
             img,
             font,
@@ -334,7 +338,7 @@ impl Chart {
             line_color,
         );
 
-        let line_x2 = if label_high_x < chart_width2 { high_bounding_rect.left() + high_bounding_rect.width() as i32} else {label_high_x as i32};
+        let line_x2 = if label_high_x > chart_width2 { high_bounding_rect.left() + high_bounding_rect.width() as i32} else {label_high_x as i32};
         draw_line_segment_mut(
             img,
             (highest_x_center, highest_y),
