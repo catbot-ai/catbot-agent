@@ -1,14 +1,14 @@
-use image::{ImageBuffer, Rgb};
+use image::{ImageBuffer, Rgba};
 use imageproc::drawing::draw_line_segment_mut;
 
 // Draw a dashed line segment on the image buffer
 pub fn draw_dashed_line_segment_mut(
-    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
     start: (f32, f32),
     end: (f32, f32),
     dash_length: f32,
     gap_length: f32,
-    color: Rgb<u8>,
+    color: Rgba<u8>,
 ) {
     let (x1, y1) = start;
     let (x2, y2) = end;
