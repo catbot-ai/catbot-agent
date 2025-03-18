@@ -345,7 +345,6 @@ impl Chart {
         Ok(())
     }
 
-    // Update build method to pass candle_width
     pub fn build(self) -> Result<Vec<u8>, Box<dyn Error>> {
         if self.past_candle_data.is_none() {
             return Err("Candle data set is required".into());
