@@ -1,5 +1,6 @@
 use super::helpers::get_visible_range_and_data;
 use super::helpers::parse_kline_time;
+use super::image::draw_dashed_line_segment_mut;
 use super::painters::*;
 use crate::charts::png::encode_png;
 use ab_glyph::FontArc;
@@ -343,6 +344,26 @@ impl Chart {
             img,
             (highest_x_center, highest_y),
             (line_x2 as f32, highest_y - 8.0),  
+            line_color,
+        );
+
+        // Horizon line
+        let line_color = Rgb([255/2, 255/2, 255/2]); // White line
+        draw_dashed_line_segment_mut(
+            img,
+            (0.0, lowest_y),  
+            (chart_width as f32, lowest_y),  
+            3.0,
+            3.0,
+            line_color,
+        );
+
+        draw_dashed_line_segment_mut(
+            img,
+            (0.0, highest_y),  
+            (chart_width as f32, highest_y),  
+            3.0,
+            3.0,
             line_color,
         );
 
