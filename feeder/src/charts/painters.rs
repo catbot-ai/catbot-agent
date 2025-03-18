@@ -1414,7 +1414,7 @@ pub fn draw_signals(
         let h = price_bounding_rect.height() as f32;
         // let factor_y = (y / current_price as f32) as f32;
 
-        let entry_percent = ((signal.entry_price - current_price) / current_price) * 100.0;
+        let _entry_percent = ((signal.entry_price - current_price) / current_price) * 100.0;
         let target_percent = ((signal.target_price - current_price) / current_price) * 100.0;
         let stop_percent = ((signal.stop_loss - current_price) / current_price) * 100.0;
 
