@@ -848,7 +848,7 @@ pub fn draw_bollinger_detail(
                 y_offset,
                 LABEL_SCALE,
                 LABEL_COLOR,
-                Some(TRANSPARENT_BLACK_50),
+                None,
             )?;
             y_offset += 25.0;
         }
