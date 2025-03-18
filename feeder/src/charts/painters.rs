@@ -93,7 +93,8 @@ pub fn draw_chart(
         .margin_right(margin_right)
         .build_cartesian_2d(first_time..last_time, min_price * 0.95..max_price * 1.05)?;
 
-    let candle_width = calculate_candle_width(&top_chart, timeframe);
+    let total_candles_num = all_candle_data.len() as u8;
+    let candle_width = calculate_candle_width(&top_chart, total_candles_num);
 
     draw_candlesticks(
         &mut top_chart,
@@ -227,6 +228,7 @@ pub fn draw_chart(
                 candle_width,
                 final_width * 2,
             )?;
+
             let mut stoch_rsi_chart = ChartBuilder::on(&stoch_rsi_area)
                 .margin_right(margin_right)
                 .build_cartesian_2d(first_visible_time..last_visible_time, 0.0f32..100.0f32)?;
@@ -645,17 +647,11 @@ pub fn calculate_candle_width<Tz: TimeZone>(
         impl DrawingBackend,
         Cartesian2d<RangedDateTime<DateTime<Tz>>, RangedCoordf32>,
     >,
-    timeframe: &str,
+    num_candles: u8,
 ) -> u32 {
     // Get drawing area dimensions and x-axis range
     let drawing_area = chart.plotting_area();
-    let pixel_width = drawing_area.dim_in_pixel().0 as f32; // Total width in pixels
-    let x_range = chart.plotting_area().get_x_range();
-    let total_time_ms = (x_range.end.timestamp_millis() - x_range.start.timestamp_millis()) as f32;
-
-    // Calculate the number of candles that fit in the time range
-    let timeframe_ms = parse_timeframe_duration(timeframe).num_milliseconds() as f32;
-    let num_candles = (total_time_ms / timeframe_ms).ceil() as usize;
+    let pixel_width = drawing_area.dim_in_pixel().0 as f32;
 
     // Estimate candle width in pixels: distribute total pixel width across candles
     if num_candles > 0 {
@@ -688,7 +684,7 @@ where
         .draw()?;
 
     chart.draw_series(candle_data.iter().map(|k| {
-        let time = parse_kline_time(k.open_time, timezone);
+        let time = parse_kline_time(k.open_time - 6000 * 60 * 3, timezone);
         let open = k.open_price.parse::<f32>().unwrap();
         let high = k.high_price.parse::<f32>().unwrap();
         let low = k.low_price.parse::<f32>().unwrap();
