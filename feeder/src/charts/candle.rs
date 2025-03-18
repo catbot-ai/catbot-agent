@@ -350,7 +350,7 @@ impl Chart {
         );
 
         // Horizon line
-        let line_color = Rgba([255, 255, 255, 255/2 as u8]); // White line
+        let line_color = Rgba([255, 255, 255, 255/2u8]); // White line
         draw_dashed_line_segment_mut(
             img,
             (0.0, lowest_y),  
