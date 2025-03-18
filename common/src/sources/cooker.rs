@@ -18,7 +18,6 @@ pub async fn fetch_graph_prediction_from_worker(
 ) -> Result<RefinedGraphPredictionResponse> {
     // Construct the new path
     let new_path = format!("api/v1/predict/{pair_symbol}/{timeframe}");
-    println!("new_path: {new_path}");
 
     // Convert the request to HttpRequest
     let mut http_request: worker::HttpRequest = req.try_into()?;
