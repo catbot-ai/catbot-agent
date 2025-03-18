@@ -5,6 +5,7 @@ use crate::charts::png::encode_png;
 use ab_glyph::FontArc;
 use ab_glyph::PxScale;
 use chrono::DateTime;
+use chrono::Utc;
 use chrono_tz::Tz;
 use common::Kline;
 use common::LongShortSignal;
@@ -467,7 +468,9 @@ impl Chart {
             Some(background_color),
         )?;
 
-        let end_label = end_visible.format("%Y-%m-%d %H:%M").to_string();
+        // let end_label = end_visible.format("%Y-%m-%d %H:%M").to_string();
+        let now = Utc::now();
+        let end_label = now.with_timezone(&chrono_tz::Asia::Tokyo).format("%Y-%m-%d %H:%M").to_string();
         let (end_label_width, _) = text_size(label_scale, &font, &end_label);
         draw_label(
             &mut cropped_img,
