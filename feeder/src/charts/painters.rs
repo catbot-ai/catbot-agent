@@ -55,7 +55,7 @@ const LABEL_COLOR: Rgba<u8> = Rgba([255, 255, 255, 255]);
 const LABEL_SCALE: PxScale = PxScale { x: 20.0, y: 20.0 };
 
 // TODO: TRANSPARENT
-const TRANSPARENT_BLACK_50: Rgba<u8> = Rgba([0, 0, 0, 255]);
+const TRANSPARENT_BLACK_50: Rgba<u8> = Rgba([0, 0, 0, 127]);
 const PRICE_BG_COLOR: Rgba<u8> = Rgba([255, 255, 0, 255]);
 const PRICE_TEXT_COLOR: Rgba<u8> = Rgba([22, 26, 30, 255]);
 

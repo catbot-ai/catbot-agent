@@ -60,10 +60,11 @@ graph LR;
   I(⏱️ cranker)--"1m trigger"--> A
   AA(🌼 binance)--"token prices"-->A
   AB(🌸 jupiter)--"positions"-->A
-  A(🐝 cooker) --"chart 15m,1h,4h<br>ema,bb,mcad"--> B("🍯 hot storage")
-  B --"sum_signals"--> C
-  C("🤖 feeder_llm") --"sum_signals<br>text+img"--> L1("💬 trader_discord")
+  A(🐝 cooker) --"chart 15m,1h,4h<br>ema,bb,mcad"-->B("🍯 storage")
+  B --"sum_signals"-->C("🤖 feeder_llm") --"sum_signals<br>text+img"--> L1("💬 trader_discord")
   C--"sum_signals<br>text+img"--> O("🤖 trade_bot_vlm")
+  O-->D(🌸 jupiter_perps)<--"positions"-->E("🤖 rebalance_llm")
+  C--"sum_signals<br>text+img"-->E--"results"-->B
 ```
 
 ## Features

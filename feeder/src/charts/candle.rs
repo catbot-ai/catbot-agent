@@ -331,7 +331,7 @@ impl Chart {
         )?;
 
         // Draw line from candlestick to the LOW label
-        let line_color = Rgba([255, 255, 255, 255]); // White line
+        let line_color = Rgba([255/3, 255/3, 255/3, 255/2u8]); // White line
         
         let line_x2 = if label_low_x > chart_width2 { low_bounding_rect.left() + low_bounding_rect.width() as i32} else {label_low_x as i32};
         draw_line_segment_mut(
@@ -350,7 +350,7 @@ impl Chart {
         );
 
         // Horizon line
-        let line_color = Rgba([255, 255, 255, 255/2u8]); // White line
+        let line_color = Rgba([255/3, 255/3, 255/3, 255/2u8]); // White line
         draw_dashed_line_segment_mut(
             img,
             (0.0, lowest_y),  
@@ -448,12 +448,18 @@ impl Chart {
             )?
         };
 
-        let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(plot_width, root_height);
-        imgbuf.copy_from_slice(buffer.as_slice());
+        // Create an Rgb ImageBuffer from the plotters buffer
+        let rgb_img: ImageBuffer<Rgb<u8>, Vec<u8>> =
+        ImageBuffer::from_raw(plot_width, root_height, buffer)
+            .ok_or("Failed to create Rgb ImageBuffer")?;
 
+        // Convert Rgb to Rgba
+        let rgba_img: ImageBuffer<Rgba<u8>, Vec<u8>> = rgb_img.convert();
+
+        // Crop as before
         let crop_x = plot_width.saturating_sub(root_width);
-        let cropped_img: ImageBuffer<Rgb<u8>, Vec<u8>> =
-            image::imageops::crop_imm(&imgbuf, crop_x, 0, root_width, root_height).to_image();
+        let cropped_img: ImageBuffer<Rgba<u8>, Vec<u8>> =
+        image::imageops::crop_imm(&rgba_img, crop_x, 0, root_width, root_height).to_image();
 
         let mut cropped_img: ImageBuffer<Rgba<u8>, Vec<u8>> = cropped_img.convert();
 
