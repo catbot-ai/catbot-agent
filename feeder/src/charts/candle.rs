@@ -13,7 +13,6 @@ use image::{ImageBuffer, Rgb};
 use imageproc::drawing::draw_line_segment_mut;
 use imageproc::drawing::text_size;
 use plotters::prelude::*;
-use std::collections::HashMap;
 use std::error::Error;
 
 // Styling structures (unchanged)
@@ -82,6 +81,7 @@ impl Chart {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_predicted_candle(mut self, predicted_candle: Vec<Kline>) -> Self {
         self.predicted_candle = Some(predicted_candle);
         self
@@ -193,7 +193,7 @@ impl Chart {
         self
     }
 
-    // New function to get the visible time range
+    #[allow(clippy::type_complexity)]
     fn get_visible_time_range(
         &self,
         all_candles: &[Kline],
@@ -216,7 +216,7 @@ impl Chart {
         Ok((start_visible, end_visible, visible_candles))
     }
 
-    // New function to draw LOW and HIGH labels
+    #[allow(clippy::too_many_arguments, unused)]
     fn draw_low_high_labels(
         &self,
         img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
@@ -402,11 +402,11 @@ impl Chart {
         let min_price = prices.iter().fold(f32::INFINITY, |a, &b| a.min(b));
         let max_price = prices.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
 
-        let mut lower_bound = 0.0;
-        let mut upper_bound = 0.0;
+        #[allow(unused_assignments)]
+        let (lower_bound, upper_bound) = 
         {
             let mut root_area = BitMapBackend::with_buffer(&mut buffer, bar).into_drawing_area();
-            (lower_bound, upper_bound) = self.draw_candles(
+            self.draw_candles(
                 &all_candles,
                 past_candles,
                 timezone,
@@ -418,8 +418,8 @@ impl Chart {
                 plot_width,
                 last_past_time,
                 &mut root_area,
-            )?;
-        }
+            )?
+        };
 
         let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(plot_width, root_height);
         imgbuf.copy_from_slice(buffer.as_slice());
@@ -562,7 +562,7 @@ impl Chart {
         Ok(encode_png(&cropped_img)?)
     }
 
-    // New function to draw candles
+    #[allow(clippy::too_many_arguments, unused)]
     fn draw_candles(
         &self,
         all_candles: &[Kline],
