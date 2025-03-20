@@ -326,6 +326,7 @@ pub struct TradingContext {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct PredictedLongShortSignal {
+    pub pair_symbol: String,
     pub direction: String,
     pub entry_price: f64,
     pub target_price: f64,

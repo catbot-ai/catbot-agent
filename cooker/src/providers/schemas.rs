@@ -2,6 +2,22 @@ use jup_sdk::perps::PerpsPosition;
 
 use crate::predictions::prediction_types::PredictionType;
 
+pub fn get_signal_schema(pair_symbol: &str) -> String {
+    format!(
+        r#""signals": [{{
+        "pair_symbol": {pair_symbol}, // 
+        "direction": string, // Predicted direction, long or shot
+        "confidence": number, // Confidence about this signal: 0.0-1.0
+        "entry_price": number, // Suggest entry price, Can be future price.
+        "target_price": number, // Suggest target price, Can be future price.
+        "stop_loss": number,  // Suggest stop loss, Can be future price.
+        "entry_time": number, // Timestamp prediction when to make a trade for this signal, Can be now or in the future.
+        "target_time": number, // Timestamp prediction when to take profit.
+        "rationale": "string" // Rationale about this signal e.g., "4h momentum up, bids outpace asks", "1h rejection at xxx, high ask volume"
+    }}]"#
+    )
+}
+
 pub fn get_perps_position_schema(
     maybe_preps_positions: Option<Vec<PerpsPosition>>,
 ) -> (String, String) {
@@ -37,39 +53,30 @@ pub fn get_perps_position_schema(
     (maybe_preps_positions_string, maybe_position_schema)
 }
 
-const SIGNAL_SCHEMA: &str = r#""signals": [{
-        "direction": string, // Predicted direction, long or shot
-        "confidence": number, // Confidence about this signal: 0.0-1.0
-        "entry_price": number, // Suggest entry price, Can be future price.
-        "target_price": number, // Suggest target price, Can be future price.
-        "stop_loss": number,  // Suggest stop loss, Can be future price.
-        "entry_time": number, // Timestamp prediction when to make a trade for this signal, Can be now or in the future.
-        "target_time": number, // Timestamp prediction when to take profit.
-        "rationale": "string" // Rationale about this signal e.g., "4h momentum up, bids outpace asks", "1h rejection at xxx, high ask volume"
-    }]"#;
-
 pub fn get_schema_instruction(
     prediction_type: &PredictionType,
-    symbol: &str,
+    pair_symbol: &str,
     maybe_position_schema: String,
 ) -> String {
+    let signal_schema = get_signal_schema(pair_symbol);
     match prediction_type {
         PredictionType::TradingPredictions => format!(
             r#"{{
     "summary": {{
         "technical_resistance_4h": number, // Estimated 4h resistance from provided data.
         "technical_support_4h": number, // Estimated 4h support from provided data.
-        "vibe": "string", // Current market vibe e.g., "{symbol} Short-term 65% Bearish"
+        "vibe": "string", // Current market vibe e.g., "{pair_symbol} Short-term 65% Bearish"
         "detail": "string", // Trading analysis <500 chars, include volume and momentum insights
-        "suggestion": "string" // Suggestion trading action e.g., "Short {symbol} at xxx if volume confirms resistance"
+        "suggestion": "string" // Suggestion trading action e.g., "Short {pair_symbol} at xxx if volume confirms resistance"
     }},
-    {SIGNAL_SCHEMA},
+    {signal_schema},
     {maybe_position_schema}
 }}
 "#
         ),
-        PredictionType::GraphPredictions => r#"{
-    {SIGNAL_SCHEMA},
+        PredictionType::GraphPredictions => format!(
+            r#"{{
+    {signal_schema},
     "klines": [
         [
             1741870260000,  // Open time: Timestamp in milliseconds when the K-line opens
@@ -81,8 +88,8 @@ pub fn get_schema_instruction(
             1741873860000,  // Close time: Timestamp in milliseconds when the K-line closes
         ]
     ]
-}
+ }}
 "#
-        .to_string(),
+        ),
     }
 }

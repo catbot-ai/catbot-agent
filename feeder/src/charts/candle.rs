@@ -645,7 +645,6 @@ mod test {
     use common::binance::fetch_binance_kline_data;
     use common::binance::fetch_orderbook_depth;
     use common::PredictedLongShortSignal;
-    use common::TradingContext;
 
     #[tokio::test]
     async fn entry_point() {
@@ -675,6 +674,7 @@ mod test {
 
             past_signals.push(LongShortSignal {
             predicted:PredictedLongShortSignal {
+                pair_symbol: pair_symbol.to_owned(),
                 direction:"long".to_string(),
                 confidence:0.85,
                 entry_price:long_entry_price,
@@ -703,6 +703,7 @@ mod test {
 
             past_signals.push(LongShortSignal {
                 predicted: PredictedLongShortSignal {
+                    pair_symbol: pair_symbol.to_owned(),
                     direction: "short".to_string(),
                     confidence: 0.82,
                     entry_price: short_entry_price,
@@ -750,6 +751,7 @@ mod test {
 
             signals.push(LongShortSignal {
                 predicted: PredictedLongShortSignal {
+                    pair_symbol: pair_symbol.to_owned(),
                     direction: "long".to_string(),
                     confidence: 0.9,
                     entry_price: long_entry_price,
@@ -776,6 +778,7 @@ mod test {
         
             signals.push(LongShortSignal {
                 predicted: PredictedLongShortSignal {
+                    pair_symbol: pair_symbol.to_owned(),
                     direction: "short".to_string(),
                     confidence: 0.87,
                     entry_price: short_entry_price,

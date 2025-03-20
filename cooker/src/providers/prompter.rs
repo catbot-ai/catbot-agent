@@ -32,7 +32,8 @@ pub fn build_prompt<T>(
     let current_timestamp = now_utc.timestamp_millis();
 
     // TODO: Better handle binance_pair_symbol
-    let binance_pair_symbol = context.pair_symbol.replace("_", "");
+    let pair_symbol = context.pair_symbol.clone();
+    let binance_pair_symbol = pair_symbol.replace("_", "");
     let symbol = binance_pair_symbol
         .split("USDT")
         .next()
@@ -58,7 +59,8 @@ pub fn build_prompt<T>(
 
     // Instructions
     let instruction = get_instruction(prediction_type, context.timeframe);
-    let schema_instruction = get_schema_instruction(prediction_type, symbol, maybe_position_schema);
+    let schema_instruction =
+        get_schema_instruction(prediction_type, &pair_symbol, maybe_position_schema);
 
     let price_history_string = maybe_price_history
         .as_ref()
