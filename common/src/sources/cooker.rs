@@ -88,7 +88,7 @@ pub async fn fetch_graph_prediction(
 
 pub async fn get_mock_graph_prediction() -> String {
     // Load real data from Binance
-    let binance_pair_symbol = "SOLUSDC";
+    let binance_pair_symbol = "SOLUSDT";
     let timeframe = "1h";
     let limit = 24;
     let candle_data = fetch_binance_kline_data::<Kline>(binance_pair_symbol, timeframe, limit)
@@ -153,7 +153,7 @@ pub async fn get_mock_graph_prediction() -> String {
             "entry_price": last_candle.close_price.parse::<f64>().unwrap(),
             "rationale": "Based on the 1h price history, SOL is showing signs of a potential bullish reversal. Stochastic RSI is currently below 20, indicating oversold conditions. Recent price action shows strong support. 1h volume is increasing.",
             "stop_loss": last_candle.close_price.parse::<f64>().unwrap() * 0.97,
-            "pair_symbol": "SOL_USDC",
+            "pair_symbol": "SOL_USDT",
             "target_time": target_time,
             "target_time_local": target_time_local,
             "target_price": last_candle.close_price.parse::<f64>().unwrap() * 1.03,
@@ -174,7 +174,7 @@ mod tests {
         dotenvy::from_filename(".env").expect("No .env file");
         let api_url = std::env::var("PREDICTION_API_URL").expect("PREDICTION_API_URL must be set");
 
-        let pair_symbol = "SOL_USDC";
+        let pair_symbol = "SOL_USDT";
         let timeframe = "1h";
 
         let prediction = fetch_graph_prediction(&api_url, pair_symbol, timeframe, None)

@@ -69,6 +69,8 @@ const NUM_GREEN: Rgba<u8> = Rgba([B_GREEN.0, B_GREEN.1, B_GREEN.2, 255]);
 
 const PRICE_LINE_COLOR: Rgba<u8> = PRICE_BG_COLOR;
 
+const MARGIN_TOP: i32 = 1024 / 3;
+
 #[allow(clippy::too_many_arguments, unused)]
 pub fn draw_chart(
     root: &mut DrawingArea<BitMapBackend<'_>, plotters::coord::Shift>,
@@ -1205,8 +1207,9 @@ pub fn draw_orderbook(
     let rect_height = 17u32;
     let gap = 4i32;
     let bar_height = rect_height as i32 + gap;
-    let offset_y = (current_price_y as i32 - bar_height * (ask_data.len() as i32) + bar_height
-        - gap / 2) as f32;
+    let offset_y = MARGIN_TOP as f32
+        + (current_price_y as i32 - bar_height * (ask_data.len() as i32) + bar_height - gap / 2)
+            as f32;
 
     let max_bar_width = 80;
     let current_x = 40u32;
@@ -1292,8 +1295,9 @@ pub fn draw_orderbook(
 
     // Reset
     let mut current_y = (-{ price_rect_height_half } / 2i32);
-    let offset_y = (current_price_y as i32 - bar_height * (ask_data.len() as i32) + bar_height
-        - gap / 2) as f32;
+    let offset_y = MARGIN_TOP as f32
+        + (current_price_y as i32 - bar_height * (ask_data.len() as i32) + bar_height - gap / 2)
+            as f32;
 
     let offset_x = parent_offset_x;
 
@@ -1336,6 +1340,8 @@ pub fn draw_orderbook(
             current_y += rect_height as i32 + gap;
         }
     }
+
+    let middle_y = (current_y + price_rect_height_half / 4) as f32 + offset_y;
     current_y += price_rect_height_half;
 
     for (price, volume) in bid_data.iter() {
@@ -1385,7 +1391,19 @@ pub fn draw_orderbook(
             parent_offset_x - padding_right + price_bounding_rect.width() as f32,
             price_line_y,
         ),
-        (width as f32, price_line_y),
+        (offset_x - 3.0, price_line_y),
+        PRICE_LINE_COLOR,
+    );
+    draw_line_segment_mut(
+        img,
+        (offset_x - 3.0, price_line_y),
+        (offset_x - 3.0, middle_y),
+        PRICE_LINE_COLOR,
+    );
+    draw_line_segment_mut(
+        img,
+        (offset_x - 3.0, middle_y),
+        (offset_x + 128.0, middle_y),
         PRICE_LINE_COLOR,
     );
 

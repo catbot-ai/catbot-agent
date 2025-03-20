@@ -19,7 +19,7 @@ pub enum Route {
 
 pub async fn handle_root(_req: Request, _ctx: RouteContext<()>) -> worker::Result<Response> {
     Response::from_html(
-        r#"<a href="/api/v1/suggest/SOL_USDC">SUGGEST</a><br><a href="/api/v1/predict/SOL_USDC/1h">PREDICT</a><br>"#,
+        r#"<a href="/api/v1/suggest/SOL_USDT">SUGGEST</a><br><a href="/api/v1/predict/SOL_USDT/1h">PREDICT</a><br>"#,
     )
 }
 
@@ -229,7 +229,7 @@ mod tests {
         dotenvy::from_filename(".env").expect("No .env file");
 
         let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
-        let pair_symbol = "SOL_USDC";
+        let pair_symbol = "SOL_USDT";
         let wallet_address = std::env::var("WALLET_ADDRESS").ok();
 
         let result = predict_with_gemini(
@@ -253,7 +253,7 @@ mod tests {
         dotenvy::from_filename(".env").expect("No .env file");
 
         let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
-        let pair_symbol = "SOL_USDC";
+        let pair_symbol = "SOL_USDT";
 
         let result = predict_with_gemini(
             &PredictionType::GraphPredictions,

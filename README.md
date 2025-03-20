@@ -40,7 +40,7 @@ https://catbot-cooker.foxfox.workers.dev/api/v1/predict
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer KEY' \
   -d '{
-  "url": "https://www.binance.com/en/trade/SOL_USDC",
+  "url": "https://www.binance.com/en/trade/SOL_USDT",
       "viewport": {
       "width": 1640,
       "height": 960

@@ -139,7 +139,7 @@ pub async fn handle_chart(req: Request, ctx: RouteContext<()>) -> worker::Result
 }
 
 pub async fn handle_root(_: Request, _ctx: RouteContext<()>) -> worker::Result<Response> {
-    Response::from_html("<a href=\"/api/v1/chart/SOL_USDC/1h\">/api/v1/chart/SOL_USDC/1h</a><hr>")
+    Response::from_html("<a href=\"/api/v1/chart/SOL_USDT/1h\">/api/v1/chart/SOL_USDT/1h</a><hr>")
 }
 
 #[event(fetch)]

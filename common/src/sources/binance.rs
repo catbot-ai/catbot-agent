@@ -18,7 +18,7 @@ where
     let binance_pair_symbol = pair_symbol.replace("_", "");
     let client = Client::new();
     // let current_time = Utc::now().timestamp_millis();
-    // https://adversely-amazing-wildcat.edgecompute.app/?url=https://data-api.binance.vision/api/v3/uiKlines?limit=1&symbol=SOLUSDC&interval=1s
+    // https://adversely-amazing-wildcat.edgecompute.app/?url=https://data-api.binance.vision/api/v3/uiKlines?limit=1&symbol=SOLUSDT&interval=1s
 
     let url = format!(
         "https://adversely-amazing-wildcat.edgecompute.app/?url={BINANCE_API_URL}/uiKlines?limit={}&symbol={}&interval={}",
@@ -50,7 +50,7 @@ where
 pub async fn fetch_orderbook_depth(pair_symbol: &str, limit: i32) -> Result<OrderBook> {
     let binance_pair_symbol = pair_symbol.replace("_", "");
     let client = Client::new();
-    // https://adversely-amazing-wildcat.edgecompute.app/?url=https://api.binance.com/api/v3/depth?symbol=SOLUSDC&limit=1
+    // https://adversely-amazing-wildcat.edgecompute.app/?url=https://api.binance.com/api/v3/depth?symbol=SOLUSDT&limit=1
     let url = format!(
         "https://adversely-amazing-wildcat.edgecompute.app/?url={BINANCE_API_URL}/depth?symbol={}&limit={}",
         binance_pair_symbol, limit
@@ -64,7 +64,7 @@ pub async fn fetch_orderbook_depth(pair_symbol: &str, limit: i32) -> Result<Orde
 /// Fetches Binance Kline data for a given pair symbol, interval, and limit, and returns it as a CSV string.
 ///
 /// # Arguments
-/// * `pair_symbol` - The trading pair symbol (e.g., "SOLUSDC").
+/// * `pair_symbol` - The trading pair symbol (e.g., "SOLUSDT").
 /// * `interval` - The time interval (e.g., "1h", "1d").
 /// * `limit` - The number of Kline data points to fetch.
 ///
@@ -113,7 +113,7 @@ pub async fn fetch_binance_kline_csv(
 async fn test() {
     use crate::ConciseKline;
 
-    let pair_symbol = "SOL_USDC";
+    let pair_symbol = "SOL_USDT";
     let interval = "1h";
 
     println!(
