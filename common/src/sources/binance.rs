@@ -49,7 +49,6 @@ where
 
 pub async fn fetch_orderbook_depth(pair_symbol: &str, limit: i32) -> Result<OrderBook> {
     let binance_pair_symbol = pair_symbol.replace("_", "");
-    println!("fetch_orderbook_depth: {}", binance_pair_symbol);
     let client = Client::new();
     // https://adversely-amazing-wildcat.edgecompute.app/?url=https://api.binance.com/api/v3/depth?symbol=SOLUSDC&limit=1
     let url = format!(

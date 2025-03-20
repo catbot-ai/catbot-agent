@@ -7,7 +7,7 @@ use ab_glyph::ScaleFont;
 use ab_glyph::{Font, PxScale};
 use chrono::{DateTime, TimeZone};
 use chrono_tz::Tz;
-use common::numbers::{convert_grouped_data, group_by_fractional_part_f32, FractionalPart};
+use common::numbers::{group_by_fractional_part, FractionalPart};
 use common::{Kline, LongShortSignal, OrderBook};
 use image::buffer::ConvertBuffer;
 use image::{ImageBuffer, Rgb, Rgba};
@@ -1159,7 +1159,7 @@ pub fn draw_past_signals(
 pub fn draw_orderbook(
     img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
     font: &impl Font,
-    orderbook_data: &OrderBook,
+    orderbook: &OrderBook,
     min_price: f32,
     max_price: f32,
     width: u32,
@@ -1180,23 +1180,18 @@ pub fn draw_orderbook(
     let price_rect_height_half = price_rect_height / 2;
 
     // Group the order book data f32 type.
-    let (grouped_bids, grouped_asks): (HashMap<u32, f64>, HashMap<u32, f64>) =
-        group_by_fractional_part_f32(orderbook_data, FractionalPart::One);
-
-    // Transform group to hashmap
-    let (bid_volumes, ask_volumes) =
-        convert_grouped_data(&grouped_bids, &grouped_asks, min_price, max_price);
+    let (grouped_bids, grouped_asks) = group_by_fractional_part(orderbook, FractionalPart::One);
 
     // Prepare bid data for the histogram
-    let mut bid_data: Vec<(f32, f32)> = bid_volumes
+    let mut bid_data: Vec<(f32, f32)> = grouped_bids
         .iter()
-        .map(|(price_bits, volume)| (f32::from_bits(*price_bits), *volume))
+        .map(|(price_bits, volume)| (price_bits.parse::<f32>().unwrap(), *volume as f32))
         .collect();
 
     // Prepare ask data for the histogram
-    let mut ask_data: Vec<(f32, f32)> = ask_volumes
+    let mut ask_data: Vec<(f32, f32)> = grouped_asks
         .iter()
-        .map(|(price_bits, volume)| (f32::from_bits(*price_bits), *volume))
+        .map(|(price_bits, volume)| (price_bits.parse::<f32>().unwrap(), *volume as f32))
         .collect();
 
     // Sort ask_data by first element (price) in descending order

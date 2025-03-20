@@ -56,49 +56,6 @@ pub fn group_by_fractional_part(
     (grouped_bids, grouped_asks)
 }
 
-pub fn group_by_fractional_part_f32(
-    orderbook_data: &OrderBook,
-    fractional_part: FractionalPart,
-) -> (HashMap<u32, f64>, HashMap<u32, f64>) {
-    let mut grouped_bids: HashMap<u32, f64> = HashMap::new();
-    let mut grouped_asks: HashMap<u32, f64> = HashMap::new();
-
-    let multiplier = match fractional_part {
-        FractionalPart::OneTenth => 10.0,
-        FractionalPart::One => 1.0,
-        FractionalPart::Ten => 0.1,
-        FractionalPart::Hundred => 0.01,
-    };
-
-    for bid in &orderbook_data.bids {
-        if bid.len() == 2 {
-            if let (Ok(price_str), Ok(amount_str)) = (bid[0].parse::<f64>(), bid[1].parse::<f64>())
-            {
-                let price = (price_str * multiplier).floor() / multiplier;
-                if price.is_finite() {
-                    let key = (price as f32).to_bits();
-                    *grouped_bids.entry(key).or_insert(0.0) += amount_str;
-                }
-            }
-        }
-    }
-
-    for ask in &orderbook_data.asks {
-        if ask.len() == 2 {
-            if let (Ok(price_str), Ok(amount_str)) = (ask[0].parse::<f64>(), ask[1].parse::<f64>())
-            {
-                let price = (price_str * multiplier).ceil() / multiplier;
-                if price.is_finite() {
-                    let key = (price as f32).to_bits();
-                    *grouped_asks.entry(key).or_insert(0.0) += amount_str;
-                }
-            }
-        }
-    }
-
-    (grouped_bids, grouped_asks)
-}
-
 pub fn convert_grouped_data(
     grouped_bids: &HashMap<u32, f64>,
     grouped_asks: &HashMap<u32, f64>,

@@ -236,7 +236,7 @@ mod tests {
             &PredictionType::TradingPredictions,
             gemini_api_key,
             pair_symbol.to_string(),
-            100,
+            1000,
             wallet_address,
             None,
         )
@@ -259,7 +259,7 @@ mod tests {
             &PredictionType::GraphPredictions,
             gemini_api_key,
             pair_symbol.to_string(),
-            100,
+            1000,
             None,
             None,
         )

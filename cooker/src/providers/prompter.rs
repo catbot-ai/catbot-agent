@@ -46,6 +46,9 @@ pub fn build_prompt<T>(
     let top_bids_price_amount = top_n_bids_asks(&grouped_one_bids, 10, false);
     let top_asks_price_amount = top_n_bids_asks(&grouped_one_asks, 10, true);
 
+    println!("top_bids_price_amount:{top_bids_price_amount:#?}");
+    println!("top_asks_price_amount:{top_asks_price_amount:#?}");
+
     let grouped_bids_string = btree_map_to_csv(&grouped_one_bids);
     let grouped_asks_string = btree_map_to_csv(&grouped_one_asks);
 
@@ -153,7 +156,7 @@ mod tests {
         };
 
         // Fetch orderbook (assuming fetch_orderbook_depth returns OrderBook)
-        let orderbook = fetch_orderbook_depth("SOLUSDC", 100).await?;
+        let orderbook = fetch_orderbook_depth("SOLUSDC", 1000).await?;
 
         // Create a default GeminiModel
         let model = GeminiModel::default();
@@ -195,8 +198,7 @@ mod tests {
             maybe_preps_positions: None,
         };
 
-        let kline_data_1h =
-            fetch_binance_kline_data::<ConciseKline>(binance_pair_symbol, "1h", 1).await?;
+        let kline_data_1h = fetch_binance_kline_csv(binance_pair_symbol, "1h", 1).await?;
         let price_history_1h_string = serde_json::to_string_pretty(&kline_data_1h)?;
 
         // Create an empty PriceHistory struct (all fields None)
@@ -209,7 +211,7 @@ mod tests {
         };
 
         // Fetch orderbook (assuming fetch_orderbook_depth returns OrderBook)
-        let orderbook = fetch_orderbook_depth(binance_pair_symbol, 100).await?;
+        let orderbook = fetch_orderbook_depth(binance_pair_symbol, 1000).await?;
 
         // Create a default GeminiModel
         let model = GeminiModel::default();
