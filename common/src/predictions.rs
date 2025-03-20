@@ -1,4 +1,7 @@
-use jup_sdk::perps::{PerpsPosition, Side};
+use jup_sdk::{
+    perps::{PerpsPosition, Side},
+    token_registry::get_pair_or_token_symbol_from_pair_address,
+};
 
 use anyhow::Context;
 use chrono::{DateTime, Utc};
@@ -390,16 +393,15 @@ pub struct PredictedLongShortPosition {
 #[serde(rename_all = "snake_case")]
 pub struct LongShortPosition {
     // Opened Position
-    pub side: Side,                // Position side: Long or Short
-    pub market_mint: String,       // So11111111111111111111111111111111111111112
-    pub collateral_mint: String,   // EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
-    pub entry_price: f64,          // Entry price of the position
-    pub leverage: f64,             // Leverage used for the position
-    pub liquidation_price: f64,    // Liquidation price of the position
-    pub pnl_after_fees_usd: f64,   // Profit/loss after fees in USD
-    pub value: f64,                // Current position value in USD
-    pub target_price: Option<f64>, // Current target price in USD
-    pub stop_loss: Option<f64>,    // Current stop loss in USD
+    pub side: Side,
+    pub pair_symbol: String,
+    pub entry_price: f64,
+    pub leverage: f64,
+    pub liquidation_price: f64,
+    pub pnl_after_fees_usd: f64,
+    pub value: f64,
+    pub target_price: Option<f64>,
+    pub stop_loss: Option<f64>,
     // Predicted
     pub new_target_price: Option<f64>,
     pub new_stop_loss: Option<f64>,
@@ -410,6 +412,13 @@ pub struct LongShortPosition {
 
 impl LongShortPosition {
     pub fn new(perps_position: PerpsPosition, predicted: PredictedLongShortPosition) -> Self {
+        let pair_address = format!(
+            "{}_{}",
+            perps_position.market_mint, perps_position.collateral_mint
+        );
+        let pair_symbol = get_pair_or_token_symbol_from_pair_address(&pair_address)
+            .expect("Not support token pair");
+        println!("{:?}", pair_symbol);
         LongShortPosition {
             // Predicted
             new_target_price: predicted.new_target_price,
@@ -419,8 +428,7 @@ impl LongShortPosition {
             confidence: predicted.confidence,
             // Opened Position
             side: perps_position.side,
-            market_mint: perps_position.market_mint,
-            collateral_mint: perps_position.collateral_mint,
+            pair_symbol,
             entry_price: perps_position.entry_price,
             leverage: perps_position.leverage,
             liquidation_price: perps_position.liquidation_price,
