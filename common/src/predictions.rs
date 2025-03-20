@@ -232,16 +232,27 @@ impl TradingPredictionOutputWithTimeStampBuilder {
             .map(|predicted| LongShortSignal::new(context.clone(), predicted))
             .collect();
 
-        let positions = self
-            .ai_response
-            .positions
-            .or(Some(vec![]))
-            .map(|positions| {
-                positions
-                    .into_iter()
-                    .map(|predicted| LongShortPosition::new(context.clone(), predicted))
-                    .collect()
-            });
+        let preps_positions = context.maybe_preps_positions.unwrap_or_default();
+        let positions = if preps_positions.is_empty() {
+            None
+        } else {
+            Some(
+                self.ai_response
+                    .positions
+                    .unwrap_or_default()
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, predicted_position)| {
+                        preps_positions.get(i).map(|preps_position| {
+                            LongShortPosition::new(
+                                preps_position.clone(),
+                                predicted_position.clone(),
+                            )
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        };
 
         let timestamp = now_utc.timestamp_millis();
 
@@ -291,6 +302,7 @@ pub struct PredictedSummary {
     pub suggestion: String,
 }
 
+#[allow(unused)]
 fn deserialize_vec_tuples<'de, D>(deserializer: D) -> Result<Vec<Vec<f64>>, D::Error>
 where
     D: Deserializer<'de>,
@@ -401,25 +413,25 @@ pub struct LongShortPosition {
 }
 
 impl LongShortPosition {
-    pub fn new(context: TradingContext, predicted: PredictedLongShortPosition) -> Self {
+    pub fn new(perps_position: PerpsPosition, predicted: PredictedLongShortPosition) -> Self {
         LongShortPosition {
-            // Opened Position
-            side: Side::Long,
-            market_mint: "n/a".to_string(),
-            collateral_mint: "n/a".to_string(),
-            entry_price: context.current_price,
-            leverage: 1.0,
-            liquidation_price: 0.0,
-            pnl_after_fees_usd: 0.0,
-            value: 0.0,
-            target_price: None,
-            stop_loss: None,
             // Predicted
             new_target_price: predicted.new_target_price,
             new_stop_loss: predicted.new_stop_loss,
             suggestion: predicted.suggestion,
             rationale: predicted.rationale,
             confidence: predicted.confidence,
+            // Opened Position
+            side: perps_position.side,
+            market_mint: perps_position.market_mint,
+            collateral_mint: perps_position.collateral_mint,
+            entry_price: perps_position.entry_price,
+            leverage: perps_position.leverage,
+            liquidation_price: perps_position.liquidation_price,
+            pnl_after_fees_usd: perps_position.pnl_after_fees_usd,
+            value: perps_position.value,
+            target_price: perps_position.target_price,
+            stop_loss: perps_position.stop_loss,
         }
     }
 }
