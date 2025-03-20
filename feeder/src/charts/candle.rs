@@ -642,18 +642,18 @@ impl Chart {
     }
  }
 
-// Test module (unchanged)
 #[cfg(test)]
 mod test {
     use super::*;
     use chrono_tz::Asia::Tokyo;
     use common::binance::fetch_binance_kline_data;
     use common::binance::fetch_orderbook_depth;
-    use common::cooker::get_mock_graph_prediction;
-    use common::RefinedGraphPredictionResponse;
+    use common::PredictedLongShortSignal;
+    use common::TradingContext;
 
     #[tokio::test]
     async fn entry_point() {
+        let pair_symbol = "SOL_USDT";
         let binance_pair_symbol = "SOLUSDT";
         let timeframe = "1h";
         let font_data = include_bytes!("../../RobotoMono-Regular.ttf").to_vec();
@@ -678,26 +678,29 @@ mod test {
             let long_target_price = last_candle.close_price.parse::<f64>().unwrap();
 
             past_signals.push(LongShortSignal {
-                direction: "long".to_string(),
-                symbol: binance_pair_symbol.to_string(),
-                confidence: 0.85,
-                current_price: long_target_price,
-                entry_price: long_entry_price,
-                target_price: long_target_price,
-                stop_loss: long_entry_price * 0.95,
-                timeframe: timeframe.to_string(),
-                entry_time: long_entry_time,
-                target_time: long_target_time,
-                entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(long_entry_time / 1000, 0)
-                    .unwrap()
-                    .with_timezone(&chrono_tz::Asia::Tokyo)
-                    .to_string(),
-                target_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(long_target_time / 1000, 0)
-                    .unwrap()
-                    .with_timezone(&chrono_tz::Asia::Tokyo)
-                    .to_string(),
-                rationale: "Mock long signal based on price movement".to_string(),
-            });
+                context: TradingContext{
+                pair_symbol:binance_pair_symbol.to_string(),
+                timeframe:timeframe.to_string(),current_price:long_target_price,
+                maybe_preps_positions: None,
+            },
+            predicted:PredictedLongShortSignal {
+                direction:"long".to_string(),
+                confidence:0.85,
+                entry_price:long_entry_price,
+                target_price:long_target_price,
+                stop_loss:long_entry_price*0.95,
+                entry_time:long_entry_time,
+                target_time:long_target_time,
+                rationale:"Mock long signal based on price movement".to_string(),
+            }, 
+            entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(long_entry_time / 1000, 0)
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
+            target_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(long_target_time / 1000, 0)
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(), });
 
             let last_minus_30_candle = &candle_data[candle_data.len() - 31];
             let last_minus_20_candle = &candle_data[candle_data.len() - 21];
@@ -708,16 +711,22 @@ mod test {
             let short_target_price = last_minus_20_candle.close_price.parse::<f64>().unwrap();
 
             past_signals.push(LongShortSignal {
-                direction: "short".to_string(),
-                symbol: binance_pair_symbol.to_string(),
-                confidence: 0.82,
-                current_price: short_target_price,
-                entry_price: short_entry_price,
-                target_price: short_target_price,
-                stop_loss: short_entry_price * 1.05,
-                timeframe: timeframe.to_string(),
-                entry_time: short_entry_time,
-                target_time: short_target_time,
+                context: TradingContext {
+                    pair_symbol: pair_symbol.to_string(),
+                    timeframe: timeframe.to_string(),
+                    current_price: short_target_price,
+                    maybe_preps_positions: None,
+                },
+                predicted: PredictedLongShortSignal {
+                    direction: "short".to_string(),
+                    confidence: 0.82,
+                    entry_price: short_entry_price,
+                    target_price: short_target_price,
+                    stop_loss: short_entry_price * 1.05,
+                    entry_time: short_entry_time,
+                    target_time: short_target_time,
+                    rationale: "Mock short signal based on price movement".to_string(),
+                },
                 entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(short_entry_time / 1000, 0)
                     .unwrap()
                     .with_timezone(&chrono_tz::Asia::Tokyo)
@@ -726,14 +735,13 @@ mod test {
                     .unwrap()
                     .with_timezone(&chrono_tz::Asia::Tokyo)
                     .to_string(),
-                rationale: "Mock short signal based on price movement".to_string(),
             });
 
             for signal in &past_signals {
                 println!(
                     "{} Signal: Entry Time: {}, Entry Price: {}, Target Time: {}, Target Price: {}, Stop Loss: {}",
-                    signal.direction, signal.entry_time_local, signal.entry_price, 
-                    signal.target_time_local, signal.target_price, signal.stop_loss
+                    signal.predicted.direction, signal.entry_time_local, signal.predicted.entry_price, 
+                    signal.target_time_local, signal.predicted.target_price, signal.predicted.stop_loss
                 );
             }
         } else {
@@ -756,16 +764,22 @@ mod test {
             let long_target_time = long_entry_time + hour_ms;
 
             signals.push(LongShortSignal {
-                direction: "long".to_string(),
-                symbol: binance_pair_symbol.to_string(),
-                confidence: 0.9,
-                current_price: long_entry_price,
-                entry_price: long_entry_price,
-                target_price: long_target_price,
-                stop_loss: long_entry_price * 0.97,
-                timeframe: timeframe.to_string(),
-                entry_time: long_entry_time,
-                target_time: long_target_time,
+                context: TradingContext {
+                    pair_symbol: pair_symbol.to_string(),
+                    timeframe: timeframe.to_string(),
+                    current_price: long_entry_price,
+                    maybe_preps_positions: None,
+                },
+                predicted: PredictedLongShortSignal {
+                    direction: "long".to_string(),
+                    confidence: 0.9,
+                    entry_price: long_entry_price,
+                    target_price: long_target_price,
+                    stop_loss: long_entry_price * 0.97,
+                    entry_time: long_entry_time,
+                    target_time: long_target_time,
+                    rationale: "Mock long signal expecting 5% upward movement".to_string(),
+                },
                 entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(long_entry_time / 1000, 0)
                     .unwrap()
                     .with_timezone(&chrono_tz::Asia::Tokyo)
@@ -774,25 +788,30 @@ mod test {
                     .unwrap()
                     .with_timezone(&chrono_tz::Asia::Tokyo)
                     .to_string(),
-                rationale: "Mock long signal expecting 5% upward movement".to_string(),
             });
-
+        
             let short_entry_time = long_target_time;
             let short_entry_price = last_close_price * 0.99;
             let short_target_price = short_entry_price * 0.80;
             let short_target_time = short_entry_time + hour_ms;
-
+        
             signals.push(LongShortSignal {
-                direction: "short".to_string(),
-                symbol: binance_pair_symbol.to_string(),
-                confidence: 0.87,
-                current_price: short_entry_price,
-                entry_price: short_entry_price,
-                target_price: short_target_price,
-                stop_loss: short_entry_price * 1.03,
-                timeframe: timeframe.to_string(),
-                entry_time: short_entry_time,
-                target_time: short_target_time,
+                context: TradingContext {
+                    pair_symbol: pair_symbol.to_string(),
+                    timeframe: timeframe.to_string(),
+                    current_price: short_entry_price,
+                    maybe_preps_positions: None,
+                },
+                predicted: PredictedLongShortSignal {
+                    direction: "short".to_string(),
+                    confidence: 0.87,
+                    entry_price: short_entry_price,
+                    target_price: short_target_price,
+                    stop_loss: short_entry_price * 1.03,
+                    entry_time: short_entry_time,
+                    target_time: short_target_time,
+                    rationale: "Mock short signal targeting 20% profit from 1% below current price".to_string(),
+                },
                 entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(short_entry_time / 1000, 0)
                     .unwrap()
                     .with_timezone(&chrono_tz::Asia::Tokyo)
@@ -801,28 +820,28 @@ mod test {
                     .unwrap()
                     .with_timezone(&chrono_tz::Asia::Tokyo)
                     .to_string(),
-                rationale: "Mock short signal targeting 20% profit from 1% below current price".to_string(),
             });
 
-            for signal in &signals {
+            for signal in &past_signals {
                 println!(
-                    "{} Signal: Entry Time: {}, Entry Price: {:.2}, Target Time: {}, Target Price: {:.2}, Stop Loss: {:.2}",
-                    signal.direction, signal.entry_time_local, signal.entry_price, 
-                    signal.target_time_local, signal.target_price, signal.stop_loss
+                    "{} Signal: Entry Time: {}, Entry Price: {}, Target Time: {}, Target Price: {}, Stop Loss: {}",
+                    signal.predicted.direction, signal.entry_time_local, signal.predicted.entry_price, 
+                    signal.target_time_local, signal.predicted.target_price, signal.predicted.stop_loss
                 );
             }
         }
 
-        let predicted_klines_string = get_mock_graph_prediction().await;
-        let predicted_klines = serde_json::from_str::<RefinedGraphPredictionResponse>(
-            &predicted_klines_string.clone(),
-        )
-        .unwrap()
-        .klines;
+        // TODO: figure this out
+        // let predicted_klines_string = get_mock_graph_prediction().await;
+        // let predicted_klines = serde_json::from_str::<RefinedGraphPredictionResponse>(
+        //     &predicted_klines_string.clone(),
+        // )
+        // .unwrap()
+        // .klines;
 
         let png = Chart::new(timeframe, Tokyo)
             .with_past_candle(candle_data)
-            .with_title(binance_pair_symbol)
+            .with_title(pair_symbol)
             .with_font_data(font_data)
             .with_volume()
             .with_macd()

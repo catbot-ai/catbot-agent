@@ -15,13 +15,13 @@ pub const PREFIX_INSTRUCTION: &str = r#"
 - Focus on relative indicators (e.g., % changes, z-scores) over absolute levels to avoid overfitting.
 "#;
 
-pub const SCHEMA_INSTRUCTION: &str = r#"
-- Kline data is provided as an array of arrays: [[open_time, open, high, low, close, volume, close_time], ...].
+pub const INPUT_INSTRUCTION: &str = r#"
+- Kline data is provided as a CSV format.
 - Timestamps are in milliseconds (e.g., 1741870260000); prices and volume are floats (e.g., 123.45, 1000.5).
 - Assume data is sorted by open_time ascending and matches the requested timeframe (e.g., 1m, 5m, 1h).
 "#;
 
-pub const TRADE_INSTRUCTION: &str = r#"
+pub const MAIN_TRADE_INSTRUCTION: &str = r#"
 - Predict the next price top or bottom using:
   - Bollinger Bands for overbought/oversold levels.
   - Moving Average crossovers (e.g., 9-day SMA vs. 21-day SMA).
@@ -33,7 +33,7 @@ pub const TRADE_INSTRUCTION: &str = r#"
 - Include stop_loss to limit risk below profit potential.
 "#;
 
-pub const PERPS_INSTRUCTION: &str = r#"
+pub const SUB_PERPS_INSTRUCTION: &str = r#"
 - For existing positions, suggest one of the following actions based on current momentum, price action, and volume, ensuring logical risk management:
     - 'Hold': If short-term momentum aligns with the position’s side (e.g., bearish for shorts, bullish for longs).
     - 'Increase': If at least two short-term indicators (e.g., Stochastic RSI, volume, price action) strongly confirm the position’s direction and confidence exceeds 0.7.
@@ -45,7 +45,7 @@ pub const PERPS_INSTRUCTION: &str = r#"
 "#;
 
 // TODO: maybe_timeframe
-pub const GRAPH_INSTRUCTION: &str = r#"
+pub const SUB_GRAPH_INSTRUCTION: &str = r#"
 - Predict 24 klines value for 1h timeframe base on technical analysis and vibe.
 - Ensure that suggested long/short signals is matched predicted klines time and value.
 "#;
@@ -55,19 +55,16 @@ pub const SUFFIX_INSTRUCTION: &str = r#"
 - Must generate valid JSON output.
 "#;
 
-pub fn get_instruction(
-    prediction_type: &PredictionType,
-    maybe_timeframe: Option<String>,
-) -> String {
+pub fn get_instruction(prediction_type: &PredictionType, _timeframe: String) -> String {
     match prediction_type {
-        PredictionType::Suggestions => {
+        PredictionType::TradingPredictions => {
             format!(
-                r#"{PREFIX_INSTRUCTION}{SCHEMA_INSTRUCTION}{TRADE_INSTRUCTION}{PERPS_INSTRUCTION}{SUFFIX_INSTRUCTION}"#
+                r#"{PREFIX_INSTRUCTION}{INPUT_INSTRUCTION}{MAIN_TRADE_INSTRUCTION}{SUB_PERPS_INSTRUCTION}{SUFFIX_INSTRUCTION}"#
             )
         }
         PredictionType::GraphPredictions => {
             format!(
-                r#"{PREFIX_INSTRUCTION}{SCHEMA_INSTRUCTION}{TRADE_INSTRUCTION}{GRAPH_INSTRUCTION}{SUFFIX_INSTRUCTION}"#
+                r#"{PREFIX_INSTRUCTION}{INPUT_INSTRUCTION}{MAIN_TRADE_INSTRUCTION}{SUB_GRAPH_INSTRUCTION}{SUFFIX_INSTRUCTION}"#
             )
         }
     }

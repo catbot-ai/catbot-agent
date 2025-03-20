@@ -1,4 +1,7 @@
 use serde::{Deserialize, Serialize, Serializer};
+use serde_json::Value as JsonValue;
+
+use crate::KlineValue;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Kline {
@@ -77,4 +80,23 @@ pub struct OrderBook {
     pub last_update_id: i64,
     pub bids: Vec<Vec<String>>,
     pub asks: Vec<Vec<String>>,
+}
+
+impl Kline {
+    pub fn to_kline_values(&self) -> Vec<KlineValue> {
+        vec![
+            KlineValue::Int64(self.open_time),
+            KlineValue::String(self.open_price.clone()),
+            KlineValue::String(self.high_price.clone()),
+            KlineValue::String(self.low_price.clone()),
+            KlineValue::String(self.close_price.clone()),
+            KlineValue::String(self.volume.clone()),
+            KlineValue::Int64(self.close_time),
+        ]
+    }
+
+    pub fn to_array(&self) -> anyhow::Result<Vec<JsonValue>> {
+        let values = self.to_kline_values();
+        values.into_iter().map(|v| v.to_json_value()).collect()
+    }
 }

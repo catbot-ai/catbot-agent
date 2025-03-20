@@ -1117,21 +1117,21 @@ pub fn draw_past_signals(
     let short_line_style = ShapeStyle::from(&GREEN).stroke_width(2);
 
     for signal in signals {
-        let entry_dt = parse_kline_time(signal.entry_time, timezone);
-        let target_dt = parse_kline_time(signal.target_time, timezone);
+        let entry_dt = parse_kline_time(signal.predicted.entry_time, timezone);
+        let target_dt = parse_kline_time(signal.predicted.target_time, timezone);
 
         // Draw circle at the entry point
         chart.draw_series(std::iter::once(Circle::new(
-            (entry_dt, signal.entry_price as f32),
+            (entry_dt, signal.predicted.entry_price as f32),
             5, // Radius of 5 pixels
             long_circle_style,
         )))?;
 
         // Draw circle at the target point
         chart.draw_series(std::iter::once(Circle::new(
-            (target_dt, signal.target_price as f32),
+            (target_dt, signal.predicted.target_price as f32),
             5, // Radius of 5 pixels
-            if signal.direction == "long" {
+            if signal.predicted.direction == "long" {
                 long_circle_style
             } else {
                 short_circle_style
@@ -1141,10 +1141,10 @@ pub fn draw_past_signals(
         // Draw line connecting entry and target points
         chart.draw_series(LineSeries::new(
             vec![
-                (entry_dt, signal.entry_price as f32),
-                (target_dt, signal.target_price as f32),
+                (entry_dt, signal.predicted.entry_price as f32),
+                (target_dt, signal.predicted.target_price as f32),
             ],
-            if signal.direction == "long" {
+            if signal.predicted.direction == "long" {
                 long_line_style
             } else {
                 short_line_style
@@ -1410,39 +1410,41 @@ pub fn draw_signals(
         let h = price_bounding_rect.height() as f32;
         // let factor_y = (y / current_price as f32) as f32;
 
-        let _entry_percent = ((signal.entry_price - current_price) / current_price) * 100.0;
-        let target_percent = ((signal.target_price - current_price) / current_price) * 100.0;
-        let stop_percent = ((signal.stop_loss - current_price) / current_price) * 100.0;
+        let _entry_percent =
+            ((signal.predicted.entry_price - current_price) / current_price) * 100.0;
+        let target_percent =
+            ((signal.predicted.target_price - current_price) / current_price) * 100.0;
+        let stop_percent = ((signal.predicted.stop_loss - current_price) / current_price) * 100.0;
 
         // Mark position
-        let stop_y = if signal.direction == "long" {
+        let stop_y = if signal.predicted.direction == "long" {
             y - 2.0 * h
         } else {
             y + 2.0 * h
         };
-        let stop_percent_y = if signal.direction == "long" {
+        let stop_percent_y = if signal.predicted.direction == "long" {
             y - 3.0 * h
         } else {
             y + 3.0 * h
         };
-        let entry_y = if signal.direction == "long" {
+        let entry_y = if signal.predicted.direction == "long" {
             y - 4.0 * h
         } else {
             y + 4.0 * h
         };
-        let target_percent_y = if signal.direction == "long" {
+        let target_percent_y = if signal.predicted.direction == "long" {
             y - 5.0 * h
         } else {
             y + 5.0 * h
         };
-        let target_y = if signal.direction == "long" {
+        let target_y = if signal.predicted.direction == "long" {
             y - 6.0 * h
         } else {
             y + 6.0 * h
         };
 
         // Draw line
-        let line_color = if signal.direction == "long" {
+        let line_color = if signal.predicted.direction == "long" {
             Rgba([GREEN.0, GREEN.1, GREEN.2, 255])
         } else {
             Rgba([RED.0, RED.1, RED.2, 255])
@@ -1455,7 +1457,7 @@ pub fn draw_signals(
         // Draw predicted price label
         let label_scale = ORDER_LABEL_SCALE;
 
-        let color = if signal.direction == "long" {
+        let color = if signal.predicted.direction == "long" {
             Rgba([GREEN.0, GREEN.1, GREEN.2, 255])
         } else {
             Rgba([RED.0, RED.1, RED.2, 255])
@@ -1465,7 +1467,7 @@ pub fn draw_signals(
         let _ = draw_hallow_label(
             img,
             font,
-            &format!("STOP:{:.2}", signal.stop_loss),
+            &format!("STOP:{:.2}", signal.predicted.stop_loss),
             x,
             stop_y,
             label_scale,
@@ -1475,7 +1477,7 @@ pub fn draw_signals(
 
         // stop_percent
         let mut stop_percent = stop_percent;
-        if signal.direction == "short" {
+        if signal.predicted.direction == "short" {
             stop_percent *= -1.0;
         }
         let prefix = if stop_percent > 0.0 { "+" } else { "" };
@@ -1496,8 +1498,8 @@ pub fn draw_signals(
             font,
             &format!(
                 "{}:{:.2}",
-                signal.direction.to_uppercase(),
-                signal.entry_price
+                signal.predicted.direction.to_uppercase(),
+                signal.predicted.entry_price
             ),
             x,
             entry_y,
@@ -1508,7 +1510,7 @@ pub fn draw_signals(
 
         // target_percent
         let mut target_percent = target_percent;
-        if signal.direction == "short" {
+        if signal.predicted.direction == "short" {
             target_percent *= -1.0;
         }
         let prefix = if target_percent > 0.0 { "+" } else { "" };
@@ -1527,7 +1529,7 @@ pub fn draw_signals(
         let _ = draw_hallow_label(
             img,
             font,
-            &format!("TAKE:{:.2}", signal.target_price),
+            &format!("TAKE:{:.2}", signal.predicted.target_price),
             x,
             target_y,
             label_scale,

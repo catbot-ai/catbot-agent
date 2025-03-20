@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 
 use reqwest::Client;
+use serde_json::Value as JsonValue;
 
 use crate::{Kline, OrderBook};
 
@@ -59,6 +60,53 @@ pub async fn fetch_orderbook_depth(pair_symbol: &str, limit: i32) -> Result<Orde
     let orderbook_data: OrderBook = response.json().await?;
 
     Ok(orderbook_data)
+}
+
+/// Fetches Binance Kline data for a given pair symbol, interval, and limit, and returns it as a CSV string.
+///
+/// # Arguments
+/// * `pair_symbol` - The trading pair symbol (e.g., "SOLUSDT").
+/// * `interval` - The time interval (e.g., "1h", "1d").
+/// * `limit` - The number of Kline data points to fetch.
+///
+/// # Returns
+/// A `Result<String>` containing the CSV data with the header `open_time,open,high,low,close,volume,close_time`.
+///
+/// # Errors
+/// Returns an `anyhow::Error` if fetching or processing the data fails.
+pub async fn fetch_binance_kline_csv(
+    pair_symbol: &str,
+    interval: &str,
+    limit: i32,
+) -> Result<String> {
+    // Fetch raw Kline data
+    let kline_data: Vec<Kline> = fetch_binance_kline_data::<Kline>(pair_symbol, interval, limit)
+        .await
+        .with_context(|| format!("Failed to fetch Kline data for {pair_symbol} with interval {interval} and limit {limit}"))?;
+
+    // Build CSV string manually
+    let mut csv_string = String::new();
+
+    // Add header
+    csv_string.push_str("open_time,open,high,low,close,volume,close_time\n");
+
+    // Add each Kline record
+    for kline in kline_data {
+        let values = kline.to_array()?;
+        let mut is_first = true;
+        for value in values {
+            if !is_first {
+                csv_string.push(',');
+            }
+            if let JsonValue::Number(n) = value {
+                csv_string.push_str(&n.to_string());
+            }
+            is_first = false;
+        }
+        csv_string.push('\n');
+    }
+
+    Ok(csv_string)
 }
 
 #[cfg(test)]

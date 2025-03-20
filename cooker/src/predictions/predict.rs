@@ -5,7 +5,7 @@ use crate::providers::{
 use chrono_tz::Asia::Tokyo;
 
 use anyhow::Result;
-use common::Refinable;
+use common::{Refinable, TradingContext};
 use md5;
 use serde::Deserialize;
 
@@ -13,6 +13,7 @@ pub async fn get_prediction<T>(
     provider: &GeminiProvider,
     model: &GeminiModel,
     prompt: String,
+    context: TradingContext,
 ) -> Result<T::Refined>
 where
     T: Refinable + Send + Sync + for<'de> Deserialize<'de> + 'static,
@@ -24,7 +25,7 @@ where
     let prompt_hash = md5::compute(prompt)
         .iter()
         .fold(String::new(), |acc, b| format!("{acc}{:02x}", b));
-    let refined_output = gemini_response.refine(Tokyo, &model_name, &prompt_hash);
+    let refined_output = gemini_response.refine(Tokyo, &model_name, &prompt_hash, context);
 
     Ok(refined_output)
 }

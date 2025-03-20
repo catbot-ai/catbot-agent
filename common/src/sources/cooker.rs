@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use chrono::{Duration, Utc};
 use reqwest::Client;
 use serde_json::json;
@@ -153,7 +153,7 @@ pub async fn get_mock_graph_prediction() -> String {
             "entry_price": last_candle.close_price.parse::<f64>().unwrap(),
             "rationale": "Based on the 1h price history, SOL is showing signs of a potential bullish reversal. Stochastic RSI is currently below 20, indicating oversold conditions. Recent price action shows strong support. 1h volume is increasing.",
             "stop_loss": last_candle.close_price.parse::<f64>().unwrap() * 0.97,
-            "symbol": "SOL",
+            "pair_symbol": "SOL_USDT",
             "target_time": target_time,
             "target_time_local": target_time_local,
             "target_price": last_candle.close_price.parse::<f64>().unwrap() * 1.03,

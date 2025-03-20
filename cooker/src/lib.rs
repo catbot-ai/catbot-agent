@@ -6,7 +6,10 @@ use providers::gemini::{GeminiModel, GeminiProvider};
 mod predictions;
 mod providers;
 
-use common::{jup::get_preps_position, GraphPredictionOutput, PredictionOutput, SuggestionOutput};
+use common::{
+    binance::fetch_binance_kline_data, jup::get_preps_position, ConciseKline,
+    GraphPredictionOutput, PredictionOutput, TradingContext, TradingPrediction,
+};
 use worker::*;
 
 pub enum Route {
@@ -46,7 +49,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
         let output_result = match route {
             Route::SUGGESTIONS => {
                 predict_with_gemini(
-                    &PredictionType::Suggestions,
+                    &PredictionType::TradingPredictions,
                     gemini_api_key.to_owned(),
                     pair_symbol,
                     orderbook_limit,
@@ -155,6 +158,13 @@ pub async fn predict_with_gemini(
     let gemini_model = GeminiModel::default();
     let provider = GeminiProvider::new_v1beta(&gemini_api_key);
 
+    // Get price
+    // TODO: more oracle?
+    let kline_data_1s = fetch_binance_kline_data::<ConciseKline>(&pair_symbol, "1s", 1)
+        .await
+        .expect("Failed to get price.");
+    let current_price = kline_data_1s[0].close;
+
     // Get position from wallet_address if provided
     let maybe_preps_positions = match maybe_wallet_address {
         Some(wallet_address) => match get_preps_position(Some(wallet_address)).await {
@@ -164,30 +174,43 @@ pub async fn predict_with_gemini(
         None => None,
     };
 
+    let timeframe = match maybe_timeframe {
+        Some(timeframe) => timeframe,
+        None => "4h".to_owned(),
+    };
+
+    let context = TradingContext {
+        pair_symbol,
+        timeframe,
+        current_price,
+        maybe_preps_positions,
+    };
+
     let prompt = get_binance_prompt(
         prediction_type,
-        &pair_symbol,
         &gemini_model,
+        context.clone(),
         orderbook_limit,
-        maybe_preps_positions,
-        maybe_timeframe,
     )
     .await
     .map_err(|e| e.to_string())?;
 
     let prediction_result = match prediction_type {
-        PredictionType::Suggestions => {
-            get_prediction::<SuggestionOutput>(&provider, &gemini_model, prompt)
+        PredictionType::TradingPredictions => {
+            get_prediction::<TradingPrediction>(&provider, &gemini_model, prompt, context.clone())
                 .await
-                .map(PredictionOutput::Suggestions)
+                .map(PredictionOutput::TradingPredictions)
                 .map_err(|e| format!("\nError getting suggestion prediction: {e}"))
         }
-        PredictionType::GraphPredictions => {
-            get_prediction::<GraphPredictionOutput>(&provider, &gemini_model, prompt)
-                .await
-                .map(PredictionOutput::GraphPredictions)
-                .map_err(|e| format!("\nError getting graph prediction: {e}"))
-        }
+        PredictionType::GraphPredictions => get_prediction::<GraphPredictionOutput>(
+            &provider,
+            &gemini_model,
+            prompt,
+            context.clone(),
+        )
+        .await
+        .map(PredictionOutput::GraphPredictions)
+        .map_err(|e| format!("\nError getting graph prediction: {e}")),
     };
 
     match prediction_result {
@@ -202,7 +225,7 @@ mod tests {
     use crate::{predict_with_gemini, predictions::prediction_types::PredictionType};
 
     #[tokio::test]
-    async fn test_with_wallet() {
+    async fn test_prediction_with_wallet() {
         dotenvy::from_filename(".env").expect("No .env file");
 
         let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
@@ -210,34 +233,11 @@ mod tests {
         let wallet_address = std::env::var("WALLET_ADDRESS").ok();
 
         let result = predict_with_gemini(
-            &PredictionType::Suggestions,
+            &PredictionType::TradingPredictions,
             gemini_api_key,
             pair_symbol.to_string(),
             100,
             wallet_address,
-            None,
-        )
-        .await
-        .unwrap();
-        println!(
-            "{:#?}",
-            serde_json::from_str::<serde_json::Value>(&result).unwrap()
-        );
-    }
-
-    #[tokio::test]
-    async fn test_without_wallet() {
-        dotenvy::from_filename(".env").expect("No .env file");
-
-        let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
-        let pair_symbol = "SOL_USDT";
-
-        let result = predict_with_gemini(
-            &PredictionType::Suggestions,
-            gemini_api_key,
-            pair_symbol.to_string(),
-            100,
-            None,
             None,
         )
         .await

@@ -1,21 +1,29 @@
 use jup_sdk::perps::{PerpsPosition, Side};
 
+use anyhow::Context;
 use chrono::{DateTime, Utc};
 use chrono_tz::{Asia::Tokyo, Tz};
 use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::{Number as JsonNumber, Value as JsonValue};
 
 use crate::Kline;
 
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum PredictionOutput {
-    Suggestions(RefinedSuggestionOutput),
+    TradingPredictions(RefinedTradingPredictionOutput),
     GraphPredictions(RefinedGraphPredictionOutput),
 }
 
 pub trait Refinable {
     type Refined;
-    fn refine(self, timezone: Tz, model_name: &str, prompt_hash: &str) -> Self::Refined;
+    fn refine(
+        self,
+        timezone: Tz,
+        model_name: &str,
+        prompt_hash: &str,
+        context: TradingContext,
+    ) -> Self::Refined;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -38,7 +46,12 @@ impl GraphPredictionOutputWithTimeStampBuilder {
         }
     }
 
-    pub fn build(self, model_name: &str, prompt_hash: &str) -> RefinedGraphPredictionOutput {
+    pub fn build(
+        self,
+        model_name: &str,
+        prompt_hash: &str,
+        context: TradingContext,
+    ) -> RefinedGraphPredictionOutput {
         let model_name = model_name.to_owned();
         let prompt_hash = prompt_hash.to_owned();
 
@@ -46,15 +59,13 @@ impl GraphPredictionOutputWithTimeStampBuilder {
         let now_local = now_utc.with_timezone(&self.timezone);
         let iso_local = now_local.to_rfc3339();
 
-        let iso_utc = now_utc.format("%Y-%m-%dT%H:%M:%SZ").to_string();
-
         println!("🔥 self.graph_response:{:#?}", self.graph_response.clone());
 
         let signals = self
             .graph_response
             .signals
             .into_iter()
-            .map(LongShortSignal::from)
+            .map(|predicted| LongShortSignal::new(context.clone(), predicted))
             .collect();
 
         // Convert Vec<Kline> to Vec<Vec<KlineValue>>
@@ -68,6 +79,7 @@ impl GraphPredictionOutputWithTimeStampBuilder {
         let timestamp = now_utc.timestamp_millis();
 
         RefinedGraphPredictionOutput {
+            context,
             current_time: timestamp,
             current_datetime: iso_local,
             signals,
@@ -80,23 +92,18 @@ impl GraphPredictionOutputWithTimeStampBuilder {
 
 impl Refinable for GraphPredictionOutput {
     type Refined = RefinedGraphPredictionOutput;
-    fn refine(self, timezone: Tz, model_name: &str, prompt_hash: &str) -> Self::Refined {
-        GraphPredictionOutputWithTimeStampBuilder::new(self, timezone)
-            .build(model_name, prompt_hash)
-    }
-}
-
-impl Kline {
-    fn to_kline_values(&self) -> Vec<KlineValue> {
-        vec![
-            KlineValue::Int64(self.open_time),
-            KlineValue::String(self.open_price.clone()),
-            KlineValue::String(self.high_price.clone()),
-            KlineValue::String(self.low_price.clone()),
-            KlineValue::String(self.close_price.clone()),
-            KlineValue::String(self.volume.clone()),
-            KlineValue::Int64(self.close_time),
-        ]
+    fn refine(
+        self,
+        timezone: Tz,
+        model_name: &str,
+        prompt_hash: &str,
+        context: TradingContext,
+    ) -> Self::Refined {
+        GraphPredictionOutputWithTimeStampBuilder::new(self, timezone).build(
+            model_name,
+            prompt_hash,
+            context,
+        )
     }
 }
 
@@ -110,9 +117,45 @@ pub enum KlineValue {
     UInt32(u32),    // For smaller unsigned integers (e.g., number of trades)
 }
 
+impl KlineValue {
+    pub fn to_f64(&self) -> anyhow::Result<f64> {
+        match self {
+            KlineValue::Int64(val) => Ok(*val as f64),
+            KlineValue::UInt64(val) => Ok(*val as f64),
+            KlineValue::String(s) => s.parse::<f64>().map_err(|e| e.into()),
+            KlineValue::Float64(val) => Ok(*val),
+            KlineValue::UInt32(val) => Ok(*val as f64),
+        }
+    }
+
+    pub fn to_json_value(&self) -> anyhow::Result<JsonValue> {
+        match self {
+            KlineValue::Int64(val) => Ok(JsonValue::Number(JsonNumber::from(*val))),
+            KlineValue::UInt64(val) => Ok(JsonValue::Number(JsonNumber::from(*val))),
+            KlineValue::String(s) => {
+                let float_val = s
+                    .parse::<f64>()
+                    .with_context(|| format!("Failed to parse string '{}' as f64", s))?;
+                Ok(JsonValue::Number(
+                    JsonNumber::from_f64(float_val).ok_or_else(|| {
+                        anyhow::anyhow!("Failed to convert {} to JsonNumber", float_val)
+                    })?,
+                ))
+            }
+            KlineValue::Float64(val) => Ok(JsonValue::Number(
+                JsonNumber::from_f64(*val)
+                    .ok_or_else(|| anyhow::anyhow!("Failed to convert {} to JsonNumber", val))?,
+            )),
+            KlineValue::UInt32(val) => Ok(JsonValue::Number(JsonNumber::from(*val))),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct RefinedGraphPredictionOutput {
+    pub context: TradingContext,
+    //
     pub current_time: i64,
     pub current_datetime: String,
     pub signals: Vec<LongShortSignal>,
@@ -136,39 +179,45 @@ pub struct RefinedGraphPredictionResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
-pub struct SuggestionOutput {
-    pub summary: Summary,
+pub struct TradingPrediction {
+    pub summary: PredictedSummary,
     pub signals: Vec<PredictedLongShortSignal>,
-    pub positions: Option<Vec<PredictedPosition>>,
+    pub positions: Option<Vec<PredictedLongShortPosition>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
-pub struct RefinedSuggestionOutput {
+pub struct RefinedTradingPredictionOutput {
     pub current_time: i64,
     pub current_datetime: String,
-    pub summary: Summary,
+    pub current_price: f64,
+    pub summary: PredictedSummary,
     pub signals: Vec<LongShortSignal>,
-    pub positions: Option<Vec<PredictedPosition>>,
+    pub positions: Option<Vec<LongShortPosition>>,
     // Stats
     pub model_name: String,
     pub prompt_hash: String,
 }
 
-pub struct SuggestionOutputWithTimeStampBuilder {
-    pub gemini_response: SuggestionOutput,
+pub struct TradingPredictionOutputWithTimeStampBuilder {
+    pub ai_response: TradingPrediction,
     pub timezone: Tz, // Store the timezone here.
 }
 
-impl SuggestionOutputWithTimeStampBuilder {
-    pub fn new(gemini_response: SuggestionOutput, timezone: Tz) -> Self {
-        SuggestionOutputWithTimeStampBuilder {
-            gemini_response,
+impl TradingPredictionOutputWithTimeStampBuilder {
+    pub fn new(ai_response: TradingPrediction, timezone: Tz) -> Self {
+        TradingPredictionOutputWithTimeStampBuilder {
+            ai_response,
             timezone,
         }
     }
 
-    pub fn build(self, model_name: &str, prompt_hash: &str) -> RefinedSuggestionOutput {
+    pub fn build(
+        self,
+        model_name: &str,
+        prompt_hash: &str,
+        context: TradingContext,
+    ) -> RefinedTradingPredictionOutput {
         let model_name = model_name.to_owned();
         let prompt_hash = prompt_hash.to_owned();
 
@@ -176,22 +225,31 @@ impl SuggestionOutputWithTimeStampBuilder {
         let now_local = now_utc.with_timezone(&self.timezone);
         let iso_local = now_local.to_rfc3339();
 
-        let iso_utc = now_utc.format("%Y-%m-%dT%H:%M:%SZ").to_string();
-
         let signals = self
-            .gemini_response
+            .ai_response
             .signals
             .into_iter()
-            .map(LongShortSignal::from)
+            .map(|predicted| LongShortSignal::new(context.clone(), predicted))
             .collect();
 
-        let positions = self.gemini_response.positions.or(Some(vec![]));
+        let positions = self
+            .ai_response
+            .positions
+            .or(Some(vec![]))
+            .map(|positions| {
+                positions
+                    .into_iter()
+                    .map(|predicted| LongShortPosition::new(context.clone(), predicted))
+                    .collect()
+            });
+
         let timestamp = now_utc.timestamp_millis();
 
-        RefinedSuggestionOutput {
+        RefinedTradingPredictionOutput {
             current_time: timestamp,
             current_datetime: iso_local,
-            summary: self.gemini_response.summary,
+            current_price: context.current_price,
+            summary: self.ai_response.summary,
             signals,
             positions,
             model_name,
@@ -200,25 +258,34 @@ impl SuggestionOutputWithTimeStampBuilder {
     }
 }
 
-impl Refinable for SuggestionOutput {
-    type Refined = RefinedSuggestionOutput;
-    fn refine(self, timezone: Tz, model_name: &str, prompt_hash: &str) -> Self::Refined {
-        SuggestionOutputWithTimeStampBuilder::new(self, timezone).build(model_name, prompt_hash)
+impl Refinable for TradingPrediction {
+    type Refined = RefinedTradingPredictionOutput;
+    fn refine(
+        self,
+        timezone: Tz,
+        model_name: &str,
+        prompt_hash: &str,
+        context: TradingContext,
+    ) -> Self::Refined {
+        TradingPredictionOutputWithTimeStampBuilder::new(self, timezone).build(
+            model_name,
+            prompt_hash,
+            context,
+        )
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
-pub struct Summary {
-    pub price: f64,
-    pub upper_bound: f64,
-    pub lower_bound: f64,
+pub struct PredictedSummary {
+    // pub upper_bound: f64,
+    // pub lower_bound: f64,
     pub technical_resistance_4h: f64,
     pub technical_support_4h: f64,
-    #[serde(deserialize_with = "deserialize_vec_tuples")]
-    pub top_bids_price_amount: Vec<Vec<f64>>,
-    #[serde(deserialize_with = "deserialize_vec_tuples")]
-    pub top_asks_price_amount: Vec<Vec<f64>>,
+    // #[serde(deserialize_with = "deserialize_vec_tuples")]
+    // pub top_bids_price_amount: Vec<Vec<f64>>,
+    // #[serde(deserialize_with = "deserialize_vec_tuples")]
+    // pub top_asks_price_amount: Vec<Vec<f64>>,
     pub vibe: String,
     pub detail: String,
     pub suggestion: String,
@@ -234,73 +301,88 @@ where
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
+pub struct TradingContext {
+    pub pair_symbol: String,
+    pub timeframe: String,
+    pub current_price: f64,
+    pub maybe_preps_positions: Option<Vec<PerpsPosition>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
 pub struct PredictedLongShortSignal {
     pub direction: String,
-    pub symbol: String,
-    pub confidence: f64,
-    pub current_price: f64,
     pub entry_price: f64,
     pub target_price: f64,
-    pub stop_loss: f64,
-    pub timeframe: String,
     pub entry_time: i64,
     pub target_time: i64,
+    pub stop_loss: f64,
     pub rationale: String,
+    pub confidence: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct LongShortSignal {
-    pub direction: String,
-    pub symbol: String,
-    pub confidence: f64,
-    pub current_price: f64,
-    pub entry_price: f64,
-    pub target_price: f64,
-    pub stop_loss: f64,
-    pub timeframe: String,
-    pub entry_time: i64,
-    pub target_time: i64,
+    // Context
+    #[serde(flatten)]
+    pub context: TradingContext,
+    // Predicted
+    #[serde(flatten)]
+    pub predicted: PredictedLongShortSignal,
+    // UI
     pub entry_time_local: String,
     pub target_time_local: String,
-    pub rationale: String,
 }
 
-impl From<PredictedLongShortSignal> for LongShortSignal {
-    fn from(signal: PredictedLongShortSignal) -> Self {
-        println!("{signal:#?}");
-        let utc_datetime = DateTime::from_timestamp(signal.target_time / 1000, 0)
-            .expect("Failed to parse datetime");
-        let tokyo_datetime: DateTime<Tz> = utc_datetime.with_timezone(&Tokyo);
-        let target_time_local = tokyo_datetime.to_rfc3339();
+impl LongShortSignal {
+    pub fn new(context: TradingContext, predicted: PredictedLongShortSignal) -> Self {
+        // Convert target_time to Tokyo timezone
+        let target_time_local = DateTime::from_timestamp(predicted.target_time / 1000, 0)
+            .map(|utc_datetime| {
+                let tokyo_datetime: DateTime<Tz> = utc_datetime.with_timezone(&Tokyo);
+                tokyo_datetime.to_rfc3339()
+            })
+            .unwrap_or_else(|| {
+                eprintln!("Failed to parse target_time: {}", predicted.target_time);
+                String::new()
+            });
 
-        let utc_datetime = DateTime::from_timestamp(signal.entry_time / 1000, 0)
-            .expect("Failed to parse datetime");
-        let tokyo_datetime: DateTime<Tz> = utc_datetime.with_timezone(&Tokyo);
-        let entry_time_local = tokyo_datetime.to_rfc3339();
+        // Convert entry_time to Tokyo timezone
+        let entry_time_local = DateTime::from_timestamp(predicted.entry_time / 1000, 0)
+            .map(|utc_datetime| {
+                let tokyo_datetime: DateTime<Tz> = utc_datetime.with_timezone(&Tokyo);
+                tokyo_datetime.to_rfc3339()
+            })
+            .unwrap_or_else(|| {
+                eprintln!("Failed to parse entry_time: {}", predicted.entry_time);
+                String::new()
+            });
 
         LongShortSignal {
-            direction: signal.direction,
-            symbol: signal.symbol,
-            confidence: signal.confidence,
-            current_price: signal.current_price,
-            entry_price: signal.entry_price,
-            target_price: signal.target_price,
-            stop_loss: signal.stop_loss,
-            timeframe: signal.timeframe,
-            target_time: signal.target_time,
-            entry_time: signal.entry_time,
+            context,
+            predicted,
             entry_time_local,
             target_time_local,
-            rationale: signal.rationale,
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
-pub struct PredictedPosition {
-    pub side: Side,                // Position side: long or short
+pub struct PredictedLongShortPosition {
+    pub new_target_price: Option<f64>,
+    pub new_stop_loss: Option<f64>,
+    pub suggestion: String,
+    pub rationale: String,
+    pub confidence: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct LongShortPosition {
+    // Opened Position
+    pub side: Side,                // Position side: Long or Short
     pub market_mint: String,       // So11111111111111111111111111111111111111112
     pub collateral_mint: String,   // EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
     pub entry_price: f64,          // Entry price of the position
@@ -308,27 +390,36 @@ pub struct PredictedPosition {
     pub liquidation_price: f64,    // Liquidation price of the position
     pub pnl_after_fees_usd: f64,   // Profit/loss after fees in USD
     pub value: f64,                // Current position value in USD
-    pub target_price: Option<f64>, // Optional current target price in USD
-    pub stop_loss: Option<f64>,    // Optional current stop loss in USD
-    // From ai
-    pub new_target_price: Option<f64>, //  Optional suggested new target price
-    pub new_stop_loss: Option<f64>,    // Optional suggested new stop loss
-    pub suggestion: String, // Suggestion for this position. e.g. "Hold short position. Consider increasing position at 138.5 with stop loss at 140.5 and taking profit at 135."
+    pub target_price: Option<f64>, // Current target price in USD
+    pub stop_loss: Option<f64>,    // Current stop loss in USD
+    // Predicted
+    pub new_target_price: Option<f64>,
+    pub new_stop_loss: Option<f64>,
+    pub suggestion: String,
     pub rationale: String,
-    pub confidence: f64, // Confidence score between 0.0 and 1.0
+    pub confidence: f64,
 }
 
-impl From<PerpsPosition> for PredictedPosition {
-    fn from(perps: PerpsPosition) -> Self {
-        PredictedPosition {
-            // From ai
-            new_target_price: None,
-            new_stop_loss: None,
-            suggestion: "n/a".to_string(),
-            rationale: "n/a".to_string(),
-            confidence: perps.confidence,
-            // Base
-            ..perps.into()
+impl LongShortPosition {
+    pub fn new(context: TradingContext, predicted: PredictedLongShortPosition) -> Self {
+        LongShortPosition {
+            // Opened Position
+            side: Side::Long,
+            market_mint: "n/a".to_string(),
+            collateral_mint: "n/a".to_string(),
+            entry_price: context.current_price,
+            leverage: 1.0,
+            liquidation_price: 0.0,
+            pnl_after_fees_usd: 0.0,
+            value: 0.0,
+            target_price: None,
+            stop_loss: None,
+            // Predicted
+            new_target_price: predicted.new_target_price,
+            new_stop_loss: predicted.new_stop_loss,
+            suggestion: predicted.suggestion,
+            rationale: predicted.rationale,
+            confidence: predicted.confidence,
         }
     }
 }
