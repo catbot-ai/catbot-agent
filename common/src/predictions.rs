@@ -65,7 +65,7 @@ impl GraphPredictionOutputWithTimeStampBuilder {
             .graph_response
             .signals
             .into_iter()
-            .map(|predicted| LongShortSignal::new(context.clone(), predicted))
+            .map(LongShortSignal::new)
             .collect();
 
         // Convert Vec<Kline> to Vec<Vec<KlineValue>>
@@ -229,7 +229,7 @@ impl TradingPredictionOutputWithTimeStampBuilder {
             .ai_response
             .signals
             .into_iter()
-            .map(|predicted| LongShortSignal::new(context.clone(), predicted))
+            .map(LongShortSignal::new)
             .collect();
 
         let preps_positions = context.maybe_preps_positions.unwrap_or_default();
@@ -336,9 +336,6 @@ pub struct PredictedLongShortSignal {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct LongShortSignal {
-    // Context
-    #[serde(flatten)]
-    pub context: TradingContext,
     // Predicted
     #[serde(flatten)]
     pub predicted: PredictedLongShortSignal,
@@ -348,7 +345,7 @@ pub struct LongShortSignal {
 }
 
 impl LongShortSignal {
-    pub fn new(context: TradingContext, predicted: PredictedLongShortSignal) -> Self {
+    pub fn new(predicted: PredictedLongShortSignal) -> Self {
         // Convert target_time to Tokyo timezone
         let target_time_local = DateTime::from_timestamp(predicted.target_time / 1000, 0)
             .map(|utc_datetime| {
@@ -372,7 +369,6 @@ impl LongShortSignal {
             });
 
         LongShortSignal {
-            context,
             predicted,
             entry_time_local,
             target_time_local,

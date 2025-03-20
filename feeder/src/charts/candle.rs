@@ -674,11 +674,6 @@ mod test {
             let long_target_price = last_candle.close_price.parse::<f64>().unwrap();
 
             past_signals.push(LongShortSignal {
-                context: TradingContext{
-                pair_symbol:binance_pair_symbol.to_string(),
-                timeframe:timeframe.to_string(),current_price:long_target_price,
-                maybe_preps_positions: None,
-            },
             predicted:PredictedLongShortSignal {
                 direction:"long".to_string(),
                 confidence:0.85,
@@ -707,12 +702,6 @@ mod test {
             let short_target_price = last_minus_20_candle.close_price.parse::<f64>().unwrap();
 
             past_signals.push(LongShortSignal {
-                context: TradingContext {
-                    pair_symbol: pair_symbol.to_string(),
-                    timeframe: timeframe.to_string(),
-                    current_price: short_target_price,
-                    maybe_preps_positions: None,
-                },
                 predicted: PredictedLongShortSignal {
                     direction: "short".to_string(),
                     confidence: 0.82,
@@ -760,12 +749,6 @@ mod test {
             let long_target_time = long_entry_time + hour_ms;
 
             signals.push(LongShortSignal {
-                context: TradingContext {
-                    pair_symbol: pair_symbol.to_string(),
-                    timeframe: timeframe.to_string(),
-                    current_price: long_entry_price,
-                    maybe_preps_positions: None,
-                },
                 predicted: PredictedLongShortSignal {
                     direction: "long".to_string(),
                     confidence: 0.9,
@@ -792,12 +775,6 @@ mod test {
             let short_target_time = short_entry_time + hour_ms;
         
             signals.push(LongShortSignal {
-                context: TradingContext {
-                    pair_symbol: pair_symbol.to_string(),
-                    timeframe: timeframe.to_string(),
-                    current_price: short_entry_price,
-                    maybe_preps_positions: None,
-                },
                 predicted: PredictedLongShortSignal {
                     direction: "short".to_string(),
                     confidence: 0.87,
