@@ -648,8 +648,8 @@ mod test {
 
     #[tokio::test]
     async fn entry_point() {
-        let pair_symbol = "SOL_USDT";
-        let binance_pair_symbol = "SOLUSDT";
+        let pair_symbol = "SOL_USDC";
+        let binance_pair_symbol = "SOLUSDC";
         let timeframe = "1h";
         let font_data = include_bytes!("../../RobotoMono-Regular.ttf").to_vec();
 

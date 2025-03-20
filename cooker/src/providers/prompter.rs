@@ -35,7 +35,7 @@ pub fn build_prompt<T>(
     let pair_symbol = context.pair_symbol.clone();
     let binance_pair_symbol = pair_symbol.replace("_", "");
     let symbol = binance_pair_symbol
-        .split("USDT")
+        .split("USDC")
         .next()
         .unwrap_or(&binance_pair_symbol);
 
@@ -119,8 +119,8 @@ mod tests {
     async fn test_build_prompt_stage1_empty_price_history() -> Result<(), Box<dyn std::error::Error>>
     {
         // Define pair symbol
-        let pair_symbol = "SOL_USDT".to_string();
-        let binance_pair_symbol = "SOLUSDT";
+        let pair_symbol = "SOL_USDC".to_string();
+        let binance_pair_symbol = "SOLUSDC";
         let timeframe = "1h".to_string();
 
         // Fetch 1-second kline data to get current price
@@ -153,7 +153,7 @@ mod tests {
         };
 
         // Fetch orderbook (assuming fetch_orderbook_depth returns OrderBook)
-        let orderbook = fetch_orderbook_depth("SOLUSDT", 100).await?;
+        let orderbook = fetch_orderbook_depth("SOLUSDC", 100).await?;
 
         // Create a default GeminiModel
         let model = GeminiModel::default();
@@ -178,8 +178,8 @@ mod tests {
     async fn test_build_prompt_predict_signal_and_candles() -> Result<(), Box<dyn std::error::Error>>
     {
         // Define pair symbol
-        let pair_symbol = "SOL_USDT".to_string();
-        let binance_pair_symbol = "SOLUSDT";
+        let pair_symbol = "SOL_USDC".to_string();
+        let binance_pair_symbol = "SOLUSDC";
         let timeframe = "1h".to_string();
 
         // Fetch 1-second kline data to get current price
