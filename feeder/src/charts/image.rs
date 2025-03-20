@@ -35,7 +35,7 @@ pub fn draw_dashed_line_segment_mut(
     let mut current_pos = 0.0;
     let mut is_dashing = true;
 
-    for i in 0..num_segments {
+    for _i in 0..num_segments {
         let start_pos = current_pos;
         let end_pos = if is_dashing {
             (start_pos + dash_length).min(length)
