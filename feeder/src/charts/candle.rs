@@ -286,15 +286,11 @@ impl Chart {
         };
 
         // Calculate label top-left coordinates
-        let label_low_x = lowest_x + candle_w2;
+        let label_low_x = lowest_x;
         let label_low_y = lowest_y + 8.0; 
 
         let label_high_y = highest_y - 20.0 - 8.0;
         let label_high_x = highest_x;
-
-        // Adjust lowest_x for the center of the candlestick
-        let lowest_x_center = lowest_x + candle_w2;
-        let highest_x_center = highest_x;
 
         // Draw hallow labels
         let label_width = 112.0;
@@ -302,28 +298,28 @@ impl Chart {
         let font_color = Rgba([255, 255, 255, 255]);
         let border_color = Rgba([255, 255, 255, 255]);
 
-        let label_low_x = if label_low_x > chart_width2   { lowest_x - label_width - candle_w2 } else { lowest_x + 16.0 };
+        let new_label_low_x = if label_low_x > chart_width2 { lowest_x - label_width - candle_w2 } else { lowest_x + 16.0 };
         let low_bounding_rect = draw_hallow_label(
             img,
             font,
             &format!("LOW:{:.2}", lowest_price),
-            label_low_x,
+            new_label_low_x,
             label_low_y,
             label_scale,
             font_color,
             border_color,
         )?;
 
-        let label_high_x = if label_high_x > chart_width2   { highest_x - label_width - candle_w2 } else { highest_x  + 16.0 };
+        let new_label_high_x = if label_high_x > chart_width2 { highest_x - label_width - candle_w2 - 6.0 } else { highest_x + 16.0 };
 
         // Under other label?
-        let label_high_x = if label_high_x < 300.0 { 300.0 } else { label_high_x };
+        let new_label_high_x = if label_high_x < 300.0 { 300.0 } else { new_label_high_x };
 
         let high_bounding_rect = draw_hallow_label(
             img,
             font,
             &format!("HIGH:{:.2}", highest_price),
-            label_high_x,
+            new_label_high_x,
             label_high_y,
             label_scale,
             font_color,
@@ -331,12 +327,12 @@ impl Chart {
         )?;
 
         // Draw line from candlestick to the LOW label
-        let line_color = Rgba([255/3, 255/3, 255/3, 255/2u8]); // White line
+        let line_color = Rgba([255, 255, 255, 255]); // White line
         
         let line_x2 = if label_low_x > chart_width2 { low_bounding_rect.left() + low_bounding_rect.width() as i32} else {label_low_x as i32};
         draw_line_segment_mut(
             img,
-            (lowest_x_center, lowest_y),  
+            (lowest_x, lowest_y),  
             (line_x2 as f32, lowest_y + 8.0),  
             line_color,
         );
@@ -344,7 +340,7 @@ impl Chart {
         let line_x2 = if label_high_x > chart_width2 { high_bounding_rect.left() + high_bounding_rect.width() as i32} else {label_high_x as i32};
         draw_line_segment_mut(
             img,
-            (highest_x_center, highest_y),
+            (highest_x - 2.0, highest_y),
             (line_x2 as f32, highest_y - 8.0),  
             line_color,
         );
