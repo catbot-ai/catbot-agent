@@ -73,22 +73,21 @@ graph LR;
 
 - See yesterday tab result via web.
 - See today tab blurry result with `stake` button via web.
+- Only one token.
 
 ### Staked
 
 - See yesterday tab result via web.
 - See today tab result via web.
-- See next hour tab. (more stake more hour)
-
-## Rules
-
-- [free-email] user get end of the day summary, link to website.
-- [free-web] user can see yesterday result.
-- [free-web] user can see profit comparison between `free` | `signed-in` | `staked`.
-- Stake to get signals.
-- More stake = more signals frequency.
-- Update via email and discord.
+- More token.
+- See rebalance tab.
 - Unstake took 7 days.
-- Staker get role in Discord.
-- Gold member get access realtime bot.
-- Gold member get circuit breaker.
+- Get role in Discord.
+- Get circuit breaker signal.
+
+## TODO
+
+- [ ] Watch for 500k volume via websocket.
+- [ ] Try vlm with graph.
+- [ ] Trigger prediction every 5 minute.
+- [ ] Store signals in KV/DO.
