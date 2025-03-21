@@ -69,8 +69,6 @@ const NUM_GREEN: Rgba<u8> = Rgba([B_GREEN.0, B_GREEN.1, B_GREEN.2, 255]);
 
 const PRICE_LINE_COLOR: Rgba<u8> = PRICE_BG_COLOR;
 
-const MARGIN_TOP: i32 = 1024 / 3;
-
 #[allow(clippy::too_many_arguments, unused)]
 pub fn draw_chart(
     root: &mut DrawingArea<BitMapBackend<'_>, plotters::coord::Shift>,
@@ -1167,15 +1165,15 @@ pub fn draw_orderbook(
     width: u32,
     height: u32,
     parent_offset_x: f32,
-    current_price_y: f32,
     lower_bound: f32,
     upper_bound: f32,
-    price_bounding_rect: Rect,
+    current_price_bounding_rect: Rect,
 ) -> Result<(HashMap<String, f32>), Box<dyn Error>> {
     // Output items y
     let mut bids_asks_y_map = HashMap::new();
 
     // Position
+    let current_price_y = current_price_bounding_rect.top() as f32;
     let padding_right = 120.0;
     let parent_offset_x = parent_offset_x + padding_right;
     let price_rect_height = 20;
@@ -1204,12 +1202,11 @@ pub fn draw_orderbook(
 
     // Prepare position for the histogram
     let mut current_y = (-{ price_rect_height_half } / 2i32);
-    let rect_height = 17u32;
+    let histogram_rect_height = 17u32;
     let gap = 4i32;
-    let bar_height = rect_height as i32 + gap;
-    let offset_y = MARGIN_TOP as f32
-        + (current_price_y as i32 - bar_height * (ask_data.len() as i32) + bar_height - gap / 2)
-            as f32;
+    let bar_height = histogram_rect_height as i32 + gap;
+    let offset_y =
+        height as f32 / 2.0 - (bar_height * (ask_data.len() as i32) + bar_height - gap / 2) as f32;
 
     let max_bar_width = 80;
     let current_x = 40u32;
@@ -1248,7 +1245,7 @@ pub fn draw_orderbook(
                     } else {
                         ASK_COLOR
                     };
-                    let y = offset_y as i32 + current_y + rect_height as i32;
+                    let y = offset_y as i32 + current_y + histogram_rect_height as i32;
                     root.draw(&Rectangle::new(
                         [
                             (offset_x as i32, offset_y as i32 + current_y),
@@ -1256,7 +1253,7 @@ pub fn draw_orderbook(
                         ],
                         ShapeStyle::from(color).filled(),
                     ))?;
-                    current_y += (rect_height + gap as u32) as i32;
+                    current_y += (histogram_rect_height + gap as u32) as i32;
                     bids_asks_y_map.insert(price.to_string(), y as f32);
                 }
             }
@@ -1270,7 +1267,7 @@ pub fn draw_orderbook(
                     } else {
                         BID_COLOR
                     };
-                    let y = offset_y as i32 + current_y + rect_height as i32;
+                    let y = offset_y as i32 + current_y + histogram_rect_height as i32;
                     root.draw(&Rectangle::new(
                         [
                             (offset_x as i32, offset_y as i32 + current_y),
@@ -1278,7 +1275,7 @@ pub fn draw_orderbook(
                         ],
                         ShapeStyle::from(color).filled(),
                     ))?;
-                    current_y += (rect_height + gap as u32) as i32;
+                    current_y += (histogram_rect_height + gap as u32) as i32;
                     bids_asks_y_map.insert(price.to_string(), y as f32);
                 }
             }
@@ -1295,9 +1292,8 @@ pub fn draw_orderbook(
 
     // Reset
     let mut current_y = (-{ price_rect_height_half } / 2i32);
-    let offset_y = MARGIN_TOP as f32
-        + (current_price_y as i32 - bar_height * (ask_data.len() as i32) + bar_height - gap / 2)
-            as f32;
+    let offset_y =
+        height as f32 / 2.0 - (bar_height * (ask_data.len() as i32) + bar_height - gap / 2) as f32;
 
     let offset_x = parent_offset_x;
 
@@ -1337,7 +1333,7 @@ pub fn draw_orderbook(
                 None,
             )?;
 
-            current_y += rect_height as i32 + gap;
+            current_y += histogram_rect_height as i32 + gap;
         }
     }
 
@@ -1379,7 +1375,7 @@ pub fn draw_orderbook(
                 None,
             )?;
 
-            current_y += (rect_height + gap as u32) as i32;
+            current_y += (histogram_rect_height + gap as u32) as i32;
         }
     }
 
@@ -1388,7 +1384,7 @@ pub fn draw_orderbook(
     draw_line_segment_mut(
         img,
         (
-            parent_offset_x - padding_right + price_bounding_rect.width() as f32,
+            parent_offset_x - padding_right + current_price_bounding_rect.width() as f32 + 8.0,
             price_line_y,
         ),
         (offset_x - 3.0, price_line_y),

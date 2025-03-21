@@ -569,7 +569,6 @@ impl Chart {
                     root_width,
                     root_height,
                     right_offset_x as f32,
-                    price_bounding_rect.top() as f32,
                     lower_bound,
                     upper_bound,
                     price_bounding_rect,
