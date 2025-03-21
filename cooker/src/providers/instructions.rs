@@ -3,7 +3,7 @@ use crate::predictions::prediction_types::PredictionType;
 pub const PREFIX_INSTRUCTION: &str = r#"
 - Perform technical analysis on price histories (1m, 5m, 1h, 4h, 1d) and order book volume:
   - Use 1m, 5m, and 1h equally for short-term signals (intraday focus). Prioritize 1m if rapid momentum shifts occur.
-  - Use 4h and 1d to confirm broader trends or detect weekly patterns; weight 4h/1d higher if volume exceeds 1.5x 10-period average or momentum aligns with prior weekly cycles.
+  - Use 4h and 1d to confirm broader trends or detect weekly patterns; weight 4h/1d higher only if volume exceeds 2x 10-period average and short-term signals (1m, 5m, 1h) do not strongly contradict.
 - Detect momentum and reversals with key indicators:
   - Bullish: Stochastic RSI <20, price near lower Bollinger Band, rising bid volume, or EMA (9) crosses above EMA (21).
   - Bearish: Stochastic RSI >80, price near upper Bollinger Band, rising ask volume, or EMA (9) crosses below EMA (21).
@@ -20,7 +20,7 @@ pub const PREFIX_INSTRUCTION: &str = r#"
 - Analyze historical volatility spikes (e.g., periods with >2x average ATR or volume) on 4h and 1d timeframes. Adjust entry and target timing to avoid whipsaws during spikes unless momentum aligns with the trade direction, in which case prioritize breakout entries.
 - Confidence (0.0–1.0):
   - Base at 0.5, +0.1 per aligned indicator (e.g., RSI, volume, EMA, Fibonacci), -0.1 per conflict.
-  - Suggest trades only if confidence ≥0.6; otherwise, recommend monitoring.
+  - Suggest trades only if confidence ≥0.6; for 'Hold' on existing positions, require confidence ≥0.7 to ensure strong alignment.
 - Focus on relative indicators (e.g., % changes, z-scores) over absolute levels to avoid overfitting.
 "#;
 
@@ -44,10 +44,11 @@ pub const MAIN_TRADE_INSTRUCTION: &str = r#"
 "#;
 
 pub const SUB_PERPS_INSTRUCTION: &str = r#"
+- Ensure about open position side is "long" or "short" before made a suggestion.
 - For existing positions, suggest one of the following actions based on current momentum, price action, and volume, ensuring logical risk management:
-    - 'Hold': If short-term momentum aligns with the position’s side (e.g., bullish for longs with Stochastic RSI <20 or rising bid volume; bearish for shorts with Stochastic RSI >80 or rising ask volume).
+    - 'Hold': If short-term momentum clearly aligns with the position’s side (e.g., bullish for longs with Stochastic RSI <20, rising bid volume, or EMA (9) above EMA (21); bearish for shorts with Stochastic RSI >80, rising ask volume, or EMA (9) below EMA (21)). Require confidence ≥0.7 and at least two confirming indicators. Do not suggest 'Hold' if momentum is mixed or opposes the position’s side.
     - 'Increase': If at least two short-term indicators (e.g., Stochastic RSI, volume, price action, EMA crossover) strongly confirm the position’s direction and confidence exceeds 0.7.
-    - 'Close': If short-term signals oppose the position’s side (e.g., bearish signals for a long position) or the position nears its target, stop_loss, or liquidation risk.
+    - 'Close': If short-term signals oppose the position’s side (e.g., bearish signals for a long position with Stochastic RSI >80 or rising ask volume) or the position nears its target, stop_loss, or liquidation risk.
     - 'Reverse': If short-term signals strongly oppose the position’s side with confidence ≥0.7 (e.g., bearish signals for a long with Stochastic RSI >80 and rising ask volume), suggest closing the current position and opening an opposite position with new entry_price, target_price, and stop_loss.
     - Ensure stop_loss values are logically set:
     - For longs, set stop_loss 1-2% below the entry_price or nearest support (e.g., below the lower Bollinger Band, 9-period EMA, or Fibonacci 38.2% level if price is volatile).
@@ -62,6 +63,7 @@ pub const SUB_GRAPH_INSTRUCTION: &str = r#"
 pub const SUFFIX_INSTRUCTION: &str = r#"
 - Be concise, think step by step.
 - Must generate valid JSON output.
+- Ensure summary suggestion aligns with the existing position’s side (e.g., 'Hold long position' for longs, 'Hold short position' for shorts) unless suggesting 'Close' or 'Reverse'.
 "#;
 
 pub fn get_instruction(prediction_type: &PredictionType, _timeframe: String) -> String {
