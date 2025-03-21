@@ -2,9 +2,9 @@ mod charts;
 
 use charts::candle::Chart;
 use chrono_tz::Asia::Tokyo;
-use common::binance::fetch_orderbook_depth;
+use common::binance::fetch_orderbook_depth_usdt;
 use common::cooker::fetch_graph_prediction_from_worker;
-use common::sources::binance::fetch_binance_kline_data;
+use common::sources::binance::fetch_binance_kline_usdt;
 use common::Kline;
 
 use std::ops::Deref;
@@ -12,7 +12,7 @@ use worker::*;
 
 // TODO: call service binding
 async fn gen_candle(pair_symbol: String, timeframe: String) -> anyhow::Result<Vec<Kline>> {
-    let kline_data_1m = fetch_binance_kline_data::<Kline>(&pair_symbol, &timeframe, 300).await?;
+    let kline_data_1m = fetch_binance_kline_usdt::<Kline>(&pair_symbol, &timeframe, 300).await?;
     Ok(kline_data_1m)
 }
 
@@ -77,7 +77,7 @@ pub async fn handle_chart(req: Request, ctx: RouteContext<()>) -> worker::Result
         //     title: format!("{pair_symbol} {timeframe}"),
         // };
 
-        let orderbook = fetch_orderbook_depth(&pair_symbol, 1000).await;
+        let orderbook = fetch_orderbook_depth_usdt(&pair_symbol, 1000).await;
         let orderbook = match orderbook {
             Ok(orderbook) => orderbook,
             Err(error) => {

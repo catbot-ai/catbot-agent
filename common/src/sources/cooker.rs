@@ -5,7 +5,7 @@ use serde_json::json;
 
 use crate::{Kline, KlineValue, RefinedGraphPredictionResponse};
 
-use super::binance::fetch_binance_kline_data;
+use super::binance::fetch_binance_kline_usdt;
 
 #[cfg(feature = "service_binding")]
 use worker::*;
@@ -91,7 +91,7 @@ pub async fn get_mock_graph_prediction() -> String {
     let binance_pair_symbol = "SOLUSDT";
     let timeframe = "1h";
     let limit = 24;
-    let candle_data = fetch_binance_kline_data::<Kline>(binance_pair_symbol, timeframe, limit)
+    let candle_data = fetch_binance_kline_usdt::<Kline>(binance_pair_symbol, timeframe, limit)
         .await
         .unwrap();
 

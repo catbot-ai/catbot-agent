@@ -642,23 +642,24 @@ impl Chart {
 mod test {
     use super::*;
     use chrono_tz::Asia::Tokyo;
-    use common::binance::fetch_binance_kline_data;
-    use common::binance::fetch_orderbook_depth;
+    use common::binance::{fetch_binance_kline_usdt, fetch_orderbook_depth_usdt};
     use common::PredictedLongShortSignal;
 
     #[tokio::test]
     async fn entry_point() {
-        let pair_symbol = "SOL_USDT";
-        let binance_pair_symbol = "SOLUSDT";
-        let timeframe = "1h";
+        let token_symbol = "SOL".to_string();
+        let pair_symbol = format!("{token_symbol}_USDT");
+        let binance_pair_symbol = format!("{token_symbol}USDT");
+        let timeframe = "1h".to_string();
+
         let font_data = include_bytes!("../../RobotoMono-Regular.ttf").to_vec();
 
         let limit = 24 * 10;
-        let candle_data = fetch_binance_kline_data::<Kline>(binance_pair_symbol, timeframe, limit)
+        let candle_data = fetch_binance_kline_usdt::<Kline>(&binance_pair_symbol, &timeframe, limit)
             .await
             .unwrap();
 
-        let orderbook = fetch_orderbook_depth(binance_pair_symbol, 2000)
+        let orderbook = fetch_orderbook_depth_usdt(&binance_pair_symbol, 2000)
             .await
             .unwrap();
 
@@ -815,9 +816,9 @@ mod test {
         // .unwrap()
         // .klines;
 
-        let png = Chart::new(timeframe, Tokyo)
+        let png = Chart::new(&timeframe, Tokyo)
             .with_past_candle(candle_data)
-            .with_title(pair_symbol)
+            .with_title(&pair_symbol)
             .with_font_data(font_data)
             .with_volume()
             .with_macd()

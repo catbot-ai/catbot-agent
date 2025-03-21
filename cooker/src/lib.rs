@@ -7,8 +7,9 @@ mod predictions;
 mod providers;
 
 use common::{
-    binance::fetch_binance_kline_data, jup::get_preps_position, ConciseKline,
-    GraphPredictionOutput, PredictionOutput, TradingContext, TradingPrediction,
+    binance::{fetch_binance_kline_usdt, get_token_and_pair_symbol_usdt},
+    jup::get_preps_position,
+    ConciseKline, GraphPredictionOutput, PredictionOutput, TradingContext, TradingPrediction,
 };
 use worker::*;
 
@@ -157,10 +158,11 @@ pub async fn predict_with_gemini(
 ) -> anyhow::Result<String, String> {
     let gemini_model = GeminiModel::default();
     let provider = GeminiProvider::new_v1beta(&gemini_api_key);
+    let (token_symbol, _) = get_token_and_pair_symbol_usdt(&pair_symbol);
 
     // Get price
     // TODO: more oracle?
-    let kline_data_1s = fetch_binance_kline_data::<ConciseKline>(&pair_symbol, "1s", 1)
+    let kline_data_1s = fetch_binance_kline_usdt::<ConciseKline>(&pair_symbol, "1s", 1)
         .await
         .expect("Failed to get price.");
     let current_price = kline_data_1s[0].close;
@@ -180,6 +182,7 @@ pub async fn predict_with_gemini(
     };
 
     let context = TradingContext {
+        token_symbol,
         pair_symbol,
         timeframe,
         current_price,
@@ -229,7 +232,7 @@ mod tests {
         dotenvy::from_filename(".env").expect("No .env file");
 
         let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
-        let pair_symbol = "SOL_USDT";
+        let pair_symbol = "SOL_USDC";
         let wallet_address = std::env::var("WALLET_ADDRESS").ok();
 
         let result = predict_with_gemini(

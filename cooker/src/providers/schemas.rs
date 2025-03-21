@@ -1,11 +1,11 @@
-use jup_sdk::perps::PerpsPosition;
+use jup_sdk::{perps::PerpsPosition, token_registry::get_by_address};
 
 use crate::predictions::prediction_types::PredictionType;
 
 pub fn get_signal_schema(pair_symbol: &str) -> String {
     format!(
         r#""signals": [{{
-        "pair_symbol": {pair_symbol}, // 
+        "pair_symbol": {pair_symbol},
         "direction": string, // Predicted direction, long or shot
         "confidence": number, // Confidence about this signal: 0.0-1.0
         "entry_price": number, // Suggest entry price, Can be future price.
@@ -22,20 +22,30 @@ pub fn get_perps_position_schema(
     maybe_preps_positions: Option<Vec<PerpsPosition>>,
 ) -> (String, String) {
     // Positions
-    let maybe_preps_positions_string =
-        serde_json::to_string(&maybe_preps_positions).unwrap_or("No open positions.".to_string());
+    let maybe_preps_positions_string = if maybe_preps_positions.is_none() {
+        String::from("No open positions.")
+    } else {
+        serde_json::to_string(&maybe_preps_positions).unwrap_or("No open positions.".to_string())
+    };
+
     let maybe_position_schema = if let Some(preps_positions) = maybe_preps_positions {
         let mut positions_string = String::from(r#""positions": ["#);
         let positions: Vec<String> = preps_positions
             .iter()
-            .map(|_| {
-                r#"{
+            .map(|preps_position| {
+                let token_symbol = get_by_address(&preps_position.market_mint)
+                    .expect("Not support token pair")
+                    .symbol
+                    .to_string();
+
+                format!(r#"{{
+        "token_symbol" : {token_symbol},
         "new_target_price": Option<number>,  // Suggested new target price if adjusting position needed or when target_price is null
         "new_stop_loss": Option<number>,     // Suggested new stop loss if adjusting position needed or when stop_loss is null
         "suggestion": "string", // A concise action (e.g., "Hold", "Increase", "Close", "Reverse")
         "rationale": "string", // A brief explanation for the suggestion
         "confidence": number   // Confidence score between 0.0 and 1.0
-    }"#.to_string()
+    }}"#)
             })
             .collect();
         if !positions.is_empty() {

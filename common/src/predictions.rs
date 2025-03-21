@@ -1,6 +1,6 @@
 use jup_sdk::{
     perps::{PerpsPosition, Side},
-    token_registry::get_pair_or_token_symbol_from_pair_address,
+    token_registry::get_by_address,
 };
 
 use anyhow::Context;
@@ -317,6 +317,7 @@ where
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct TradingContext {
+    pub token_symbol: String,
     pub pair_symbol: String,
     pub timeframe: String,
     pub current_price: f64,
@@ -395,7 +396,7 @@ pub struct PredictedLongShortPosition {
 pub struct LongShortPosition {
     // Opened Position
     pub side: Side,
-    pub pair_symbol: String,
+    pub token_symbol: String,
     pub entry_price: f64,
     pub leverage: f64,
     pub liquidation_price: f64,
@@ -413,13 +414,11 @@ pub struct LongShortPosition {
 
 impl LongShortPosition {
     pub fn new(perps_position: PerpsPosition, predicted: PredictedLongShortPosition) -> Self {
-        let pair_address = format!(
-            "{}_{}",
-            perps_position.market_mint, perps_position.collateral_mint
-        );
-        let pair_symbol = get_pair_or_token_symbol_from_pair_address(&pair_address)
-            .expect("Not support token pair");
-        println!("{:?}", pair_symbol);
+        let token_symbol = get_by_address(&perps_position.market_mint)
+            .expect("Not support token pair")
+            .symbol
+            .to_string();
+
         LongShortPosition {
             // Predicted
             new_target_price: predicted.new_target_price,
@@ -429,7 +428,7 @@ impl LongShortPosition {
             confidence: predicted.confidence,
             // Opened Position
             side: perps_position.side,
-            pair_symbol,
+            token_symbol,
             entry_price: perps_position.entry_price,
             leverage: perps_position.leverage,
             liquidation_price: perps_position.liquidation_price,

@@ -7,7 +7,16 @@ use crate::{Kline, OrderBook};
 
 const BINANCE_API_URL: &str = "https://data-api.binance.vision/api/v3";
 
-pub async fn fetch_binance_kline_data<T>(
+pub fn get_token_and_pair_symbol_usdt(pair_symbol: &str) -> (String, String) {
+    let token_symbol = pair_symbol.split("_").next().unwrap();
+    let token_symbol = token_symbol.split("USD").next().unwrap();
+
+    // We need USDT orderbook
+    let binance_pair_symbol = format!("{token_symbol}USDT");
+    (token_symbol.to_string(), binance_pair_symbol)
+}
+
+pub async fn fetch_binance_kline_usdt<T>(
     pair_symbol: &str,
     interval: &str,
     limit: i32,
@@ -15,7 +24,8 @@ pub async fn fetch_binance_kline_data<T>(
 where
     T: serde::de::DeserializeOwned + Send + std::convert::From<Kline>,
 {
-    let binance_pair_symbol = pair_symbol.replace("_", "");
+    let (_, binance_pair_symbol) = get_token_and_pair_symbol_usdt(pair_symbol);
+
     let client = Client::new();
     // let current_time = Utc::now().timestamp_millis();
     // https://adversely-amazing-wildcat.edgecompute.app/?url=https://data-api.binance.vision/api/v3/uiKlines?limit=1&symbol=SOLUSDT&interval=1s
@@ -47,8 +57,10 @@ where
     Ok(concise_kline_data)
 }
 
-pub async fn fetch_orderbook_depth(pair_symbol: &str, limit: i32) -> Result<OrderBook> {
-    let binance_pair_symbol = pair_symbol.replace("_", "");
+pub async fn fetch_orderbook_depth_usdt(pair_symbol: &str, limit: i32) -> Result<OrderBook> {
+    // We need USDT orderbook
+    let (_, binance_pair_symbol) = get_token_and_pair_symbol_usdt(pair_symbol);
+
     let client = Client::new();
     // https://adversely-amazing-wildcat.edgecompute.app/?url=https://api.binance.com/api/v3/depth?symbol=SOLUSDT&limit=1
     let url = format!(
@@ -73,15 +85,18 @@ pub async fn fetch_orderbook_depth(pair_symbol: &str, limit: i32) -> Result<Orde
 ///
 /// # Errors
 /// Returns an `anyhow::Error` if fetching or processing the data fails.
-pub async fn fetch_binance_kline_csv(
+pub async fn fetch_binance_kline_usdt_csv(
     pair_symbol: &str,
     interval: &str,
     limit: i32,
 ) -> Result<String> {
+    // We need USDT orderbook
+    let (_, binance_pair_symbol) = get_token_and_pair_symbol_usdt(pair_symbol);
+
     // Fetch raw Kline data
-    let kline_data: Vec<Kline> = fetch_binance_kline_data::<Kline>(pair_symbol, interval, limit)
+    let kline_data: Vec<Kline> = fetch_binance_kline_usdt::<Kline>(&binance_pair_symbol, interval, limit)
         .await
-        .with_context(|| format!("Failed to fetch Kline data for {pair_symbol} with interval {interval} and limit {limit}"))?;
+        .with_context(|| format!("Failed to fetch Kline data for {binance_pair_symbol} with interval {interval} and limit {limit}"))?;
 
     // Build CSV string manually
     let mut csv_string = String::new();
@@ -109,27 +124,40 @@ pub async fn fetch_binance_kline_csv(
 }
 
 #[cfg(test)]
-#[tokio::test]
-async fn test() {
-    use crate::ConciseKline;
+mod test {
+    use super::*;
+    #[test]
+    fn test_get_token_and_pair_symbol() {
+        let pair_symbols = ["SOL", "SOLUSDC", "SOL_USDC", "SOLUSDT", "SOL_USDT"];
+        for pair_symbol in pair_symbols {
+            let (token_symbol, binance_pair_symbol) = get_token_and_pair_symbol_usdt(pair_symbol);
+            assert_eq!(token_symbol, "SOL");
+            assert_eq!(binance_pair_symbol, "SOLUSDT");
+        }
+    }
 
-    let pair_symbol = "SOL_USDT";
-    let interval = "1h";
+    #[tokio::test]
+    async fn test() {
+        use crate::ConciseKline;
 
-    println!(
-        "Fetcher started for symbol: {}, interval: {}",
-        pair_symbol, interval
-    );
+        let pair_symbol = "SOL_USDT";
+        let interval = "1h";
 
-    let kline_data = fetch_binance_kline_data::<Kline>(pair_symbol, interval, 1)
-        .await
-        .unwrap();
-    println!("Fetched {} Kline data points", kline_data.len()); // Log data points fetched
+        println!(
+            "Fetcher started for symbol: {}, interval: {}",
+            pair_symbol, interval
+        );
 
-    let kline_data = fetch_binance_kline_data::<ConciseKline>(pair_symbol, interval, 1)
-        .await
-        .unwrap();
-    println!("Fetched {} ConciseKline data points", kline_data.len()); // Log data points fetched
+        let kline_data = fetch_binance_kline_usdt::<Kline>(pair_symbol, interval, 1)
+            .await
+            .unwrap();
+        println!("Fetched {} Kline data points", kline_data.len()); // Log data points fetched
 
-    assert!(!kline_data.is_empty());
+        let kline_data = fetch_binance_kline_usdt::<ConciseKline>(pair_symbol, interval, 1)
+            .await
+            .unwrap();
+        println!("Fetched {} ConciseKline data points", kline_data.len()); // Log data points fetched
+
+        assert!(!kline_data.is_empty());
+    }
 }

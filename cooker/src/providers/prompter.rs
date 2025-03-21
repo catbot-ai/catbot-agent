@@ -1,4 +1,5 @@
 use chrono::Utc;
+use common::binance::get_token_and_pair_symbol_usdt;
 use common::OrderBook;
 use common::TradingContext;
 
@@ -31,15 +32,9 @@ pub fn build_prompt<T>(
     let current_datetime = now_utc.format("%Y-%m-%dT%H:%M:%SZ").to_string();
     let current_timestamp = now_utc.timestamp_millis();
 
-    // TODO: Better handle binance_pair_symbol
+    // Handle binance_pair_symbol
     let pair_symbol = context.pair_symbol.clone();
-    let binance_pair_symbol = pair_symbol.replace("_", "");
-    let symbol = binance_pair_symbol
-        .split("USDC")
-        .next()
-        .unwrap_or(&binance_pair_symbol);
-    let symbol = symbol.to_owned();
-    let symbol = symbol.split("USDT").next().unwrap_or(&binance_pair_symbol);
+    let (token_symbol, binance_pair_symbol) = get_token_and_pair_symbol_usdt(&pair_symbol);
 
     let (grouped_one_bids, grouped_one_asks) =
         group_by_fractional_part(&orderbook, FractionalPart::One);
@@ -57,7 +52,6 @@ pub fn build_prompt<T>(
     // TODO: take this to the account
     let min_profit = fund_usd * 0.025;
 
-    // TODO: replace market_mint, collateral_mint with symbol
     // Positions
     let (maybe_preps_positions_string, maybe_position_schema) =
         get_perps_position_schema(context.maybe_preps_positions);
@@ -73,10 +67,10 @@ pub fn build_prompt<T>(
 
     // Consolidate
     format!(
-        r#"Analyze {symbol} for price movement in the next 4 hours using:
+        r#"Analyze {pair_symbol} for price movement in the next 4 hours using:
 
 ## Input Data:
-symbol={symbol}
+token_symbol={token_symbol}
 fund_usd={fund_usd}
 current_datetime={current_datetime}
 current_timestamp={current_timestamp}
@@ -113,7 +107,9 @@ mod tests {
     use crate::providers::gemini::GeminiModel;
     use anyhow::Result;
     use common::{
-        binance::{fetch_binance_kline_csv, fetch_binance_kline_data, fetch_orderbook_depth},
+        binance::{
+            fetch_binance_kline_usdt, fetch_binance_kline_usdt_csv, fetch_orderbook_depth_usdt,
+        },
         jup::get_preps_position,
         ConciseKline,
     };
@@ -124,13 +120,14 @@ mod tests {
     async fn test_build_prompt_stage1_empty_price_history() -> Result<(), Box<dyn std::error::Error>>
     {
         // Define pair symbol
-        let pair_symbol = "SOL_USDT".to_string();
-        let binance_pair_symbol = "SOLUSDT";
+        let token_symbol = "SOL".to_string();
+        let pair_symbol = format!("{token_symbol}_USDT");
+        let binance_pair_symbol = format!("{token_symbol}USDT");
         let timeframe = "1h".to_string();
 
         // Fetch 1-second kline data to get current price
         let kline_data_1s =
-            fetch_binance_kline_data::<ConciseKline>(binance_pair_symbol, "1s", 1).await?;
+            fetch_binance_kline_usdt::<ConciseKline>(&binance_pair_symbol, "1s", 1).await?;
         let current_price = kline_data_1s[0].close;
 
         // Load environment variables from .env file (optional, handle errors gracefully)
@@ -140,13 +137,14 @@ mod tests {
 
         // Context
         let context = TradingContext {
+            token_symbol,
             pair_symbol,
             timeframe,
             current_price,
             maybe_preps_positions,
         };
 
-        let kline_data_1h = fetch_binance_kline_csv(binance_pair_symbol, "1h", 1).await?;
+        let kline_data_1h = fetch_binance_kline_usdt_csv(&binance_pair_symbol, "1h", 1).await?;
 
         // Create an empty PriceHistory struct (all fields None)
         let price_history = PriceHistory {
@@ -158,7 +156,7 @@ mod tests {
         };
 
         // Fetch orderbook (assuming fetch_orderbook_depth returns OrderBook)
-        let orderbook = fetch_orderbook_depth(binance_pair_symbol, 1000).await?;
+        let orderbook = fetch_orderbook_depth_usdt(&binance_pair_symbol, 1000).await?;
 
         // Create a default GeminiModel
         let model = GeminiModel::default();
@@ -183,37 +181,38 @@ mod tests {
     async fn test_build_prompt_predict_signal_and_candles() -> Result<(), Box<dyn std::error::Error>>
     {
         // Define pair symbol
-        let pair_symbol = "SOL_USDT".to_string();
-        let binance_pair_symbol = "SOLUSDT";
+        let token_symbol = "SOL".to_string();
+        let pair_symbol = format!("{token_symbol}_USDT");
+        let binance_pair_symbol = format!("{token_symbol}USDT");
         let timeframe = "1h".to_string();
 
         // Fetch 1-second kline data to get current price
         let kline_data_1s =
-            fetch_binance_kline_data::<ConciseKline>(binance_pair_symbol, "1s", 1).await?;
+            fetch_binance_kline_usdt::<ConciseKline>(&binance_pair_symbol, "1s", 1).await?;
         let current_price = kline_data_1s[0].close;
 
         // Context
         let context = TradingContext {
+            token_symbol,
             pair_symbol,
             timeframe,
             current_price,
             maybe_preps_positions: None,
         };
 
-        let kline_data_1h = fetch_binance_kline_csv(binance_pair_symbol, "1h", 1).await?;
-        let price_history_1h_string = serde_json::to_string_pretty(&kline_data_1h)?;
+        let kline_data_1h = fetch_binance_kline_usdt_csv(&binance_pair_symbol, "1h", 1).await?;
 
         // Create an empty PriceHistory struct (all fields None)
         let price_history = PriceHistory {
             price_history_1m: None,
             price_history_5m: Some("[]".to_string()),
-            price_history_1h: Some(price_history_1h_string),
+            price_history_1h: Some(kline_data_1h),
             price_history_4h: Some("[]".to_string()),
             price_history_1d: Some("[]".to_string()),
         };
 
         // Fetch orderbook (assuming fetch_orderbook_depth returns OrderBook)
-        let orderbook = fetch_orderbook_depth(binance_pair_symbol, 1000).await?;
+        let orderbook = fetch_orderbook_depth_usdt(&binance_pair_symbol, 1000).await?;
 
         // Create a default GeminiModel
         let model = GeminiModel::default();
