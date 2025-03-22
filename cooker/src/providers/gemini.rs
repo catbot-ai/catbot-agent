@@ -1,8 +1,6 @@
 use anyhow::{anyhow, Result};
-
 use reqwest::Client;
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
 use strum::AsRefStr;
@@ -11,7 +9,7 @@ use strum::EnumString;
 use super::cleaner::try_parse_json_with_trailing_comma_removal;
 use super::core::AiProvider;
 
-// --- Gemini Model Enum ---
+// --- Gemini Model Enum and Response Structs ---
 
 #[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,9 +35,22 @@ pub struct Content {
 }
 
 #[derive(Deserialize, Debug, Serialize)]
+#[serde(untagged)]
+pub enum Part {
+    Text {
+        text: String,
+    },
+    InlineData {
+        #[serde(rename = "inlineData")]
+        inline_data: InlineDataContent,
+    },
+}
+
+#[derive(Deserialize, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Part {
-    pub text: String,
+pub struct InlineDataContent {
+    mime_type: String,
+    data: String, // Base64 encoded image data
 }
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -85,11 +96,30 @@ impl GeminiProvider {
     }
 }
 
+#[derive(Serialize)]
+pub struct ImageData {
+    pub mime_type: String,
+    pub data: String, // Base64 encoded image data
+}
+
 impl AiProvider for GeminiProvider {
     async fn call_api<T: serde::de::DeserializeOwned + Send>(
         &self,
         model: &GeminiModel,
         prompt: &str,
+        maybe_response_schema: Option<&str>,
+    ) -> Result<T> {
+        self.call_api_with_images(model, prompt, vec![], maybe_response_schema)
+            .await
+    }
+}
+
+impl GeminiProvider {
+    pub async fn call_api_with_images<T: serde::de::DeserializeOwned + Send>(
+        &self,
+        model: &GeminiModel,
+        prompt: &str,
+        images: Vec<ImageData>,
         maybe_response_schema: Option<&str>,
     ) -> Result<T> {
         let model_str = model.as_ref();
@@ -98,12 +128,22 @@ impl AiProvider for GeminiProvider {
             self.api_url, model_str, self.api_key
         );
 
+        let mut parts = vec![Part::Text {
+            text: prompt.to_string(),
+        }];
+        for image_data in images {
+            parts.push(Part::InlineData {
+                inline_data: InlineDataContent {
+                    mime_type: image_data.mime_type,
+                    data: image_data.data,
+                },
+            });
+        }
+
         let payload_json = if let Some(response_schema) = maybe_response_schema {
             json!({
                 "contents": [{
-                  "parts":[
-                    {"text": prompt}
-                  ]
+                    "parts": parts
                 }],
                 "generationConfig": {
                     "response_mime_type": "application/json",
@@ -113,9 +153,7 @@ impl AiProvider for GeminiProvider {
         } else {
             json!({
                 "contents": [{
-                  "parts":[
-                    {"text": prompt}
-                  ]
+                    "parts": parts
                 }],
                 "generationConfig": {
                     "response_mime_type": "application/json",
@@ -123,9 +161,16 @@ impl AiProvider for GeminiProvider {
             })
         };
 
+        // Log the request payload for debugging
+        println!("Request URL: {}", gemini_api_url);
+        println!(
+            "Request Payload: {}",
+            serde_json::to_string_pretty(&payload_json)?
+        );
+
         let response = self
             .client
-            .post(gemini_api_url)
+            .post(&gemini_api_url)
             .json(&payload_json)
             .send()
             .await?;
@@ -142,7 +187,10 @@ impl AiProvider for GeminiProvider {
                 .candidates
                 .first()
                 .and_then(|candidate| candidate.content.parts.first())
-                .map(|part| part.text.clone())
+                .and_then(|part| match part {
+                    Part::Text { text } => Some(text.clone()),
+                    _ => None,
+                })
                 .ok_or_else(|| anyhow!("No text output found in Gemini response"))?;
 
             let parsed_output: T = try_parse_json_with_trailing_comma_removal(&output_string)
@@ -156,9 +204,18 @@ impl AiProvider for GeminiProvider {
 
             Ok(parsed_output)
         } else {
+            let status = response.status();
+            let headers = response.headers().clone();
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Failed to read error body".to_string());
+
             Err(anyhow!(
-                "Gemini API request failed: {:?}",
-                response.status()
+                "Gemini API request failed: Status: {}, Headers: {:?}, Body: {}",
+                status,
+                headers,
+                error_body
             ))
         }
     }

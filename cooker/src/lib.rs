@@ -1,7 +1,7 @@
 use predictions::{
     binance::get_binance_prompt, predict::get_prediction, prediction_types::PredictionType,
 };
-use providers::gemini::{GeminiModel, GeminiProvider};
+use providers::gemini::{GeminiModel, GeminiProvider, ImageData};
 
 mod predictions;
 mod providers;
@@ -12,11 +12,6 @@ use common::{
     ConciseKline, GraphPredictionOutput, PredictionOutput, TradingContext, TradingPrediction,
 };
 use worker::*;
-
-pub enum Route {
-    SUGGESTIONS,
-    PREDICTIONS,
-}
 
 pub async fn handle_root(_req: Request, _ctx: RouteContext<()>) -> worker::Result<Response> {
     Response::from_html(
@@ -40,15 +35,15 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
 
     // Shared handler logic
     async fn handle_prediction_request(
-        route: Route,
+        prediction_type: PredictionType,
         gemini_api_key: &str,
         orderbook_limit: i32,
         pair_symbol: String,
         maybe_wallet_address: Option<String>,
         maybe_timeframe: Option<String>,
     ) -> Result<Response> {
-        let output_result = match route {
-            Route::SUGGESTIONS => {
+        let output_result = match prediction_type {
+            PredictionType::TradingPredictions => {
                 predict_with_gemini(
                     &PredictionType::TradingPredictions,
                     gemini_api_key.to_owned(),
@@ -56,10 +51,11 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                     orderbook_limit,
                     maybe_wallet_address,
                     maybe_timeframe,
+                    None,
                 )
                 .await
             }
-            Route::PREDICTIONS => {
+            PredictionType::GraphPredictions => {
                 predict_with_gemini(
                     &PredictionType::GraphPredictions,
                     gemini_api_key.to_owned(),
@@ -67,6 +63,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                     orderbook_limit,
                     maybe_wallet_address,
                     maybe_timeframe,
+                    None,
                 )
                 .await
             }
@@ -95,7 +92,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                 };
                 let maybe_wallet_address = ctx.param("wallet_address").cloned();
                 handle_prediction_request(
-                    Route::SUGGESTIONS,
+                    PredictionType::TradingPredictions,
                     gemini_api_key,
                     orderbook_limit,
                     pair_symbol,
@@ -112,7 +109,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                 None => return Response::error("Bad Request - Missing Token", 400),
             };
             handle_prediction_request(
-                Route::SUGGESTIONS,
+                PredictionType::TradingPredictions,
                 gemini_api_key,
                 orderbook_limit,
                 pair_symbol,
@@ -134,7 +131,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                 let timeframe = ctx.param("timeframe");
 
                 handle_prediction_request(
-                    Route::PREDICTIONS,
+                    PredictionType::GraphPredictions,
                     gemini_api_key,
                     orderbook_limit,
                     pair_symbol,
@@ -155,8 +152,15 @@ pub async fn predict_with_gemini(
     orderbook_limit: i32,
     maybe_wallet_address: Option<String>,
     maybe_timeframe: Option<String>,
+    maybe_images: Option<Vec<ImageData>>, // Added image support
 ) -> anyhow::Result<String, String> {
-    let gemini_model = GeminiModel::default();
+    let gemini_model = if maybe_images.is_some() {
+        println!("✨ Some images");
+        GeminiModel::Gemini2Flash
+    } else {
+        GeminiModel::default()
+    };
+
     let provider = GeminiProvider::new_v1beta(&gemini_api_key);
     let (token_symbol, _) = get_token_and_pair_symbol_usdt(&pair_symbol);
 
@@ -176,10 +180,8 @@ pub async fn predict_with_gemini(
         None => None,
     };
 
-    let timeframe = match maybe_timeframe {
-        Some(timeframe) => timeframe,
-        None => "4h".to_owned(),
-    };
+    // Use provided timeframe or default to "4h"
+    let timeframe = maybe_timeframe.unwrap_or_else(|| "4h".to_owned());
 
     let context = TradingContext {
         token_symbol,
@@ -198,18 +200,26 @@ pub async fn predict_with_gemini(
     .await
     .map_err(|e| e.to_string())?;
 
+    // Use empty vec if no images provided
+    let images = maybe_images.unwrap_or_default();
+
     let prediction_result = match prediction_type {
-        PredictionType::TradingPredictions => {
-            get_prediction::<TradingPrediction>(&provider, &gemini_model, prompt, context.clone())
-                .await
-                .map(PredictionOutput::TradingPredictions)
-                .map_err(|e| format!("\nError getting suggestion prediction: {e}"))
-        }
+        PredictionType::TradingPredictions => get_prediction::<TradingPrediction>(
+            &provider,
+            &gemini_model,
+            prompt,
+            context.clone(),
+            images,
+        )
+        .await
+        .map(PredictionOutput::TradingPredictions)
+        .map_err(|e| format!("\nError getting suggestion prediction: {e}")),
         PredictionType::GraphPredictions => get_prediction::<GraphPredictionOutput>(
             &provider,
             &gemini_model,
             prompt,
             context.clone(),
+            images,
         )
         .await
         .map(PredictionOutput::GraphPredictions)
@@ -225,7 +235,11 @@ pub async fn predict_with_gemini(
 
 #[cfg(test)]
 mod tests {
-    use crate::{predict_with_gemini, predictions::prediction_types::PredictionType};
+    use crate::{
+        predict_with_gemini, predictions::prediction_types::PredictionType,
+        providers::gemini::ImageData,
+    };
+    use base64::Engine;
 
     #[tokio::test]
     async fn test_prediction_with_wallet() {
@@ -241,6 +255,7 @@ mod tests {
             pair_symbol.to_string(),
             1000,
             wallet_address,
+            None,
             None,
         )
         .await
@@ -265,6 +280,7 @@ mod tests {
             1000,
             None,
             None,
+            None,
         )
         .await
         .unwrap();
@@ -272,5 +288,47 @@ mod tests {
             "{:#?}",
             serde_json::from_str::<serde_json::Value>(&result).unwrap()
         );
+    }
+
+    #[tokio::test]
+    async fn test_prediction_with_image_and_timeframe() {
+        // Load environment variables from .env file
+        dotenvy::from_filename(".env").expect("No .env file found");
+
+        // Retrieve Gemini API key from environment
+        let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
+
+        // Define trading pair symbol
+        let pair_symbol = "SOL_USDT";
+
+        // Load and encode test.png file
+        let image_bytes = std::fs::read("../feeder/test.png").expect("Failed to read test.png");
+        let base64_image = base64::engine::general_purpose::STANDARD.encode(&image_bytes);
+        let images = vec![ImageData {
+            mime_type: "image/png".to_string(),
+            data: base64_image,
+        }];
+
+        // Call the prediction function with image and timeframe
+        let result = predict_with_gemini(
+            &PredictionType::GraphPredictions,
+            gemini_api_key,
+            pair_symbol.to_string(),
+            1000,
+            None,                   // No wallet address
+            Some("1h".to_string()), // Custom timeframe
+            Some(images),           // Pass the image data
+        )
+        .await;
+
+        // Handle the result
+        match result {
+            Ok(json_string) => {
+                let parsed_result: serde_json::Value =
+                    serde_json::from_str(&json_string).expect("Failed to parse result as JSON");
+                println!("{:#?}", parsed_result);
+            }
+            Err(error) => panic!("Prediction failed: {}", error),
+        }
     }
 }
