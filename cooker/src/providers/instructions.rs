@@ -84,17 +84,17 @@ pub const SUFFIX_INSTRUCTION: &str = r#"
 
 pub fn get_instruction(prediction_type: &PredictionType, _timeframe: String) -> String {
     match prediction_type {
-        PredictionType::TradingPredictions => {
+        PredictionType::Trading => {
             format!(
                 r#"{PREFIX_INSTRUCTION}{INPUT_INSTRUCTION}{MAIN_TRADE_INSTRUCTION}{SUB_PERPS_INSTRUCTION}{SUFFIX_INSTRUCTION}"#
             )
         }
-        PredictionType::GraphPredictions => {
+        PredictionType::Graph => {
             format!(
                 r#"{PREFIX_INSTRUCTION}{INPUT_INSTRUCTION}{MAIN_TRADE_INSTRUCTION}{SUB_GRAPH_INSTRUCTION}{SUFFIX_INSTRUCTION}"#
             )
         }
-        PredictionType::RebalancePredictions => {
+        PredictionType::Rebalance => {
             format!(
                 r#"{PREFIX_INSTRUCTION}{INPUT_INSTRUCTION}{MAIN_TRADE_INSTRUCTION}{SUB_PERPS_INSTRUCTION}{SUB_CONSOLIDATE_INSTRUCTION}{SUFFIX_INSTRUCTION}"#
             )

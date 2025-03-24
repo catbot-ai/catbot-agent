@@ -70,7 +70,7 @@ pub fn get_schema_instruction(
 ) -> String {
     let signal_schema = get_signal_schema(pair_symbol);
     match prediction_type {
-        PredictionType::TradingPredictions => format!(
+        PredictionType::Trading => format!(
             r#"{{
     "summary": {{
         "technical_resistance_4h": number, // Estimated 4h resistance from provided data.
@@ -84,7 +84,7 @@ pub fn get_schema_instruction(
 }}
 "#
         ),
-        PredictionType::GraphPredictions => format!(
+        PredictionType::Graph => format!(
             r#"{{
     {signal_schema},
     "klines": [
@@ -101,7 +101,7 @@ pub fn get_schema_instruction(
  }}
 "#
         ),
-        PredictionType::RebalancePredictions => format!(
+        PredictionType::Rebalance => format!(
             r#"{{
     pair_symbol: {pair_symbol},
     should_trade: boolean, // Whether to execute the trade, true or false

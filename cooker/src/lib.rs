@@ -79,7 +79,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                 };
                 let maybe_wallet_address = ctx.param("wallet_address").cloned();
                 handle_prediction_request(
-                    PredictionType::TradingPredictions,
+                    PredictionType::Trading,
                     gemini_api_key,
                     orderbook_limit,
                     pair_symbol,
@@ -96,7 +96,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                 None => return Response::error("Bad Request - Missing Token", 400),
             };
             handle_prediction_request(
-                PredictionType::TradingPredictions,
+                PredictionType::Trading,
                 gemini_api_key,
                 orderbook_limit,
                 pair_symbol,
@@ -118,7 +118,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                 let timeframe = ctx.param("timeframe");
 
                 handle_prediction_request(
-                    PredictionType::GraphPredictions,
+                    PredictionType::Graph,
                     gemini_api_key,
                     orderbook_limit,
                     pair_symbol,
@@ -138,7 +138,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                 };
                 let maybe_wallet_address = ctx.param("wallet_address").cloned();
                 handle_prediction_request(
-                    PredictionType::RebalancePredictions,
+                    PredictionType::Rebalance,
                     gemini_api_key,
                     orderbook_limit,
                     pair_symbol,
@@ -248,7 +248,7 @@ mod tests {
         let wallet_address = std::env::var("WALLET_ADDRESS").ok();
 
         let result = predict_with_gemini(
-            &PredictionType::TradingPredictions,
+            &PredictionType::Trading,
             gemini_api_key,
             pair_symbol.to_string(),
             1000,
@@ -274,7 +274,7 @@ mod tests {
         let pair_symbol = "SOL_USDT";
 
         let result = predict_with_gemini(
-            &PredictionType::GraphPredictions,
+            &PredictionType::Graph,
             gemini_api_key,
             pair_symbol.to_string(),
             1000,
@@ -313,7 +313,7 @@ mod tests {
 
         // Call the prediction function with image and timeframe
         let result = predict_with_gemini(
-            &PredictionType::GraphPredictions,
+            &PredictionType::Graph,
             gemini_api_key,
             pair_symbol.to_string(),
             1000,

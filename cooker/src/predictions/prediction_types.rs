@@ -1,7 +1,7 @@
 // Enum for the different types of prediction requests
 #[derive(Debug)]
 pub enum PredictionType {
-    TradingPredictions,
-    GraphPredictions,
-    RebalancePredictions,
+    Trading,
+    Graph,
+    Rebalance,
 }

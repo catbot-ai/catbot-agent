@@ -164,7 +164,7 @@ mod tests {
 
         // Call the refactored build_prompt with Option<PriceHistory>
         let prompt = build_prompt(
-            &PredictionType::TradingPredictions,
+            &PredictionType::Trading,
             &model, // Reference to GeminiModel
             context,
             Some(price_history), // Option<PriceHistory> with empty data
@@ -221,7 +221,7 @@ mod tests {
 
         // Call the refactored build_prompt with Option<PriceHistory>
         let prompt = build_prompt(
-            &PredictionType::GraphPredictions,
+            &PredictionType::Graph,
             &model, // Reference to GeminiModel
             context,
             Some(price_history), // Option<PriceHistory> with empty data
