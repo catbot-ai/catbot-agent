@@ -56,15 +56,15 @@ https://catbot-cooker.foxfox.workers.dev/api/v1/predict
 ## Flow
 
 ```mermaid
-graph LR;
+graph TD;
   I(⏱️ cranker)--"1m trigger"--> A
   AA(🌼 binance)--"token prices"-->A
-  AB(🌸 jupiter)--"positions"-->A
-  A(🐝 cooker) --"chart 15m,1h,4h<br>ema,bb,mcad"-->B("🍯 storage")
-  B --"sum_signals"-->C("🤖 feeder_llm") --"sum_signals<br>text+img"--> L1("💬 trader_discord")
-  C--"sum_signals<br>text+img"--> O("🤖 trade_bot_vlm")
-  O-->D(🌸 jupiter_perps)<--"positions"-->E("🤖 rebalance_llm")
-  C--"sum_signals<br>text+img"-->E--"results"-->B
+  BB("🍰 tasks")<--"signals<br>actions<br>positions"-->O("🤖 vlm_actor")
+  A(🐝 cooker)--"chart 15m,1h,4h<br>ema,bb,mcad<br>sum_signals"-->B("🍯 signals")--"chart 15m,1h,4h<br>ema,bb,mcad<br>sum_signals"-->C("🤖 llm_feeder")
+  C--"sum_signals<br>text+chart"-->BBB("🎂 reranked_signals")
+  BBB-->O
+  O--actions-->AB--"positions"-->O
+  AB(🌸 jupiter)--"token prices<br>positions"-->A
 ```
 
 ## Features
