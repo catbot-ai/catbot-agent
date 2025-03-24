@@ -142,6 +142,7 @@ mod tests {
             timeframe,
             current_price,
             maybe_preps_positions,
+            maybe_trading_predictions: None,
         };
 
         let kline_data_1h = fetch_binance_kline_usdt_csv(&binance_pair_symbol, "1h", 1).await?;
@@ -198,6 +199,7 @@ mod tests {
             timeframe,
             current_price,
             maybe_preps_positions: None,
+            maybe_trading_predictions: None,
         };
 
         let kline_data_1h = fetch_binance_kline_usdt_csv(&binance_pair_symbol, "1h", 1).await?;

@@ -3,4 +3,5 @@
 pub enum PredictionType {
     TradingPredictions,
     GraphPredictions,
+    RebalancePredictions,
 }

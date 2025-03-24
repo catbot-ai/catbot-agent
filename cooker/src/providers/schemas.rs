@@ -101,5 +101,13 @@ pub fn get_schema_instruction(
  }}
 "#
         ),
+        PredictionType::RebalancePredictions => format!(
+            r#"{{
+    pair_symbol: {pair_symbol},
+    should_trade: boolean, // Whether to execute the trade, true or false
+    rationale, // A brief explanation of the decision to trade or not
+}}
+"#
+        ),
     }
 }

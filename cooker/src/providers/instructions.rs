@@ -22,6 +22,7 @@ pub const PREFIX_INSTRUCTION: &str = r#"
   - Base at 0.5, +0.1 per aligned indicator (e.g., RSI, volume, EMA, Fibonacci), -0.1 per conflict.
   - Suggest trades only if confidence ≥0.6; for 'Hold' on existing positions, require confidence ≥0.7 to ensure strong alignment.
 - Focus on relative indicators (e.g., % changes, z-scores) over absolute levels to avoid overfitting.
+- Ensure summary suggestion aligns with the existing position’s side (e.g., 'Hold long position' for longs, 'Hold short position' for shorts) unless suggesting 'Close' or 'Reverse'.
 "#;
 
 pub const INPUT_INSTRUCTION: &str = r#"
@@ -60,10 +61,25 @@ pub const SUB_GRAPH_INSTRUCTION: &str = r#"
 - Ensure that suggested long/short signals match predicted klines time and value.
 "#;
 
+pub const SUB_CONSOLIDATE_INSTRUCTION: &str = r#"
+- Focus on key indicators like price action, moving averages, Bollinger Bands, MACD, Stochastic RSI, and volume.
+- Consider the confidence level (0.65) and rationale provided in the signals.
+- If the charts align with the bearish bias and the suggested entry price (130.55) is reasonable given current price (130.39), confirm the trade.
+- If there are discrepancies (e.g., conflicting signals in the charts, low confidence, or unfavorable risk-reward ratio), reject the trade.
+- Return your decision using the `execute_trade_decision` function with the following parameters:
+  - `pair_symbol`: "SOL_USDT"
+  - `should_trade`: true or false (whether to execute the trade)
+  - `rationale`: A brief explanation of your decision
+
+### Tasks
+1. Analyze the 15m, 1h, 4h, and 1d charts to confirm the trends, resistance/support levels, and indicator signals (e.g., MACD, Stochastic RSI, Bollinger Bands, volume).
+2. Cross-reference the chart analysis with the provided summary and signals.
+3. Decide whether to execute the suggested trade (short SOL_USDT at 130.55 with a target of 126.56 and stop-loss at 131.82).
+4. Use the provided function `execute_trade_decision` to return your decision."#;
+
 pub const SUFFIX_INSTRUCTION: &str = r#"
 - Be concise, think step by step.
 - Must generate valid JSON output.
-- Ensure summary suggestion aligns with the existing position’s side (e.g., 'Hold long position' for longs, 'Hold short position' for shorts) unless suggesting 'Close' or 'Reverse'.
 "#;
 
 pub fn get_instruction(prediction_type: &PredictionType, _timeframe: String) -> String {
@@ -76,6 +92,11 @@ pub fn get_instruction(prediction_type: &PredictionType, _timeframe: String) -> 
         PredictionType::GraphPredictions => {
             format!(
                 r#"{PREFIX_INSTRUCTION}{INPUT_INSTRUCTION}{MAIN_TRADE_INSTRUCTION}{SUB_GRAPH_INSTRUCTION}{SUFFIX_INSTRUCTION}"#
+            )
+        }
+        PredictionType::RebalancePredictions => {
+            format!(
+                r#"{PREFIX_INSTRUCTION}{INPUT_INSTRUCTION}{MAIN_TRADE_INSTRUCTION}{SUB_PERPS_INSTRUCTION}{SUB_CONSOLIDATE_INSTRUCTION}{SUFFIX_INSTRUCTION}"#
             )
         }
     }

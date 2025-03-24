@@ -9,7 +9,8 @@ mod providers;
 use common::{
     binance::{fetch_binance_kline_usdt, get_token_and_pair_symbol_usdt},
     jup::get_preps_position,
-    ConciseKline, GraphPredictionOutput, PredictionOutput, TradingContext, TradingPrediction,
+    ConciseKline, PredictionOutput, RefinedTradingPredictionOutput, TradingContext,
+    TradingPrediction,
 };
 use worker::*;
 
@@ -42,32 +43,18 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
         maybe_wallet_address: Option<String>,
         maybe_timeframe: Option<String>,
     ) -> Result<Response> {
-        let output_result = match prediction_type {
-            PredictionType::TradingPredictions => {
-                predict_with_gemini(
-                    &PredictionType::TradingPredictions,
-                    gemini_api_key.to_owned(),
-                    pair_symbol,
-                    orderbook_limit,
-                    maybe_wallet_address,
-                    maybe_timeframe,
-                    None,
-                )
-                .await
-            }
-            PredictionType::GraphPredictions => {
-                predict_with_gemini(
-                    &PredictionType::GraphPredictions,
-                    gemini_api_key.to_owned(),
-                    pair_symbol,
-                    orderbook_limit,
-                    maybe_wallet_address,
-                    maybe_timeframe,
-                    None,
-                )
-                .await
-            }
-        };
+        let output_result = predict_with_gemini(
+            &prediction_type,
+            gemini_api_key.to_owned(),
+            pair_symbol,
+            orderbook_limit,
+            maybe_wallet_address,
+            maybe_timeframe,
+            None,
+            None,
+            None,
+        )
+        .await;
 
         match output_result {
             Ok(output) => match serde_json::from_str::<serde_json::Value>(&output) {
@@ -141,6 +128,26 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
                 .await
             },
         )
+        // Endpoint: /api/v1/rebalance/:token/:wallet_address",
+        .get_async(
+            "/api/v1/rebalance/:token/:wallet_address",
+            |_req, ctx| async move {
+                let pair_symbol = match ctx.param("token") {
+                    Some(token) => token.to_owned(),
+                    None => return Response::error("Bad Request - Missing Token", 400),
+                };
+                let maybe_wallet_address = ctx.param("wallet_address").cloned();
+                handle_prediction_request(
+                    PredictionType::RebalancePredictions,
+                    gemini_api_key,
+                    orderbook_limit,
+                    pair_symbol,
+                    maybe_wallet_address,
+                    None,
+                )
+                .await
+            },
+        )
         .run(req, env)
         .await
 }
@@ -152,7 +159,9 @@ pub async fn predict_with_gemini(
     orderbook_limit: i32,
     maybe_wallet_address: Option<String>,
     maybe_timeframe: Option<String>,
-    maybe_images: Option<Vec<ImageData>>, // Added image support
+    maybe_images: Option<Vec<ImageData>>,
+    maybe_prompt: Option<String>,
+    maybe_trading_predictions: Option<Vec<RefinedTradingPredictionOutput>>,
 ) -> anyhow::Result<String, String> {
     let gemini_model = if maybe_images.is_some() {
         println!("✨ Some images");
@@ -189,6 +198,7 @@ pub async fn predict_with_gemini(
         timeframe,
         current_price,
         maybe_preps_positions,
+        maybe_trading_predictions,
     };
 
     let prompt = get_binance_prompt(
@@ -203,28 +213,16 @@ pub async fn predict_with_gemini(
     // Use empty vec if no images provided
     let images = maybe_images.unwrap_or_default();
 
-    let prediction_result = match prediction_type {
-        PredictionType::TradingPredictions => get_prediction::<TradingPrediction>(
-            &provider,
-            &gemini_model,
-            prompt,
-            Some(context.clone()),
-            images,
-        )
-        .await
-        .map(PredictionOutput::TradingPredictions)
-        .map_err(|e| format!("\nError getting suggestion prediction: {e}")),
-        PredictionType::GraphPredictions => get_prediction::<GraphPredictionOutput>(
-            &provider,
-            &gemini_model,
-            prompt,
-            Some(context.clone()),
-            images,
-        )
-        .await
-        .map(PredictionOutput::GraphPredictions)
-        .map_err(|e| format!("\nError getting graph prediction: {e}")),
-    };
+    let prediction_result = get_prediction::<TradingPrediction>(
+        &provider,
+        &gemini_model,
+        prompt,
+        Some(context.clone()),
+        images,
+    )
+    .await
+    .map(PredictionOutput::TradingPredictions)
+    .map_err(|e| format!("\nError getting prediction: {e}"));
 
     match prediction_result {
         Ok(prediction_output) => Ok(serde_json::to_string_pretty(&prediction_output)
@@ -257,6 +255,8 @@ mod tests {
             wallet_address,
             None,
             None,
+            None,
+            None,
         )
         .await
         .unwrap();
@@ -278,6 +278,8 @@ mod tests {
             gemini_api_key,
             pair_symbol.to_string(),
             1000,
+            None,
+            None,
             None,
             None,
             None,
@@ -318,6 +320,8 @@ mod tests {
             None,                   // No wallet address
             Some("1h".to_string()), // Custom timeframe
             Some(images),           // Pass the image data
+            None,
+            None,
         )
         .await;
 

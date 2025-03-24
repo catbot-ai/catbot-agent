@@ -1,3 +1,4 @@
+pub mod actors;
 pub mod cleaner;
 pub mod core;
 pub mod gemini;
