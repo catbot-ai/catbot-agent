@@ -208,7 +208,7 @@ pub async fn predict_with_gemini(
             &provider,
             &gemini_model,
             prompt,
-            context.clone(),
+            Some(context.clone()),
             images,
         )
         .await
@@ -218,7 +218,7 @@ pub async fn predict_with_gemini(
             &provider,
             &gemini_model,
             prompt,
-            context.clone(),
+            Some(context.clone()),
             images,
         )
         .await

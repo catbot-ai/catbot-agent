@@ -1,11 +1,10 @@
+use anyhow::Context;
+use chrono::{DateTime, Utc};
+use chrono_tz::{Asia::Tokyo, Tz};
 use jup_sdk::{
     perps::{PerpsPosition, Side},
     token_registry::get_by_address,
 };
-
-use anyhow::Context;
-use chrono::{DateTime, Utc};
-use chrono_tz::{Asia::Tokyo, Tz};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Number as JsonNumber, Value as JsonValue};
 
@@ -25,7 +24,7 @@ pub trait Refinable {
         timezone: Tz,
         model_name: &str,
         prompt_hash: &str,
-        context: TradingContext,
+        context: Option<TradingContext>,
     ) -> Self::Refined;
 }
 
@@ -53,7 +52,7 @@ impl GraphPredictionOutputWithTimeStampBuilder {
         self,
         model_name: &str,
         prompt_hash: &str,
-        context: TradingContext,
+        context: Option<TradingContext>,
     ) -> RefinedGraphPredictionOutput {
         let model_name = model_name.to_owned();
         let prompt_hash = prompt_hash.to_owned();
@@ -100,7 +99,7 @@ impl Refinable for GraphPredictionOutput {
         timezone: Tz,
         model_name: &str,
         prompt_hash: &str,
-        context: TradingContext,
+        context: Option<TradingContext>,
     ) -> Self::Refined {
         GraphPredictionOutputWithTimeStampBuilder::new(self, timezone).build(
             model_name,
@@ -113,11 +112,11 @@ impl Refinable for GraphPredictionOutput {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum KlineValue {
-    Int64(i64),     // For signed integers (e.g., timestamps)
-    UInt64(u64),    // For unsigned integers (if needed)
-    String(String), // For prices and volumes
-    Float64(f64),   // For floating-point numbers (optional)
-    UInt32(u32),    // For smaller unsigned integers (e.g., number of trades)
+    Int64(i64),
+    UInt64(u64),
+    String(String),
+    Float64(f64),
+    UInt32(u32),
 }
 
 impl KlineValue {
@@ -157,8 +156,7 @@ impl KlineValue {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct RefinedGraphPredictionOutput {
-    pub context: TradingContext,
-    //
+    pub context: Option<TradingContext>,
     pub current_time: i64,
     pub current_datetime: String,
     pub signals: Vec<LongShortSignal>,
@@ -193,7 +191,7 @@ pub struct TradingPrediction {
 pub struct RefinedTradingPredictionOutput {
     pub current_time: i64,
     pub current_datetime: String,
-    pub current_price: f64,
+    pub current_price: Option<f64>, // Made optional since context is optional
     pub summary: PredictedSummary,
     pub signals: Vec<LongShortSignal>,
     pub positions: Option<Vec<LongShortPosition>>,
@@ -204,7 +202,7 @@ pub struct RefinedTradingPredictionOutput {
 
 pub struct TradingPredictionOutputWithTimeStampBuilder {
     pub ai_response: TradingPrediction,
-    pub timezone: Tz, // Store the timezone here.
+    pub timezone: Tz,
 }
 
 impl TradingPredictionOutputWithTimeStampBuilder {
@@ -219,7 +217,7 @@ impl TradingPredictionOutputWithTimeStampBuilder {
         self,
         model_name: &str,
         prompt_hash: &str,
-        context: TradingContext,
+        context: Option<TradingContext>,
     ) -> RefinedTradingPredictionOutput {
         let model_name = model_name.to_owned();
         let prompt_hash = prompt_hash.to_owned();
@@ -235,26 +233,32 @@ impl TradingPredictionOutputWithTimeStampBuilder {
             .map(LongShortSignal::new)
             .collect();
 
-        let preps_positions = context.maybe_preps_positions.unwrap_or_default();
-        let positions = if preps_positions.is_empty() {
-            None
-        } else {
-            Some(
-                self.ai_response
-                    .positions
-                    .unwrap_or_default()
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, predicted_position)| {
-                        preps_positions.get(i).map(|preps_position| {
-                            LongShortPosition::new(
-                                preps_position.clone(),
-                                predicted_position.clone(),
-                            )
-                        })
-                    })
-                    .collect::<Vec<_>>(),
-            )
+        let (current_price, positions) = match context {
+            Some(ctx) => {
+                let preps_positions = ctx.maybe_preps_positions.unwrap_or_default();
+                let positions = if preps_positions.is_empty() {
+                    None
+                } else {
+                    Some(
+                        self.ai_response
+                            .positions
+                            .unwrap_or_default()
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(i, predicted_position)| {
+                                preps_positions.get(i).map(|preps_position| {
+                                    LongShortPosition::new(
+                                        preps_position.clone(),
+                                        predicted_position.clone(),
+                                    )
+                                })
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                };
+                (Some(ctx.current_price), positions)
+            }
+            None => (None, None), // No context, so no price or positions
         };
 
         let timestamp = now_utc.timestamp_millis();
@@ -262,7 +266,7 @@ impl TradingPredictionOutputWithTimeStampBuilder {
         RefinedTradingPredictionOutput {
             current_time: timestamp,
             current_datetime: iso_local,
-            current_price: context.current_price,
+            current_price,
             summary: self.ai_response.summary,
             signals,
             positions,
@@ -279,7 +283,7 @@ impl Refinable for TradingPrediction {
         timezone: Tz,
         model_name: &str,
         prompt_hash: &str,
-        context: TradingContext,
+        context: Option<TradingContext>,
     ) -> Self::Refined {
         TradingPredictionOutputWithTimeStampBuilder::new(self, timezone).build(
             model_name,
