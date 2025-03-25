@@ -75,7 +75,7 @@ pub const SUB_CONSOLIDATE_INSTRUCTION: &str = r#"
 ### Tasks
 1. Analyze the 15m, 1h, 4h, and 1d charts to confirm the trends, resistance/support levels, and indicator signals (e.g., MACD, Stochastic RSI, Bollinger Bands, volume).
 2. Cross-reference the chart analysis with the provided summary and signals.
-3. Decide whether to execute the suggested trade (short SOL_USDT at 130.55 with a target of 126.56 and stop-loss at 131.82).
+3. Decide whether to execute the suggested trade (short SOL_USDT at X with a target of Y and stop-loss at Z).
 4. Use the provided function `execute_trade_decision` to return your decision."#;
 
 pub const SUFFIX_INSTRUCTION: &str = r#"
