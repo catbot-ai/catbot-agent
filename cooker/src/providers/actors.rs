@@ -32,7 +32,7 @@ pub async fn analyze_and_decide_trade(
         builder = builder.with_images(images);
     }
 
-    let function_call: FunctionCallContent = builder.build().await?;
+    let function_call: FunctionCallContent = builder.run().await?;
 
     if function_call.name != "execute_trade_decision" {
         return Err(anyhow!(

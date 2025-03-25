@@ -130,7 +130,7 @@ impl<'a> GeminiCallBuilder<'a> {
         self
     }
 
-    pub async fn build<T: serde::de::DeserializeOwned + Send>(self) -> Result<T> {
+    pub async fn run<T: serde::de::DeserializeOwned + Send>(self) -> Result<T> {
         let model_str = self.model.as_ref();
         let gemini_api_url = format!(
             "{}{}:generateContent?key={}",
@@ -255,7 +255,7 @@ impl AiProvider for GeminiProvider {
         if let Some(schema) = maybe_response_schema {
             builder = builder.with_response_schema(schema.to_string());
         }
-        builder.build().await
+        builder.run().await
     }
 }
 

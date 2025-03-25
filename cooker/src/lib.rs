@@ -224,7 +224,7 @@ pub async fn predict_with_gemini(
                 TradePredictor::<TradingPrediction>::new(&provider, &gemini_model, &prompt)
                     .with_context(context.clone())
                     .with_images(images)
-                    .build()
+                    .run()
                     .await;
 
             match prediction_result {
@@ -240,7 +240,7 @@ pub async fn predict_with_gemini(
                 TradePredictor::<TradingPrediction>::new(&provider, &gemini_model, &prompt)
                     .with_context(context.clone())
                     .with_images(images)
-                    .build()
+                    .run()
                     .await;
 
             match prediction_result {

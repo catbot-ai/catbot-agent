@@ -40,12 +40,12 @@ where
         self
     }
 
-    pub async fn build(self) -> Result<T::Refined> {
+    pub async fn run(self) -> Result<T::Refined> {
         let gemini_response: T = self
             .provider
             .call_api(self.model, self.prompt.to_string())
             .with_images(self.images)
-            .build()
+            .run()
             .await?;
 
         let model_name = self.model.as_ref().to_string();
@@ -85,7 +85,7 @@ mod tests {
 
         let result = TradePredictor::<TradingPrediction>::new(&provider, &model, prompt)
             .with_images(images)
-            .build()
+            .run()
             .await?;
         println!("result: {result:#?}");
 
