@@ -38,14 +38,16 @@ pub fn get_perps_position_schema(
                     .symbol
                     .to_string();
 
-                format!(r#"{{
+                format!(
+                    r#"{{
         "token_symbol" : {token_symbol},
-        "new_target_price": Option<number>,  // Suggested new target price if adjusting position needed or when target_price is null
-        "new_stop_loss": Option<number>,     // Suggested new stop loss if adjusting position needed or when stop_loss is null
+        "suggested_target_price": number, // Suggested target price.
+        "suggested_stop_loss": number, // Suggested stop loss.
         "suggestion": "string", // A concise action (e.g., "Hold", "Increase", "Close", "Reverse")
         "rationale": "string", // A brief explanation for the suggestion
         "confidence": number   // Confidence score between 0.0 and 1.0
-    }}"#)
+    }}"#
+                )
             })
             .collect();
         if !positions.is_empty() {

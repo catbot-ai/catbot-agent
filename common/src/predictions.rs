@@ -389,8 +389,8 @@ impl LongShortSignal {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct PredictedLongShortPosition {
-    pub new_target_price: Option<f64>,
-    pub new_stop_loss: Option<f64>,
+    pub suggested_target_price: f64,
+    pub suggested_stop_loss: f64,
     pub suggestion: String,
     pub rationale: String,
     pub confidence: f64,
@@ -410,8 +410,8 @@ pub struct LongShortPosition {
     pub target_price: Option<f64>,
     pub stop_loss: Option<f64>,
     // Predicted
-    pub new_target_price: Option<f64>,
-    pub new_stop_loss: Option<f64>,
+    pub suggested_target_price: f64,
+    pub suggested_stop_loss: f64,
     pub suggestion: String,
     pub rationale: String,
     pub confidence: f64,
@@ -426,8 +426,8 @@ impl LongShortPosition {
 
         LongShortPosition {
             // Predicted
-            new_target_price: predicted.new_target_price,
-            new_stop_loss: predicted.new_stop_loss,
+            suggested_target_price: predicted.suggested_target_price,
+            suggested_stop_loss: predicted.suggested_stop_loss,
             suggestion: predicted.suggestion,
             rationale: predicted.rationale,
             confidence: predicted.confidence,
