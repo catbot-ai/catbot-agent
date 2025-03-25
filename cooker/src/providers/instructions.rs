@@ -51,10 +51,12 @@ pub const SUB_PERPS_INSTRUCTION: &str = r#"
     - 'Increase': If at least two short-term indicators strongly confirm the position’s direction (e.g., rising momentum, favorable volume, price action) with confidence >0.7.
     - 'Close': If short-term signals oppose the position’s side (e.g., bearish signals for longs, bullish for shorts), or the position nears its target, stop-loss, or liquidation risk.
     - 'Reverse': If short-term signals strongly oppose the position’s side with confidence ≥0.7, suggest closing the current position and opening an opposite one with a new entry_price, target_price, and stop_loss based on current market conditions.
-- Set stop_loss values logically to manage risk:
+- Set stop_loss values to manage risk effectively:
     - Base stop_loss on volatility, support/resistance levels, or recent price action (e.g., below key support for longs, above resistance for shorts).
-    - For reversals, adjust stop_loss to protect against whipsaws, typically tighter than initial entries.
-    - Ensure stop_loss aligns with the position’s direction and market context, avoiding arbitrary fixed percentages unless justified by risk tolerance.
+    - Position stop_loss between the entry_price and liquidation_price, ensuring a buffer to exit before liquidation (e.g., 25-50% of the distance to liquidation, adjusted for volatility).
+    - For shorts, set stop_loss above entry_price but well below liquidation_price; for longs, below entry_price but above liquidation_price.
+    - For reversals, use a tighter stop_loss to protect against whipsaws, closer to entry than initial positions.
+    - Align stop_loss with market context and position direction, avoiding arbitrary values unless risk tolerance justifies them.
 "#;
 
 pub const SUB_GRAPH_INSTRUCTION: &str = r#"
