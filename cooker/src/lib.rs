@@ -1,5 +1,5 @@
 use predictions::{
-    binance::get_binance_prompt, predict::get_prediction, prediction_types::PredictionType,
+    binance::get_binance_prompt, predict::TradePredictor, prediction_types::PredictionType,
 };
 use providers::gemini::{GeminiModel, GeminiProvider, ImageData};
 
@@ -221,7 +221,7 @@ pub async fn predict_with_gemini(
     match prediction_type {
         PredictionType::Trading => {
             let prediction_result =
-                get_prediction::<TradingPrediction>(&provider, &gemini_model, &prompt)
+                TradePredictor::<TradingPrediction>::new(&provider, &gemini_model, &prompt)
                     .with_context(context.clone())
                     .with_images(images)
                     .build()
@@ -237,7 +237,7 @@ pub async fn predict_with_gemini(
         }
         PredictionType::Graph => {
             let prediction_result =
-                get_prediction::<GraphPrediction>(&provider, &gemini_model, &prompt)
+                TradePredictor::<TradingPrediction>::new(&provider, &gemini_model, &prompt)
                     .with_context(context.clone())
                     .with_images(images)
                     .build()

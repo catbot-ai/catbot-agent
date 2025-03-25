@@ -25,7 +25,7 @@ pub async fn analyze_and_decide_trade(
     images: Option<Vec<ImageData>>,
 ) -> Result<TradeDecision> {
     let mut builder = provider
-        .call_api::<FunctionCallContent>(model, prompt.to_string())
+        .call_api(model, prompt.to_string())
         .with_function_declarations(vec![TradeDecision::default()]);
 
     if let Some(images) = images {

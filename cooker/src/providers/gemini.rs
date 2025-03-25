@@ -1,7 +1,7 @@
 use super::cleaner::try_parse_json_with_trailing_comma_removal;
 use super::core::AiProvider;
 use anyhow::{anyhow, Result};
-use json_schema::ToJsonSchema; // Add this import
+use json_schema::ToJsonSchema;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
@@ -123,7 +123,6 @@ impl<'a> GeminiCallBuilder<'a> {
     }
 
     pub fn with_function_declarations<T: ToJsonSchema>(mut self, declarations: Vec<T>) -> Self {
-        // Convert Vec<T> where T: ToJsonSchema into Vec<JsonValue>
         self.function_declarations = declarations
             .into_iter()
             .map(|_| T::to_json_schema())
@@ -240,11 +239,7 @@ impl GeminiProvider {
         )
     }
 
-    pub fn call_api<'a, T: serde::de::DeserializeOwned + Send>(
-        &'a self,
-        model: &'a GeminiModel,
-        prompt: String,
-    ) -> GeminiCallBuilder<'a> {
+    pub fn call_api<'a>(&'a self, model: &'a GeminiModel, prompt: String) -> GeminiCallBuilder<'a> {
         GeminiCallBuilder::new(self, model, prompt)
     }
 }
@@ -256,10 +251,11 @@ impl AiProvider for GeminiProvider {
         prompt: &str,
         maybe_response_schema: Option<&str>,
     ) -> Result<T> {
-        self.call_api::<T>(model, prompt.to_string())
-            .with_response_schema(maybe_response_schema.unwrap_or("").to_string())
-            .build()
-            .await
+        let mut builder = self.call_api(model, prompt.to_string());
+        if let Some(schema) = maybe_response_schema {
+            builder = builder.with_response_schema(schema.to_string());
+        }
+        builder.build().await
     }
 }
 

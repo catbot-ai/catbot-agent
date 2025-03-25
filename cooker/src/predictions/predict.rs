@@ -5,8 +5,8 @@ use common::{Refinable, TradingContext};
 use md5;
 use serde::Deserialize;
 
-// Builder for get_prediction
-pub struct PredictionRequestBuilder<'a, T> {
+// Builder for predictions
+pub struct TradePredictor<'a, T> {
     provider: &'a GeminiProvider,
     model: &'a GeminiModel,
     prompt: &'a str,
@@ -15,7 +15,7 @@ pub struct PredictionRequestBuilder<'a, T> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-impl<'a, T> PredictionRequestBuilder<'a, T>
+impl<'a, T> TradePredictor<'a, T>
 where
     T: Refinable + Send + Sync + for<'de> Deserialize<'de> + 'static,
 {
@@ -43,7 +43,7 @@ where
     pub async fn build(self) -> Result<T::Refined> {
         let gemini_response: T = self
             .provider
-            .call_api::<T>(self.model, self.prompt.to_string())
+            .call_api(self.model, self.prompt.to_string())
             .with_images(self.images)
             .build()
             .await?;
@@ -56,17 +56,6 @@ where
 
         Ok(refined_output)
     }
-}
-
-pub fn get_prediction<'a, T>(
-    provider: &'a GeminiProvider,
-    model: &'a GeminiModel,
-    prompt: &'a str,
-) -> PredictionRequestBuilder<'a, T>
-where
-    T: Refinable + Send + Sync + for<'de> Deserialize<'de> + 'static,
-{
-    PredictionRequestBuilder::new(provider, model, prompt)
 }
 
 #[cfg(test)]
@@ -94,7 +83,7 @@ mod tests {
             data: base64_image,
         }];
 
-        let result = get_prediction::<TradingPrediction>(&provider, &model, prompt)
+        let result = TradePredictor::<TradingPrediction>::new(&provider, &model, prompt)
             .with_images(images)
             .build()
             .await?;
