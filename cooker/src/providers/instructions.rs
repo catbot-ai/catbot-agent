@@ -52,8 +52,8 @@ pub const SUB_PERPS_INSTRUCTION: &str = r#"
     - 'Close': If short-term signals oppose the position’s side (e.g., bearish signals for a long position with Stochastic RSI >80 or rising ask volume) or the position nears its target, stop_loss, or liquidation risk.
     - 'Reverse': If short-term signals strongly oppose the position’s side with confidence ≥0.7 (e.g., bearish signals for a long with Stochastic RSI >80 and rising ask volume), suggest closing the current position and opening an opposite position with new entry_price, target_price, and stop_loss.
     - Ensure stop_loss values are logically set:
-    - For longs, set stop_loss 1-2% below the entry_price or nearest support (e.g., below the lower Bollinger Band, 9-period EMA, or Fibonacci 38.2% level if price is volatile).
-    - For shorts, set stop_loss 1-2% above the entry_price or nearest resistance (e.g., above the upper Bollinger Band, 9-period EMA, or Fibonacci 38.2% level).
+      - For longs, set stop_loss 1-2% below the entry_price or nearest support (e.g., below the lower Bollinger Band, 9-period EMA, or Fibonacci 38.2% level if price is volatile).
+      - For shorts, set stop_loss 1-2% above the entry_price or nearest resistance (e.g., above the upper Bollinger Band, 9-period EMA, or Fibonacci 38.2% level).
 "#;
 
 pub const SUB_GRAPH_INSTRUCTION: &str = r#"
