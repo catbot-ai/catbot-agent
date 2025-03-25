@@ -45,15 +45,16 @@ pub const MAIN_TRADE_INSTRUCTION: &str = r#"
 "#;
 
 pub const SUB_PERPS_INSTRUCTION: &str = r#"
-- Ensure about open position side is "long" or "short" before made a suggestion.
-- For existing positions, suggest one of the following actions based on current momentum, price action, and volume, ensuring logical risk management:
-    - 'Hold': If short-term momentum clearly aligns with the position’s side (e.g., bullish for longs with Stochastic RSI <20, rising bid volume, or EMA (9) above EMA (21); bearish for shorts with Stochastic RSI >80, rising ask volume, or EMA (9) below EMA (21)). Require confidence ≥0.7 and at least two confirming indicators. Do not suggest 'Hold' if momentum is mixed or opposes the position’s side.
-    - 'Increase': If at least two short-term indicators (e.g., Stochastic RSI, volume, price action, EMA crossover) strongly confirm the position’s direction and confidence exceeds 0.7.
-    - 'Close': If short-term signals oppose the position’s side (e.g., bearish signals for a long position with Stochastic RSI >80 or rising ask volume) or the position nears its target, stop_loss, or liquidation risk.
-    - 'Reverse': If short-term signals strongly oppose the position’s side with confidence ≥0.7 (e.g., bearish signals for a long with Stochastic RSI >80 and rising ask volume), suggest closing the current position and opening an opposite position with new entry_price, target_price, and stop_loss.
-    - Ensure stop_loss values are logically set:
-      - For longs, set stop_loss 1-2% below the entry_price or nearest support (e.g., below the lower Bollinger Band, 9-period EMA, or Fibonacci 38.2% level if price is volatile).
-      - For shorts, set stop_loss 1-2% above the entry_price or nearest resistance (e.g., above the upper Bollinger Band, 9-period EMA, or Fibonacci 38.2% level).
+- Ensure the open position side is identified as "long" or "short" before making a suggestion.
+- For existing positions, suggest one of the following actions based on current momentum, price action, and volume, with logical risk management:
+    - 'Hold': If short-term momentum clearly aligns with the position’s side (e.g., bullish for longs, bearish for shorts) with confidence ≥0.7 and at least two confirming indicators (e.g., Stochastic RSI, volume trends, EMA crossovers). Avoid 'Hold' if momentum is mixed or opposes the position.
+    - 'Increase': If at least two short-term indicators strongly confirm the position’s direction (e.g., rising momentum, favorable volume, price action) with confidence >0.7.
+    - 'Close': If short-term signals oppose the position’s side (e.g., bearish signals for longs, bullish for shorts), or the position nears its target, stop-loss, or liquidation risk.
+    - 'Reverse': If short-term signals strongly oppose the position’s side with confidence ≥0.7, suggest closing the current position and opening an opposite one with a new entry_price, target_price, and stop_loss based on current market conditions.
+- Set stop_loss values logically to manage risk:
+    - Base stop_loss on volatility, support/resistance levels, or recent price action (e.g., below key support for longs, above resistance for shorts).
+    - For reversals, adjust stop_loss to protect against whipsaws, typically tighter than initial entries.
+    - Ensure stop_loss aligns with the position’s direction and market context, avoiding arbitrary fixed percentages unless justified by risk tolerance.
 "#;
 
 pub const SUB_GRAPH_INSTRUCTION: &str = r#"
