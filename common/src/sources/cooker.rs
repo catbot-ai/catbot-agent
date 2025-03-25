@@ -1,11 +1,6 @@
+use crate::RefinedGraphPredictionResponse;
 use anyhow::Result;
-use chrono::{Duration, Utc};
 use reqwest::Client;
-use serde_json::json;
-
-use crate::{Kline, KlineValue, RefinedGraphPredictionResponse};
-
-use super::binance::fetch_binance_kline_usdt;
 
 #[cfg(feature = "service_binding")]
 use worker::*;
@@ -86,88 +81,92 @@ pub async fn fetch_graph_prediction(
     Ok(prediction)
 }
 
-pub async fn get_mock_graph_prediction() -> String {
-    // Load real data from Binance
-    let binance_pair_symbol = "SOLUSDT";
-    let timeframe = "1h";
-    let limit = 24;
-    let candle_data = fetch_binance_kline_usdt::<Kline>(binance_pair_symbol, timeframe, limit)
-        .await
-        .unwrap();
-
-    // Get current time and offset it into the future
-    let now = Utc::now();
-    let future_offset = Duration::minutes(1); // 1 minute into the future
-    let current_time = (now + future_offset).timestamp_millis();
-
-    // Define timezone for local time (Tokyo, +09:00)
-    let tokyo = chrono_tz::Asia::Tokyo;
-    let future_now_tz = (now + future_offset).with_timezone(&tokyo); // Future time in Tokyo
-
-    // Generate current_datetime as future time
-    let current_datetime = future_now_tz.to_rfc3339();
-
-    // Generate 24 klines with the same prices, only updating time
-    let mut klines = Vec::new();
-    let hour_interval = 3_600_000; // 1 hour in milliseconds
-
-    let last_candle = candle_data.last().unwrap();
-    let last_open_time = last_candle.open_time;
-
-    for i in 0..24 {
-        let candle_index = i % candle_data.len();
-        let historical_candle = &candle_data[candle_index];
-        let open_time = last_open_time + (i + 1) as i64 * hour_interval;
-        let close_time = open_time + hour_interval - 1;
-
-        let kline_values = vec![
-            KlineValue::Int64(open_time),
-            KlineValue::String(historical_candle.open_price.clone()),
-            KlineValue::String(historical_candle.high_price.clone()),
-            KlineValue::String(historical_candle.low_price.clone()),
-            KlineValue::String(historical_candle.close_price.clone()),
-            KlineValue::String(historical_candle.volume.clone()),
-            KlineValue::Int64(close_time),
-        ];
-        klines.push(kline_values);
-    }
-
-    // Generate signal with future times
-    let entry_time = current_time; // Already offset
-    let target_time = (now + future_offset + Duration::hours(1)).timestamp_millis();
-    let entry_time_local = (now + future_offset).to_rfc3339();
-    let target_time_local = (now + future_offset + Duration::hours(1)).to_rfc3339();
-
-    let json_data = json!({
-        "current_time": current_time,
-        "current_datetime": current_datetime,
-        "klines": klines,
-        "model_name": "gemini-2.0-flash-lite",
-        "prompt_hash": "7b73af1c95c40c59b856d6cfd5b7f31d",
-        "signals": [{
-            "confidence": 0.7,
-            "current_price": last_candle.close_price.parse::<f64>().unwrap(),
-            "direction": "long",
-            "entry_time": entry_time,
-            "entry_time_local": entry_time_local,
-            "entry_price": last_candle.close_price.parse::<f64>().unwrap(),
-            "rationale": "Based on the 1h price history, SOL is showing signs of a potential bullish reversal. Stochastic RSI is currently below 20, indicating oversold conditions. Recent price action shows strong support. 1h volume is increasing.",
-            "stop_loss": last_candle.close_price.parse::<f64>().unwrap() * 0.97,
-            "pair_symbol": "SOL_USDT",
-            "target_time": target_time,
-            "target_time_local": target_time_local,
-            "target_price": last_candle.close_price.parse::<f64>().unwrap() * 1.03,
-            "timeframe": "1h"
-        }]
-    });
-
-    serde_json::to_string_pretty(&json_data).unwrap()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{DateTime, Utc};
+    use crate::{
+        binance::fetch_binance_kline_usdt, Kline, KlineValue, RefinedGraphPredictionResponse,
+    };
+    use chrono::{DateTime, Duration, Utc};
+    use serde_json::json;
+
+    pub async fn get_mock_graph_prediction() -> String {
+        // Load real data from Binance
+        let binance_pair_symbol = "SOLUSDT";
+        let timeframe = "1h";
+        let limit = 24;
+        let candle_data = fetch_binance_kline_usdt::<Kline>(binance_pair_symbol, timeframe, limit)
+            .await
+            .unwrap();
+
+        // Get current time and offset it into the future
+        let now = Utc::now();
+        let future_offset = Duration::minutes(1); // 1 minute into the future
+        let current_time = (now + future_offset).timestamp_millis();
+
+        // Define timezone for local time (Tokyo, +09:00)
+        let tokyo = chrono_tz::Asia::Tokyo;
+        let future_now_tz = (now + future_offset).with_timezone(&tokyo); // Future time in Tokyo
+
+        // Generate current_datetime as future time
+        let current_datetime = future_now_tz.to_rfc3339();
+
+        // Generate 24 klines with the same prices, only updating time
+        let mut klines = Vec::new();
+        let hour_interval = 3_600_000; // 1 hour in milliseconds
+
+        let last_candle = candle_data.last().unwrap();
+        let last_open_time = last_candle.open_time;
+
+        for i in 0..24 {
+            let candle_index = i % candle_data.len();
+            let historical_candle = &candle_data[candle_index];
+            let open_time = last_open_time + (i + 1) as i64 * hour_interval;
+            let close_time = open_time + hour_interval - 1;
+
+            let kline_values = vec![
+                KlineValue::Int64(open_time),
+                KlineValue::String(historical_candle.open_price.clone()),
+                KlineValue::String(historical_candle.high_price.clone()),
+                KlineValue::String(historical_candle.low_price.clone()),
+                KlineValue::String(historical_candle.close_price.clone()),
+                KlineValue::String(historical_candle.volume.clone()),
+                KlineValue::Int64(close_time),
+            ];
+            klines.push(kline_values);
+        }
+
+        // Generate signal with future times
+        let entry_time = current_time; // Already offset
+        let target_time = (now + future_offset + Duration::hours(1)).timestamp_millis();
+        let entry_time_local = (now + future_offset).to_rfc3339();
+        let target_time_local = (now + future_offset + Duration::hours(1)).to_rfc3339();
+
+        let json_data = json!({
+            "current_time": current_time,
+            "current_datetime": current_datetime,
+            "klines": klines,
+            "model_name": "gemini-2.0-flash-lite",
+            "prompt_hash": "7b73af1c95c40c59b856d6cfd5b7f31d",
+            "signals": [{
+                "confidence": 0.7,
+                "current_price": last_candle.close_price.parse::<f64>().unwrap(),
+                "direction": "long",
+                "entry_time": entry_time,
+                "entry_time_local": entry_time_local,
+                "entry_price": last_candle.close_price.parse::<f64>().unwrap(),
+                "rationale": "Based on the 1h price history, SOL is showing signs of a potential bullish reversal. Stochastic RSI is currently below 20, indicating oversold conditions. Recent price action shows strong support. 1h volume is increasing.",
+                "stop_loss": last_candle.close_price.parse::<f64>().unwrap() * 0.97,
+                "pair_symbol": "SOL_USDT",
+                "target_time": target_time,
+                "target_time_local": target_time_local,
+                "target_price": last_candle.close_price.parse::<f64>().unwrap() * 1.03,
+                "timeframe": "1h"
+            }]
+        });
+
+        serde_json::to_string_pretty(&json_data).unwrap()
+    }
 
     #[tokio::test]
     async fn test_fetch_graph_prediction() {

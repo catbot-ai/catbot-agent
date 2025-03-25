@@ -9,7 +9,7 @@ mod providers;
 use common::{
     binance::{fetch_binance_kline_usdt, get_token_and_pair_symbol_usdt},
     jup::get_preps_position,
-    ConciseKline, RefinedTradingPredictionOutput, TradingContext, TradingPrediction,
+    ConciseKline, GraphPrediction, RefinedTradingPrediction, TradingContext, TradingPrediction,
 };
 use worker::*;
 
@@ -160,7 +160,7 @@ pub async fn predict_with_gemini(
     maybe_timeframe: Option<String>,
     maybe_images: Option<Vec<ImageData>>,
     maybe_prompt: Option<String>,
-    maybe_trading_predictions: Option<Vec<RefinedTradingPredictionOutput>>,
+    maybe_trading_predictions: Option<Vec<RefinedTradingPrediction>>,
 ) -> anyhow::Result<String, String> {
     let gemini_model = if maybe_images.is_some() {
         println!("✨ Some images");
@@ -209,19 +209,49 @@ pub async fn predict_with_gemini(
     .await
     .map_err(|e| e.to_string())?;
 
+    let prompt = if maybe_prompt.is_some() {
+        prompt + "\n" + &maybe_prompt.unwrap_or_default()
+    } else {
+        prompt
+    };
+
     // Use empty vec if no images provided
     let images = maybe_images.unwrap_or_default();
 
-    let prediction_result = get_prediction::<TradingPrediction>(&provider, &gemini_model, &prompt)
-        .with_context(context.clone())
-        .with_images(images)
-        .build()
-        .await;
+    match prediction_type {
+        PredictionType::Trading => {
+            let prediction_result =
+                get_prediction::<TradingPrediction>(&provider, &gemini_model, &prompt)
+                    .with_context(context.clone())
+                    .with_images(images)
+                    .build()
+                    .await;
 
-    match prediction_result {
-        Ok(prediction_output) => Ok(serde_json::to_string_pretty(&prediction_output)
-            .map_err(|e| format!("Failed to serialize prediction output to JSON: {}", e))?),
-        Err(error) => Err(error.to_string()),
+            match prediction_result {
+                Ok(prediction_output) => Ok(serde_json::to_string_pretty(&prediction_output)
+                    .map_err(|e| {
+                        format!("Failed to serialize prediction output to JSON: {}", e)
+                    })?),
+                Err(error) => Err(error.to_string()),
+            }
+        }
+        PredictionType::Graph => {
+            let prediction_result =
+                get_prediction::<GraphPrediction>(&provider, &gemini_model, &prompt)
+                    .with_context(context.clone())
+                    .with_images(images)
+                    .build()
+                    .await;
+
+            match prediction_result {
+                Ok(prediction_output) => Ok(serde_json::to_string_pretty(&prediction_output)
+                    .map_err(|e| {
+                        format!("Failed to serialize prediction output to JSON: {}", e)
+                    })?),
+                Err(error) => Err(error.to_string()),
+            }
+        }
+        PredictionType::Rebalance => todo!(),
     }
 }
 

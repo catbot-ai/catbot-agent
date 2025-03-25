@@ -8,13 +8,11 @@ use jup_sdk::{
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Number as JsonNumber, Value as JsonValue};
 
-use crate::Kline;
-
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum PredictionOutput {
-    TradingPredictions(RefinedTradingPredictionOutput),
-    GraphPredictions(RefinedGraphPredictionOutput),
+    TradingPredictions(RefinedTradingPrediction),
+    GraphPredictions(RefinedGraphPrediction),
 }
 
 pub trait Refinable {
@@ -30,19 +28,18 @@ pub trait Refinable {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
-pub struct GraphPredictionOutput {
+pub struct GraphPrediction {
     pub signals: Vec<PredictedLongShortSignal>,
-    pub klines: Vec<Kline>,
 }
 
-pub struct GraphPredictionOutputWithTimeStampBuilder {
-    pub graph_response: GraphPredictionOutput,
+pub struct GraphPredictionWithTimeStampBuilder {
+    pub graph_response: GraphPrediction,
     pub timezone: Tz,
 }
 
-impl GraphPredictionOutputWithTimeStampBuilder {
-    pub fn new(graph_response: GraphPredictionOutput, timezone: Tz) -> Self {
-        GraphPredictionOutputWithTimeStampBuilder {
+impl GraphPredictionWithTimeStampBuilder {
+    pub fn new(graph_response: GraphPrediction, timezone: Tz) -> Self {
+        GraphPredictionWithTimeStampBuilder {
             graph_response,
             timezone,
         }
@@ -53,7 +50,7 @@ impl GraphPredictionOutputWithTimeStampBuilder {
         model_name: &str,
         prompt_hash: &str,
         context: Option<TradingContext>,
-    ) -> RefinedGraphPredictionOutput {
+    ) -> RefinedGraphPrediction {
         let model_name = model_name.to_owned();
         let prompt_hash = prompt_hash.to_owned();
 
@@ -70,30 +67,21 @@ impl GraphPredictionOutputWithTimeStampBuilder {
             .map(LongShortSignal::new)
             .collect();
 
-        // Convert Vec<Kline> to Vec<Vec<KlineValue>>
-        let klines = self
-            .graph_response
-            .klines
-            .into_iter()
-            .map(|kline| kline.to_kline_values())
-            .collect();
-
         let timestamp = now_utc.timestamp_millis();
 
-        RefinedGraphPredictionOutput {
+        RefinedGraphPrediction {
             context,
             current_time: timestamp,
             current_datetime: iso_local,
             signals,
-            klines,
             model_name,
             prompt_hash,
         }
     }
 }
 
-impl Refinable for GraphPredictionOutput {
-    type Refined = RefinedGraphPredictionOutput;
+impl Refinable for GraphPrediction {
+    type Refined = RefinedGraphPrediction;
     fn refine(
         self,
         timezone: Tz,
@@ -101,7 +89,7 @@ impl Refinable for GraphPredictionOutput {
         prompt_hash: &str,
         context: Option<TradingContext>,
     ) -> Self::Refined {
-        GraphPredictionOutputWithTimeStampBuilder::new(self, timezone).build(
+        GraphPredictionWithTimeStampBuilder::new(self, timezone).build(
             model_name,
             prompt_hash,
             context,
@@ -155,12 +143,11 @@ impl KlineValue {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
-pub struct RefinedGraphPredictionOutput {
+pub struct RefinedGraphPrediction {
     pub context: Option<TradingContext>,
     pub current_time: i64,
     pub current_datetime: String,
     pub signals: Vec<LongShortSignal>,
-    pub klines: Vec<Vec<KlineValue>>,
     // Stats
     pub model_name: String,
     pub prompt_hash: String,
@@ -172,12 +159,10 @@ pub struct RefinedGraphPredictionResponse {
     pub current_time: i64,
     pub current_datetime: String,
     pub signals: Vec<LongShortSignal>,
-    pub klines: Vec<Kline>,
     // Stats
     pub model_name: String,
     pub prompt_hash: String,
 }
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct TradingPrediction {
@@ -188,7 +173,7 @@ pub struct TradingPrediction {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
-pub struct RefinedTradingPredictionOutput {
+pub struct RefinedTradingPrediction {
     pub current_time: i64,
     pub current_datetime: String,
     pub current_price: Option<f64>, // Made optional since context is optional
@@ -200,14 +185,14 @@ pub struct RefinedTradingPredictionOutput {
     pub prompt_hash: String,
 }
 
-pub struct TradingPredictionOutputWithTimeStampBuilder {
+pub struct TradingPredictionWithTimeStampBuilder {
     pub ai_response: TradingPrediction,
     pub timezone: Tz,
 }
 
-impl TradingPredictionOutputWithTimeStampBuilder {
+impl TradingPredictionWithTimeStampBuilder {
     pub fn new(ai_response: TradingPrediction, timezone: Tz) -> Self {
-        TradingPredictionOutputWithTimeStampBuilder {
+        TradingPredictionWithTimeStampBuilder {
             ai_response,
             timezone,
         }
@@ -218,7 +203,7 @@ impl TradingPredictionOutputWithTimeStampBuilder {
         model_name: &str,
         prompt_hash: &str,
         context: Option<TradingContext>,
-    ) -> RefinedTradingPredictionOutput {
+    ) -> RefinedTradingPrediction {
         let model_name = model_name.to_owned();
         let prompt_hash = prompt_hash.to_owned();
 
@@ -263,7 +248,7 @@ impl TradingPredictionOutputWithTimeStampBuilder {
 
         let timestamp = now_utc.timestamp_millis();
 
-        RefinedTradingPredictionOutput {
+        RefinedTradingPrediction {
             current_time: timestamp,
             current_datetime: iso_local,
             current_price,
@@ -277,7 +262,7 @@ impl TradingPredictionOutputWithTimeStampBuilder {
 }
 
 impl Refinable for TradingPrediction {
-    type Refined = RefinedTradingPredictionOutput;
+    type Refined = RefinedTradingPrediction;
     fn refine(
         self,
         timezone: Tz,
@@ -285,7 +270,7 @@ impl Refinable for TradingPrediction {
         prompt_hash: &str,
         context: Option<TradingContext>,
     ) -> Self::Refined {
-        TradingPredictionOutputWithTimeStampBuilder::new(self, timezone).build(
+        TradingPredictionWithTimeStampBuilder::new(self, timezone).build(
             model_name,
             prompt_hash,
             context,
@@ -326,7 +311,7 @@ pub struct TradingContext {
     pub timeframe: String,
     pub current_price: f64,
     pub maybe_preps_positions: Option<Vec<PerpsPosition>>,
-    pub maybe_trading_predictions: Option<Vec<RefinedTradingPredictionOutput>>,
+    pub maybe_trading_predictions: Option<Vec<RefinedTradingPrediction>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
