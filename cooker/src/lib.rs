@@ -9,8 +9,7 @@ mod providers;
 use common::{
     binance::{fetch_binance_kline_usdt, get_token_and_pair_symbol_usdt},
     jup::get_preps_position,
-    ConciseKline, PredictionOutput, RefinedTradingPredictionOutput, TradingContext,
-    TradingPrediction,
+    ConciseKline, RefinedTradingPredictionOutput, TradingContext, TradingPrediction,
 };
 use worker::*;
 
@@ -213,21 +212,16 @@ pub async fn predict_with_gemini(
     // Use empty vec if no images provided
     let images = maybe_images.unwrap_or_default();
 
-    let prediction_result = get_prediction::<TradingPrediction>(
-        &provider,
-        &gemini_model,
-        prompt,
-        Some(context.clone()),
-        images,
-    )
-    .await
-    .map(PredictionOutput::TradingPredictions)
-    .map_err(|e| format!("\nError getting prediction: {e}"));
+    let prediction_result = get_prediction::<TradingPrediction>(&provider, &gemini_model, &prompt)
+        .with_context(context.clone())
+        .with_images(images)
+        .build()
+        .await;
 
     match prediction_result {
         Ok(prediction_output) => Ok(serde_json::to_string_pretty(&prediction_output)
             .map_err(|e| format!("Failed to serialize prediction output to JSON: {}", e))?),
-        Err(error) => Err(error),
+        Err(error) => Err(error.to_string()),
     }
 }
 

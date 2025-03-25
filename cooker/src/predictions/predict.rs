@@ -1,32 +1,72 @@
 use crate::providers::gemini::{GeminiModel, GeminiProvider, ImageData};
-use chrono_tz::Asia::Tokyo;
-
 use anyhow::Result;
+use chrono_tz::Asia::Tokyo;
 use common::{Refinable, TradingContext};
 use md5;
 use serde::Deserialize;
 
-pub async fn get_prediction<T>(
-    provider: &GeminiProvider,
-    model: &GeminiModel,
-    prompt: String,
+// Builder for get_prediction
+pub struct PredictionRequestBuilder<'a, T> {
+    provider: &'a GeminiProvider,
+    model: &'a GeminiModel,
+    prompt: &'a str,
     context: Option<TradingContext>,
     images: Vec<ImageData>,
-) -> Result<T::Refined>
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<'a, T> PredictionRequestBuilder<'a, T>
 where
     T: Refinable + Send + Sync + for<'de> Deserialize<'de> + 'static,
 {
-    let gemini_response = provider
-        .call_api_with_images::<T>(model, &prompt, images, None)
-        .await?;
+    pub fn new(provider: &'a GeminiProvider, model: &'a GeminiModel, prompt: &'a str) -> Self {
+        Self {
+            provider,
+            model,
+            prompt,
+            context: None,
+            images: Vec::new(),
+            _phantom: std::marker::PhantomData,
+        }
+    }
 
-    let model_name = model.as_ref().to_string();
-    let prompt_hash = md5::compute(&prompt)
-        .iter()
-        .fold(String::new(), |acc, b| format!("{acc}{:02x}", b));
-    let refined_output = gemini_response.refine(Tokyo, &model_name, &prompt_hash, context);
+    pub fn with_context(mut self, context: TradingContext) -> Self {
+        self.context = Some(context);
+        self
+    }
 
-    Ok(refined_output)
+    pub fn with_images(mut self, images: Vec<ImageData>) -> Self {
+        self.images = images;
+        self
+    }
+
+    pub async fn build(self) -> Result<T::Refined> {
+        let gemini_response: T = self
+            .provider
+            .call_api::<T>(self.model, self.prompt.to_string())
+            .with_images(self.images)
+            .build()
+            .await?;
+
+        let model_name = self.model.as_ref().to_string();
+        let prompt_hash = md5::compute(self.prompt)
+            .iter()
+            .fold(String::new(), |acc, b| format!("{acc}{:02x}", b));
+        let refined_output = gemini_response.refine(Tokyo, &model_name, &prompt_hash, self.context);
+
+        Ok(refined_output)
+    }
+}
+
+pub fn get_prediction<'a, T>(
+    provider: &'a GeminiProvider,
+    model: &'a GeminiModel,
+    prompt: &'a str,
+) -> PredictionRequestBuilder<'a, T>
+where
+    T: Refinable + Send + Sync + for<'de> Deserialize<'de> + 'static,
+{
+    PredictionRequestBuilder::new(provider, model, prompt)
 }
 
 #[cfg(test)]
@@ -46,7 +86,7 @@ mod tests {
 
         let model = GeminiModel::Gemini2Flash;
         let prompt =
-            "Extract the number and technical analysis from the trading graph and validate the signals to proof that you understand the picture.".to_string();
+            "Extract the number and technical analysis from the trading graph and validate the signals to proof that you understand the picture.";
         let image_bytes = std::fs::read("../feeder/test.png").expect("Failed to read test.png");
         let base64_image = base64::engine::general_purpose::STANDARD.encode(&image_bytes);
         let images = vec![ImageData {
@@ -54,11 +94,11 @@ mod tests {
             data: base64_image,
         }];
 
-        // Call get_prediction with context: None
-        let result =
-            get_prediction::<TradingPrediction>(&provider, &model, prompt.clone(), None, images)
-                .await?;
-        println!("result:{result:#?}");
+        let result = get_prediction::<TradingPrediction>(&provider, &model, prompt)
+            .with_images(images)
+            .build()
+            .await?;
+        println!("result: {result:#?}");
 
         Ok(())
     }

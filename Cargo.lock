@@ -460,6 +460,8 @@ dependencies = [
  "console_error_panic_hook",
  "dotenvy",
  "env_logger",
+ "json_schema",
+ "json_schema_derive",
  "jup-sdk",
  "log",
  "md5",
@@ -1438,6 +1440,25 @@ checksum = "1cfaf33c695fc6e08064efbc1f72ec937429614f25eef83af942d0e227c3a28f"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "json_schema"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "json_schema_derive"
+version = "0.1.0"
+dependencies = [
+ "json_schema",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn",
 ]
 
 [[package]]

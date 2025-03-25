@@ -19,6 +19,9 @@ reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
+json_schema = { path = "../json_schema" }
+json_schema_derive = { path = "../json_schema_derive" }
+
 strum = { workspace = true, features = ["strum_macros"] }
 dotenvy = { workspace = true }
 chrono = { workspace = true }
