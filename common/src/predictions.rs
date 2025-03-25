@@ -298,8 +298,8 @@ impl Refinable for TradingPrediction {
 pub struct PredictedSummary {
     // pub upper_bound: f64,
     // pub lower_bound: f64,
-    pub technical_resistance_4h: f64,
-    pub technical_support_4h: f64,
+    // pub technical_resistance_4h: f64,
+    // pub technical_support_4h: f64,
     // #[serde(deserialize_with = "deserialize_vec_tuples")]
     // pub top_bids_price_amount: Vec<Vec<f64>>,
     // #[serde(deserialize_with = "deserialize_vec_tuples")]

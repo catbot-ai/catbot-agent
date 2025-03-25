@@ -75,8 +75,6 @@ pub fn get_schema_instruction(
         PredictionType::Trading => format!(
             r#"{{
     "summary": {{
-        "technical_resistance_4h": number, // Estimated 4h resistance from provided data.
-        "technical_support_4h": number, // Estimated 4h support from provided data.
         "vibe": "string", // Current market vibe e.g., "{pair_symbol} Short-term 65% Bearish"
         "detail": "string", // Trading analysis <500 chars, include volume and momentum insights
         "suggestion": "string" // Suggestion trading action e.g., "Short {pair_symbol} at xxx if volume confirms resistance"
