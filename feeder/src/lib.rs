@@ -33,6 +33,18 @@ pub async fn cooker(req: Request, ctx: RouteContext<()>) -> worker::Result<Respo
 }
 
 pub async fn handle_chart(req: Request, ctx: RouteContext<()>) -> worker::Result<Response> {
+    handle_chart_prediction(req, ctx, false).await
+}
+
+pub async fn handle_chart_signals(req: Request, ctx: RouteContext<()>) -> worker::Result<Response> {
+    handle_chart_prediction(req, ctx, true).await
+}
+
+pub async fn handle_chart_prediction(
+    req: Request,
+    ctx: RouteContext<()>,
+    is_signals: bool,
+) -> worker::Result<Response> {
     if let Some(pair_symbol) = ctx.param("pair_symbol") {
         // Get fetcher
         let api_url = ctx
@@ -85,23 +97,28 @@ pub async fn handle_chart(req: Request, ctx: RouteContext<()>) -> worker::Result
             }
         };
 
-        // TODO: Extract signal for plot the chart
-        #[cfg(not(feature = "service_binding"))]
-        let prediction = fetch_graph_prediction(&api_url, &pair_symbol, &timeframe, None).await;
+        let signals = if is_signals {
+            // TODO: Extract signal for plot the chart
+            #[cfg(not(feature = "service_binding"))]
+            let prediction = fetch_graph_prediction(&api_url, &pair_symbol, &timeframe, None).await;
 
-        #[cfg(feature = "service_binding")]
-        let fetcher = ctx.env.service("COOKER")?;
-        let prediction =
-            fetch_graph_prediction_from_worker(req, &fetcher, &pair_symbol, timeframe).await;
+            #[cfg(feature = "service_binding")]
+            let fetcher = ctx.env.service("COOKER")?;
+            let prediction =
+                fetch_graph_prediction_from_worker(req, &fetcher, &pair_symbol, timeframe).await;
 
-        let predicted = match prediction {
-            Ok(predicted_candle_data) => predicted_candle_data,
-            Err(error) => {
-                return Response::error(
-                    format!("Bad Request - Missing prediction data from {api_url}: {error}"),
-                    400,
-                )
-            }
+            let predicted = match prediction {
+                Ok(predicted_candle_data) => predicted_candle_data,
+                Err(error) => {
+                    return Response::error(
+                        format!("Bad Request - Missing prediction data from {api_url}: {error}"),
+                        400,
+                    )
+                }
+            };
+            predicted.signals
+        } else {
+            vec![]
         };
 
         // Get image
@@ -117,7 +134,7 @@ pub async fn handle_chart(req: Request, ctx: RouteContext<()>) -> worker::Result
             .with_orderbook(orderbook)
             .with_bollinger_band()
             // .with_past_signals(predicted.signals)
-            .with_signals(predicted.signals)
+            .with_signals(signals)
             .build();
 
         // Handle
@@ -151,6 +168,10 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/", handle_root)
         // .get_async("/api/v1/suggest/:pair_symbol/:timeframe", handle_hello)
         .get_async("/api/v1/chart/:pair_symbol/:timeframe", handle_chart)
+        .get_async(
+            "/api/v1/chart_signals/:pair_symbol/:timeframe",
+            handle_chart_signals,
+        )
         .run(req, env)
         .await
 }
