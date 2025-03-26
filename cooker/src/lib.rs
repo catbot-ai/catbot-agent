@@ -9,7 +9,7 @@ mod providers;
 use common::{
     binance::{fetch_binance_kline_usdt, get_token_and_pair_symbol_usdt},
     jup::get_preps_position,
-    ConciseKline, GraphPrediction, RefinedTradingPrediction, TradingContext, TradingPrediction,
+    ConciseKline, RefinedTradingPrediction, TradingContext, TradingPrediction,
 };
 use worker::*;
 
