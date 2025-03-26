@@ -8,9 +8,9 @@ pub fn get_signal_schema(pair_symbol: &str) -> String {
         "pair_symbol": {pair_symbol},
         "direction": string, // Predicted direction, long or shot
         "confidence": number, // Confidence about this signal: 0.0-1.0
-        "entry_price": number, // Suggest entry price, Can be future price.
-        "target_price": number, // Suggest target price, Can be future price.
-        "stop_loss": number,  // Suggest stop loss, Can be future price.
+        "entry_price": number, // Suggest entry price base on analysis, Can be future price.
+        "target_price": number, // Suggest target price base on analysis, Can be future price.
+        "stop_loss": number,  // Suggest stop loss base on analysis, Can be future price.
         "entry_time": number, // Timestamp prediction when to make a trade for this signal, Can be now or in the future.
         "target_time": number, // Timestamp prediction when to take profit.
         "rationale": "string" // Rationale about this signal e.g., "4h momentum up, bids outpace asks", "1h rejection at xxx, high ask volume"
@@ -41,11 +41,11 @@ pub fn get_perps_position_schema(
                 format!(
                     r#"{{
         "token_symbol" : {token_symbol},
-        "suggested_target_price": number, // Suggested target price.
-        "suggested_stop_loss": number, // Suggested stop loss.
+        "suggested_target_price": number, // Suggested target price base on analysis.
+        "suggested_stop_loss": number, // Suggested stop loss base on analysis
         "suggestion": "string", // A concise action (e.g., "Hold", "Increase", "Close", "Reverse")
         "rationale": "string", // A brief explanation for the suggestion
-        "confidence": number   // Confidence score between 0.0 and 1.0
+        "confidence": number   // Confidence score of suggestion between 0.0 and 1.0
     }}"#
                 )
             })
