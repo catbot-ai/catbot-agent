@@ -9,7 +9,7 @@ mod providers;
 use common::{
     binance::{fetch_binance_kline_usdt, get_token_and_pair_symbol_usdt},
     jup::get_preps_position,
-    ConciseKline, RefinedTradingPrediction, TradingContext, TradingPrediction,
+    ConciseKline, GraphPrediction, RefinedTradingPrediction, TradingContext, TradingPrediction,
 };
 use worker::*;
 
@@ -237,7 +237,7 @@ pub async fn predict_with_gemini(
         }
         PredictionType::Graph => {
             let prediction_result =
-                TradePredictor::<TradingPrediction>::new(&provider, &gemini_model, &prompt)
+                TradePredictor::<GraphPrediction>::new(&provider, &gemini_model, &prompt)
                     .with_context(context.clone())
                     .with_images(images)
                     .run()
@@ -264,7 +264,7 @@ mod tests {
     use base64::Engine;
 
     #[tokio::test]
-    async fn test_prediction_with_wallet() {
+    async fn test_trading_prediction_with_wallet() {
         dotenvy::from_filename(".env").expect("No .env file");
 
         let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
@@ -291,7 +291,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_prediction_without_wallet() {
+    async fn test_graph_prediction_without_wallet() {
         dotenvy::from_filename(".env").expect("No .env file");
 
         let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
