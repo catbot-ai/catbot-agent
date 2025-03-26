@@ -1,4 +1,4 @@
-use super::candle::*;
+use super::candle::{Chart, LabelStyle, LineStyle, PointStyle};
 use super::helpers::{format_short_number, kline_to_m4rs_candlestick, parse_kline_time};
 use super::image::draw_dashed_line_segment_mut;
 use crate::charts::helpers::{get_visible_range_and_data, parse_timeframe_duration};
@@ -9,8 +9,7 @@ use chrono::{DateTime, TimeZone};
 use chrono_tz::Tz;
 use common::numbers::{group_by_fractional_part, FractionalPart};
 use common::{Kline, LongShortSignal, OrderBook};
-use image::buffer::ConvertBuffer;
-use image::{ImageBuffer, Rgb, Rgba};
+use image::{ImageBuffer, Rgb};
 use imageproc::drawing::{
     draw_filled_rect_mut, draw_hollow_rect_mut, draw_line_segment_mut, draw_text_mut, text_size,
 };
@@ -35,8 +34,8 @@ const B_BLACK: RGBColor = RGBColor(22, 26, 30);
 const BB_UPPER_BOUND: RGBColor = RGBColor(34, 150, 243);
 const BB_LOWER_BOUND: RGBColor = RGBColor(255, 109, 1);
 const BB_MIDDLE: RGBColor = RGBColor(255, 185, 2);
-const BB_UPPER_BOUND_LABEL: Rgba<u8> = Rgba([34, 150, 243, 255]);
-const BB_LOWER_BOUND_LABEL: Rgba<u8> = Rgba([255, 109, 1, 255]);
+const BB_UPPER_BOUND_LABEL: Rgb<u8> = Rgb([34, 150, 243]);
+const BB_LOWER_BOUND_LABEL: Rgb<u8> = Rgb([255, 109, 1]);
 
 // MCAD
 const MCAD: RGBColor = RGBColor(34, 150, 243);
@@ -51,23 +50,23 @@ const AXIS_SCALE: PxScale = PxScale { x: 20.0, y: 20.0 };
 
 // Label
 const HEAD_SCALE: PxScale = PxScale { x: 22.0, y: 22.0 };
-const LABEL_COLOR: Rgba<u8> = Rgba([255, 255, 255, 255]);
+const LABEL_COLOR: Rgb<u8> = Rgb([255, 255, 255]);
 const LABEL_SCALE: PxScale = PxScale { x: 20.0, y: 20.0 };
 
 // TODO: TRANSPARENT
-const TRANSPARENT_BLACK_50: Rgba<u8> = Rgba([0, 0, 0, 127]);
-const PRICE_BG_COLOR: Rgba<u8> = Rgba([255, 255, 0, 255]);
-const PRICE_TEXT_COLOR: Rgba<u8> = Rgba([22, 26, 30, 255]);
+const TRANSPARENT_BLACK_50: Rgb<u8> = Rgb([0, 0, 0]);
+const PRICE_BG_COLOR: Rgb<u8> = Rgb([255, 255, 0]);
+const PRICE_TEXT_COLOR: Rgb<u8> = Rgb([22, 26, 30]);
 
 // Order
 const BID_COLOR: RGBColor = B_GREEN_DIM;
 const ASK_COLOR: RGBColor = B_RED_DIM;
 const ORDER_LABEL_SCALE: PxScale = PxScale { x: 18.0, y: 18.0 };
-const NUM_WHITE: Rgba<u8> = Rgba([255, 255, 255, 255]);
-const NUM_RED: Rgba<u8> = Rgba([B_RED.0, B_RED.1, B_RED.2, 255]);
-const NUM_GREEN: Rgba<u8> = Rgba([B_GREEN.0, B_GREEN.1, B_GREEN.2, 255]);
+const NUM_WHITE: Rgb<u8> = Rgb([255, 255, 255]);
+const NUM_RED: Rgb<u8> = Rgb([B_RED.0, B_RED.1, B_RED.2]);
+const NUM_GREEN: Rgb<u8> = Rgb([B_GREEN.0, B_GREEN.1, B_GREEN.2]);
 
-const PRICE_LINE_COLOR: Rgba<u8> = PRICE_BG_COLOR;
+const PRICE_LINE_COLOR: Rgb<u8> = PRICE_BG_COLOR;
 
 #[allow(clippy::too_many_arguments, unused)]
 pub fn draw_chart(
@@ -304,7 +303,7 @@ pub fn draw_chart(
 
 #[allow(clippy::too_many_arguments, unused)]
 pub fn draw_axis_labels(
-    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     font: &impl Font,
     klines: &[Kline],
     chart: &Chart,
@@ -314,7 +313,7 @@ pub fn draw_axis_labels(
     min_price: f32,
     max_price: f32,
 ) -> Result<Option<Rect>, Box<dyn Error>> {
-    let white = Rgba([255u8, 255u8, 255u8, 255u8]);
+    let white = Rgb([255u8, 255u8, 255u8]);
     let label_scale = AXIS_SCALE;
     let font_metrics = font.as_scaled(label_scale);
     let text_x = (final_width - margin_right + 6) as f32;
@@ -413,7 +412,7 @@ pub fn draw_axis_labels(
                 font,
                 &format!("{:.0}k", volume / 1000.0),
                 text_x,
-                { *y },
+                *y,
                 label_scale,
                 white,
                 Some(TRANSPARENT_BLACK_50),
@@ -492,7 +491,7 @@ pub fn draw_axis_labels(
 }
 
 pub fn draw_lines(
-    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     chart: &Chart,
     width: u32,
     height: u32,
@@ -535,13 +534,13 @@ pub fn draw_lines(
 }
 
 pub fn draw_labels(
-    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     font: &impl Font,
     chart: &Chart,
     final_width: u32,
     height: u32,
 ) -> Result<(), Box<dyn Error>> {
-    let white = Rgba([255u8, 255u8, 255u8, 255u8]);
+    let white = Rgb([255u8, 255u8, 255u8]);
 
     if !chart.labels.is_empty() {
         let style = chart.label_style.clone().unwrap_or(LabelStyle {
@@ -573,14 +572,14 @@ pub fn draw_labels(
 
 #[allow(clippy::too_many_arguments, unused)]
 pub fn draw_label<F: Font>(
-    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     font: &F,
     text: &str,
     x: f32,
     y: f32,
     scale: PxScale,
-    color: Rgba<u8>,
-    background_color: Option<Rgba<u8>>,
+    color: Rgb<u8>,
+    background_color: Option<Rgb<u8>>,
 ) -> anyhow::Result<Rect> {
     let font_metrics = font.as_scaled(scale);
     let (text_width, text_height) = text_size(scale, font, text);
@@ -609,14 +608,14 @@ pub fn draw_label<F: Font>(
 
 #[allow(clippy::too_many_arguments, unused)]
 pub fn draw_hallow_label<F: Font>(
-    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     font: &F,
     text: &str,
     x: f32,
     y: f32,
     scale: PxScale,
-    font_color: Rgba<u8>,
-    border_color: Rgba<u8>,
+    font_color: Rgb<u8>,
+    border_color: Rgb<u8>,
 ) -> anyhow::Result<Rect> {
     let font_metrics = font.as_scaled(scale);
     let (text_width, text_height) = text_size(scale, font, text);
@@ -709,7 +708,7 @@ where
 }
 
 pub fn draw_candle_detail(
-    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     chart: &Chart,
     font: &impl Font,
 ) -> Result<(), Box<dyn Error>> {
@@ -801,7 +800,7 @@ pub fn draw_bollinger_bands(
 }
 
 pub fn draw_bollinger_detail(
-    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     klines: &[Kline],
     font: &impl Font,
 ) -> Result<(), Box<dyn Error>> {
@@ -912,7 +911,7 @@ pub fn draw_volume_bars(
 }
 
 pub fn draw_volume_detail(
-    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     klines: &[Kline],
     font: &impl Font,
     current_y: f32,
@@ -1043,7 +1042,7 @@ pub fn draw_macd(
 }
 
 pub fn draw_macd_detail(
-    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     klines: &[Kline],
     font: &impl Font,
     current_y: f32,
@@ -1072,7 +1071,7 @@ pub fn draw_macd_detail(
 }
 
 pub fn draw_stoch_rsi_detail(
-    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     klines: &[Kline],
     font: &impl Font,
     current_y: f32,
@@ -1157,7 +1156,7 @@ pub fn draw_past_signals(
 
 #[allow(clippy::too_many_arguments, unused)]
 pub fn draw_orderbook(
-    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     font: &impl Font,
     orderbook: &OrderBook,
     min_price: f32,
@@ -1226,11 +1225,9 @@ pub fn draw_orderbook(
     let offset_x = parent_offset_x as u32 + current_x;
 
     {
-        // Convert RGBA back to RGB, discarding alpha
-        let cropped_img_rgb: ImageBuffer<Rgb<u8>, Vec<u8>> = img.convert();
-        let width = cropped_img_rgb.width();
-        let height = cropped_img_rgb.height();
-        let mut img_rgb = cropped_img_rgb.into_raw();
+        let width = img.width();
+        let height = img.height();
+        let mut img_rgb = img.clone().into_raw();
 
         {
             // Scope for root
@@ -1280,14 +1277,11 @@ pub fn draw_orderbook(
                 }
             }
             root.present()?;
-        } // root is dropped here, ending the borrow of img_rgb
+        }
 
-        // Now img_rgb can be moved
-        let cropped_img_rgb_restored =
-            ImageBuffer::<Rgb<u8>, Vec<u8>>::from_raw(width, height, img_rgb)
-                .expect("Failed to reconstruct RGB image from raw buffer");
-        let img_restored: ImageBuffer<Rgba<u8>, Vec<u8>> = cropped_img_rgb_restored.convert();
-        *img = img_restored; // Update the original img
+        let img_restored = ImageBuffer::<Rgb<u8>, Vec<u8>>::from_raw(width, height, img_rgb)
+            .expect("Failed to reconstruct RGB image from raw buffer");
+        *img = img_restored;
     }
 
     // Reset
@@ -1326,7 +1320,7 @@ pub fn draw_orderbook(
                 img,
                 font,
                 &format_short_number(*volume as i64).to_string(),
-                (current_x + offset_x as u32) as i32 as f32,
+                (current_x + offset_x as u32) as f32,
                 offset_y + current_y as f32,
                 ORDER_LABEL_SCALE,
                 NUM_WHITE,
@@ -1407,7 +1401,7 @@ pub fn draw_orderbook(
 }
 
 pub fn draw_signals(
-    img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     font: &impl Font,
     signals: &[LongShortSignal],
     current_price: f64,
@@ -1417,10 +1411,7 @@ pub fn draw_signals(
         let x = price_bounding_rect.left() as f32;
         let y = price_bounding_rect.top() as f32 + (AXIS_SCALE.y - ORDER_LABEL_SCALE.y) / 2.0;
         let h = price_bounding_rect.height() as f32;
-        // let factor_y = (y / current_price as f32) as f32;
 
-        let _entry_percent =
-            ((signal.predicted.entry_price - current_price) / current_price) * 100.0;
         let target_percent =
             ((signal.predicted.target_price - current_price) / current_price) * 100.0;
         let stop_percent = ((signal.predicted.stop_loss - current_price) / current_price) * 100.0;
@@ -1454,9 +1445,9 @@ pub fn draw_signals(
 
         // Draw line
         let line_color = if signal.predicted.direction == "long" {
-            Rgba([GREEN.0, GREEN.1, GREEN.2, 255])
+            Rgb([GREEN.0, GREEN.1, GREEN.2])
         } else {
-            Rgba([RED.0, RED.1, RED.2, 255])
+            Rgb([RED.0, RED.1, RED.2])
         };
 
         draw_line_segment_mut(img, (x, entry_y), (x, target_y), line_color);
@@ -1467,9 +1458,9 @@ pub fn draw_signals(
         let label_scale = ORDER_LABEL_SCALE;
 
         let color = if signal.predicted.direction == "long" {
-            Rgba([GREEN.0, GREEN.1, GREEN.2, 255])
+            Rgb([GREEN.0, GREEN.1, GREEN.2])
         } else {
-            Rgba([RED.0, RED.1, RED.2, 255])
+            Rgb([RED.0, RED.1, RED.2])
         };
 
         // stop
@@ -1498,7 +1489,7 @@ pub fn draw_signals(
             stop_percent_y,
             label_scale,
             color,
-            Some(Rgba([BLACK.0, BLACK.1, BLACK.2, 255])),
+            Some(Rgb([BLACK.0, BLACK.1, BLACK.2])),
         );
 
         // entry
@@ -1513,7 +1504,7 @@ pub fn draw_signals(
             x,
             entry_y,
             label_scale,
-            Rgba([BLACK.0, BLACK.1, BLACK.2, 255]),
+            Rgb([BLACK.0, BLACK.1, BLACK.2]),
             Some(color),
         );
 
@@ -1531,7 +1522,7 @@ pub fn draw_signals(
             target_percent_y,
             label_scale,
             color,
-            Some(Rgba([BLACK.0, BLACK.1, BLACK.2, 255])),
+            Some(Rgb([BLACK.0, BLACK.1, BLACK.2])),
         );
 
         // target

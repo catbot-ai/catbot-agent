@@ -11,15 +11,14 @@ use chrono_tz::Tz;
 use common::Kline;
 use common::LongShortSignal;
 use common::OrderBook;
-use image::Rgba;
-use image::{ImageBuffer, Rgb};
+use image::Rgb;
+use image::ImageBuffer;
 use imageproc::drawing::draw_line_segment_mut;
 use imageproc::drawing::text_size;
 use plotters::prelude::*;
 use std::error::Error;
-use image::buffer::ConvertBuffer;
 
-// Styling structures (unchanged)
+// Styling structures
 #[derive(Default, Clone)]
 pub struct PointStyle {
     pub radius: i32,
@@ -35,8 +34,8 @@ pub struct LineStyle {
 #[derive(Clone)]
 pub struct LabelStyle {
     pub scale: PxScale,
-    pub color: Rgba<u8>,
-    pub background_color: Rgba<u8>,
+    pub color: Rgb<u8>,
+    pub background_color: Rgb<u8>,
     pub offset_x: i32,
     pub offset_y: i32,
 }
@@ -46,7 +45,6 @@ pub struct ChartMetaData {
     pub title: String,
 }
 
-// Chart struct (unchanged)
 #[derive(Default, Clone)]
 pub struct Chart {
     pub timezone: Tz,
@@ -79,7 +77,6 @@ impl Chart {
         }
     }
 
-    // Other methods (with_*) remain unchanged
     pub fn with_past_candle(mut self, past_candle_data: Vec<Kline>) -> Self {
         self.past_candle_data = Some(past_candle_data);
         self
@@ -145,8 +142,8 @@ impl Chart {
         mut self,
         scale_x: f32,
         scale_y: f32,
-        color: Rgba<u8>,
-        background_color: Rgba<u8>,
+        color: Rgb<u8>, 
+        background_color: Rgb<u8>, 
         offset_x: i32,
         offset_y: i32,
     ) -> Self {
@@ -223,7 +220,7 @@ impl Chart {
     #[allow(clippy::too_many_arguments, unused)]
     fn draw_low_high_labels(
         &self,
-        img: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+        img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
         font: &FontArc,
         visible_candles: &[Kline],
         start_visible: DateTime<Tz>,
@@ -232,7 +229,7 @@ impl Chart {
         max_price: f32,
         chart_width: u32,
         chart_height: f64,
-        candle_width: f32, // Add candle_width parameter
+        candle_width: f32,
     ) -> Result<(), Box<dyn Error>> {
         // Find lowest and highest prices in the visible range
         let mut lowest_price = f32::INFINITY;
@@ -287,7 +284,7 @@ impl Chart {
 
         // Calculate label top-left coordinates
         let label_low_x = lowest_x;
-        let label_low_y = lowest_y + 8.0; 
+        let label_low_y = lowest_y + 8.0;
 
         let label_high_y = highest_y - 20.0 - 8.0;
         let label_high_x = highest_x;
@@ -295,8 +292,8 @@ impl Chart {
         // Draw hallow labels
         let label_width = 112.0;
         let label_scale = PxScale { x: 20.0, y: 20.0 };
-        let font_color = Rgba([255, 255, 255, 255]);
-        let border_color = Rgba([255, 255, 255, 255]);
+        let font_color = Rgb([255, 255, 255]);
+        let border_color = Rgb([255, 255, 255]);
 
         let new_label_low_x = if label_low_x > chart_width2 { lowest_x - label_width - candle_w2 } else { lowest_x + 12.0 };
         let low_bounding_rect = draw_hallow_label(
@@ -327,30 +324,29 @@ impl Chart {
         )?;
 
         // Draw line from candlestick to the LOW label
-        let line_color = Rgba([255, 255, 255, 255]); // White line
-        
-        let line_x2  = if label_low_x > chart_width2 { low_bounding_rect.left() + low_bounding_rect.width() as i32} else {low_bounding_rect.left() as i32};
+        let line_color = Rgb([255, 255, 255]);
+        let line_x2 = if label_low_x > chart_width2 { low_bounding_rect.left() + low_bounding_rect.width() as i32 } else { low_bounding_rect.left() as i32 };
         draw_line_segment_mut(
             img,
-            (lowest_x, lowest_y),  
-            (line_x2 as f32, lowest_y + 8.0),  
+            (lowest_x, lowest_y),
+            (line_x2 as f32, lowest_y + 8.0),
             line_color,
         );
 
-        let line_x2 = if label_high_x > chart_width2 { high_bounding_rect.left() + high_bounding_rect.width() as i32} else {high_bounding_rect.left() as i32};
+        let line_x2 = if label_high_x > chart_width2 { high_bounding_rect.left() + high_bounding_rect.width() as i32 } else { high_bounding_rect.left() as i32 };
         draw_line_segment_mut(
             img,
             (highest_x - 2.0, highest_y),
-            (line_x2 as f32, highest_y - 8.0),  
+            (line_x2 as f32, highest_y - 8.0),
             line_color,
         );
 
         // Horizon line
-        let line_color = Rgba([255/3, 255/3, 255/3, 255/2u8]); // White line
+        let line_color = Rgb([255/3, 255/3, 255/3]); 
         draw_dashed_line_segment_mut(
             img,
-            (0.0, lowest_y),  
-            (chart_width as f32, lowest_y),  
+            (0.0, lowest_y),
+            (chart_width as f32, lowest_y),
             3.0,
             3.0,
             line_color,
@@ -358,8 +354,8 @@ impl Chart {
 
         draw_dashed_line_segment_mut(
             img,
-            (0.0, highest_y),  
-            (chart_width as f32, highest_y),  
+            (0.0, highest_y),
+            (chart_width as f32, highest_y),
             3.0,
             3.0,
             line_color,
@@ -426,8 +422,7 @@ impl Chart {
         let max_price = prices.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
 
         #[allow(unused_assignments)]
-        let (lower_bound, upper_bound) = 
-        {
+        let (lower_bound, upper_bound) = {
             let mut root_area = BitMapBackend::with_buffer(&mut buffer, bar).into_drawing_area();
             self.draw_candles(
                 &all_candles,
@@ -446,20 +441,15 @@ impl Chart {
 
         // Create an Rgb ImageBuffer from the plotters buffer
         let rgb_img: ImageBuffer<Rgb<u8>, Vec<u8>> =
-        ImageBuffer::from_raw(plot_width, root_height, buffer)
-            .ok_or("Failed to create Rgb ImageBuffer")?;
+            ImageBuffer::from_raw(plot_width, root_height, buffer)
+                .ok_or("Failed to create Rgb ImageBuffer")?;
 
-        // Convert Rgb to Rgba
-        let rgba_img: ImageBuffer<Rgba<u8>, Vec<u8>> = rgb_img.convert();
+        let cropped_img: ImageBuffer<Rgb<u8>, Vec<u8>> =
+            image::imageops::crop_imm(&rgb_img, plot_width.saturating_sub(root_width), 0, root_width, root_height).to_image();
 
-        // Crop as before
-        let crop_x = plot_width.saturating_sub(root_width);
-        let cropped_img: ImageBuffer<Rgba<u8>, Vec<u8>> =
-        image::imageops::crop_imm(&rgba_img, crop_x, 0, root_width, root_height).to_image();
+        let mut cropped_img: ImageBuffer<Rgb<u8>, Vec<u8>> = cropped_img;
 
-        let mut cropped_img: ImageBuffer<Rgba<u8>, Vec<u8>> = cropped_img.convert();
-
-        let candle_width = 9.0; // Same as used in get_visible_time_range
+        let candle_width = 9.0;
         let (start_visible, end_visible, visible_candles) = self.get_visible_time_range(
             &all_candles,
             timezone,
@@ -478,12 +468,12 @@ impl Chart {
             max_price,
             chart_width,
             (root_height as f32 * 0.5) as f64,
-            candle_width, // Pass candle_width
+            candle_width,
         )?;
 
         let label_scale = PxScale { x: 20.0, y: 20.0 };
-        let label_color = Rgba([255, 255, 255, 255]);
-        let background_color = Rgba([0, 0, 0, 255]);
+        let label_color = Rgb([255, 255, 255]);
+        let background_color = Rgb([0, 0, 0]);
         let chart_bottom_y = (root_height as f32 * 0.5) - 20.0;
 
         let start_label = start_visible.format("%Y-%m-%d %H:%M").to_string();
@@ -498,7 +488,6 @@ impl Chart {
             Some(background_color),
         )?;
 
-        // let end_label = end_visible.format("%Y-%m-%d %H:%M").to_string();
         let now = Utc::now();
         let end_label = now.with_timezone(&chrono_tz::Asia::Tokyo).format("%Y-%m-%d %H:%M").to_string();
         let (end_label_width, _) = text_size(label_scale, &font, &end_label);
@@ -635,7 +624,7 @@ impl Chart {
 
         Ok((lower_bound, upper_bound))
     }
- }
+}
 
 #[cfg(test)]
 mod test {
