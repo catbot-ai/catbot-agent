@@ -2,7 +2,6 @@
 
 ![image](https://github.com/user-attachments/assets/59e64208-30a8-41dd-980e-b0754e2d7645)
 
-
 Let's llm do the things!
 
 ## Dev
@@ -88,7 +87,7 @@ graph TD;
 
 ## TODO
 
+- [ ] Try vlm with graph, create struct from extracted value.
 - [ ] Watch for 500k volume via websocket.
-- [ ] Try vlm with graph.
 - [ ] Trigger prediction every 5 minute.
 - [ ] Store signals in KV/DO.

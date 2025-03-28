@@ -66,6 +66,7 @@ mod tests {
     use common::TradingPrediction;
     use tokio;
 
+    // TODO: defined output format
     #[tokio::test]
     async fn test_get_prediction_with_no_context() -> Result<()> {
         dotenvy::from_filename(".env").expect("No .env file");
@@ -74,14 +75,49 @@ mod tests {
         let provider = GeminiProvider::new_v1beta(&gemini_api_key);
 
         let model = GeminiModel::Gemini2Flash;
-        let prompt =
-            "Extract the number and technical analysis from the trading graph and validate the signals to proof that you understand the picture.";
+        let prompt = r#"Extract the number and technical analysis from provided trading graphs and validate the signals to proof that you understand the pictures as JSON."#;
         let image_bytes = std::fs::read("../feeder/test.png").expect("Failed to read test.png");
         let base64_image = base64::engine::general_purpose::STANDARD.encode(&image_bytes);
         let images = vec![ImageData {
             mime_type: "image/png".to_string(),
             data: base64_image,
         }];
+
+        let result = TradePredictor::<TradingPrediction>::new(&provider, &model, prompt)
+            .with_images(images)
+            .run()
+            .await?;
+        println!("result: {result:#?}");
+
+        Ok(())
+    }
+
+    // TODO: defined output format
+    #[tokio::test]
+    async fn test_get_prediction_with_no_context_multiples_image() -> Result<()> {
+        dotenvy::from_filename(".env").expect("No .env file");
+
+        let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
+        let provider = GeminiProvider::new_v1beta(&gemini_api_key);
+
+        let model = GeminiModel::Gemini2Flash;
+        let prompt = r#"Extract the number and technical analysis from provided trading graphs and validate the signals to proof that you understand the pictures as JSON. 
+            Must extract current_price_1h and current_price_4h."#;
+        let image_bytes = std::fs::read("../feeder/test_1h.png").expect("Failed to read test.png");
+        let base64_image = base64::engine::general_purpose::STANDARD.encode(&image_bytes);
+
+        let image_bytes2 = std::fs::read("../feeder/test_4h.png").expect("Failed to read test.png");
+        let base64_image2 = base64::engine::general_purpose::STANDARD.encode(&image_bytes2);
+        let images = vec![
+            ImageData {
+                mime_type: "image/png".to_string(),
+                data: base64_image,
+            },
+            ImageData {
+                mime_type: "image/png".to_string(),
+                data: base64_image2,
+            },
+        ];
 
         let result = TradePredictor::<TradingPrediction>::new(&provider, &model, prompt)
             .with_images(images)
