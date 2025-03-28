@@ -57,11 +57,17 @@ pub const SUB_PERPS_INSTRUCTION: &str = r#"
     - 'Close': If short-term signals oppose the position’s side (e.g., bearish signals for longs, bullish for shorts), or the position nears its target, stop-loss, or liquidation risk.
     - 'Reverse': If short-term signals strongly oppose the position’s side with confidence ≥0.7, suggest closing the current position and opening an opposite one with a new entry_price, target_price, and stop_loss based on current market conditions.
 - Set stop_loss values to manage risk effectively:
-    - Base stop_loss on volatility, support/resistance levels, or recent price action (e.g., below key support for longs, above resistance for shorts).
-    - Position stop_loss between the entry_price and liquidation_price, ensuring a buffer to exit before liquidation (e.g., 25-50% of the distance to liquidation, adjusted for volatility).
-    - For shorts, set stop_loss above entry_price but well below liquidation_price; for longs, below entry_price but above liquidation_price.
-    - For reversals, use a tighter stop_loss to protect against whipsaws, closer to entry than initial positions.
-    - Align stop_loss with market context and position direction, avoiding arbitrary values unless risk tolerance justifies them.
+  - Base stop_loss on volatility (e.g., 2x ATR), support/resistance levels, and technical indicators (e.g., Bollinger Bands, Fibonacci).
+  - For shorts, set stop_loss above key resistance levels (e.g., upper Bollinger Band, recent highs, Fibonacci levels, order book ask clusters), adding a 2x ATR buffer to avoid whipsaws. Never place stop_loss at or below resistance—it must clear the resistance zone by at least 1-2% or 2x ATR, whichever is larger.
+  - Limit maximum loss to 20-25% of position value for new trades unless higher risk is justified by volatility >2x ATR or confidence >0.9 with three confirming indicators.
+  - Ensure stop_loss is well below liquidation_price (if provided), with a buffer of 40-50% of the distance to liquidation.
+  - Cross-check stop_loss against recent price action (e.g., last 24 hours) to avoid placing it at levels recently hit by spikes, such as recent highs.
+- Generate re-entry signals after a stop-out:
+  - If price reverses in the direction of the original position (e.g., bearish for shorts) after hitting stop_loss, generate a new signal if:
+    - Price crosses back below key resistance (e.g., upper Bollinger Band, recent high) for shorts.
+    - Indicators confirm the original direction (e.g., Stochastic RSI <80, rising ask volume, EMA(9) < EMA(21)).
+    - Confidence ≥0.6 with at least two confirming indicators.
+  - Use the same target_price if still valid, and set a new stop_loss based on updated resistance levels and volatility.
 "#;
 
 pub const SUB_GRAPH_INSTRUCTION: &str = r#"
