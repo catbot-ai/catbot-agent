@@ -20,7 +20,9 @@ pub const PREFIX_INSTRUCTION: &str = r#"
 - Analyze historical volatility spikes (e.g., periods with >2x average ATR or volume) on 4h and 1d timeframes. Adjust entry and target timing to avoid whipsaws during spikes unless momentum aligns with the trade direction, in which case prioritize breakout entries.
 - Confidence (0.0–1.0):
   - Base at 0.5, +0.1 per aligned indicator (e.g., RSI, volume, EMA, Fibonacci), -0.1 per conflict.
-  - Suggest trades only if confidence ≥0.6; for 'Hold' on existing positions, require confidence ≥0.7 to ensure strong alignment.
+  - Include weekly cycle adjustments: +0.1 for bullish signals on strong days (e.g., Wednesday), -0.1 for trades during slowdowns (e.g., Friday-Sunday) unless short-term volume exceeds 1.5x average.
+  - Suggest trades only if confidence ≥0.6; for 'Hold' on existing positions, require confidence ≥0.7; for 'No Action' if confidence <0.6 with no position.
+  - Explicitly state confidence in the output JSON under a 'confidence' key.
 - Focus on relative indicators (e.g., % changes, z-scores) over absolute levels to avoid overfitting.
 - Ensure summary suggestion aligns with the existing position’s side (e.g., 'Hold long position' for longs, 'Hold short position' for shorts) unless suggesting 'Close' or 'Reverse'.
 "#;
@@ -38,14 +40,17 @@ pub const MAIN_TRADE_INSTRUCTION: &str = r#"
   - Fibonacci levels (e.g., 61.8% retracement for shorts, 100% extension for longs) aligned with recent swing highs/lows.
   - Recent price action and volume trends from order book.
 - Suggest entry timing based on short-term signals (1m, 5m, 1h) aligning with predicted tops/bottoms.
-- Provide target_price with ≥2.5% profit potential:
-  - Longs: Above upper Bollinger Band, recent high, or Fibonacci 61.8%/100% extension.
-  - Shorts: Below lower Bollinger Band, recent low, or Fibonacci 61.8%/100% retracement.
-- Include stop_loss to limit risk below profit potential.
+- Provide target_price with ≥2.5% profit potential, calculated independently of any existing position’s target:
+  - Longs: Above upper Bollinger Band, recent high, or Fibonacci 61.8%/100% extension, based on current market data.
+  - Shorts: Below lower Bollinger Band, recent low, or Fibonacci 61.8%/100% retracement, based on current market data.
+- Include stop_loss to limit risk below profit potential, derived from volatility, support/resistance, or recent price action, independent of existing position parameters.
 "#;
 
 pub const SUB_PERPS_INSTRUCTION: &str = r#"
 - Ensure the open position side is identified as "long" or "short" before making a suggestion.
+- If no position exists (positions is null):
+    - Suggest 'Buy' or 'Sell' if confidence ≥0.6 with at least two confirming indicators (e.g., Stochastic RSI, volume trends, EMA crossovers, Fibonacci levels) and provide entry_price, target_price, and stop_loss.
+    - Suggest 'No Action' if confidence <0.6 or signals are mixed/insufficient.
 - For existing positions, suggest one of the following actions based on current momentum, price action, and volume, with logical risk management:
     - 'Hold': If short-term momentum clearly aligns with the position’s side (e.g., bullish for longs, bearish for shorts) with confidence ≥0.7 and at least two confirming indicators (e.g., Stochastic RSI, volume trends, EMA crossovers). Avoid 'Hold' if momentum is mixed or opposes the position.
     - 'Increase': If at least two short-term indicators strongly confirm the position’s direction (e.g., rising momentum, favorable volume, price action) with confidence >0.7.
