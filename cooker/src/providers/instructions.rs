@@ -17,12 +17,32 @@ pub const PREFIX_INSTRUCTION: &str = r#"
   - Increase confidence (+0.1) for bullish signals on historically strong days (e.g., Wednesday) or post-news spikes (e.g., 8:00 PM GMT+0).
   - Decrease confidence (-0.1) for trades against weekly slowdowns (e.g., Friday to Sunday) unless short-term volume contradicts.
   - If news context is unavailable, assume typical volatility spikes at 8:00 PM GMT+0 and adjust entry/target timing accordingly.
+- Incorporate Summary of Market Events (UTC):
+
+Time_UTC,Event,Note
+00:00,Tokyo Open,"Potential Reversal/Gap Fill Zone"
+01:30,China Open (SSE/SZSE),"Asia Sentiment Driver"
+03:30,China Lunch Break Start,"Liquidity Dip"
+05:00,China Re-Opens (Post-Lunch),"Afternoon Session Start"
+06:00,Tokyo Close,"Local Session End"
+07:00,China Close (SSE/SZSE),"Influences EU Open"
+07:00,EU Open (Lon/Fra),"Coincides w/ China Close; Volatility Watch"
+10:00,Mid-EU / US Pre-Market,"Trend Watch / Potential Fall Zone"
+13:30,US Open / EU Overlap,"Peak Liquidity/Activity"
+~15:00,Pre-EU Close / US Midday,"Potential Reversal Zone"
+15:30,EU Close (Lon/Fra),"Overlap Ends / Final Moves Watch"
+20:00,US Close,"High Caution/Sharp Moves/Gap Risk Zone"
+
+- Adjust confidence and timing based on market events:
+  - Increase confidence (+0.1) for signals aligning with high-activity periods (e.g., 13:30 UTC US Open, 07:00 UTC EU Open) if volume or momentum supports.
+  - Decrease confidence (-0.1) during low-liquidity or high-risk periods (e.g., 03:30 UTC China Lunch Break, 20:00 UTC US Close) unless short-term indicators (1m, 5m) strongly contradict.
+  - Shift entry/target timing to avoid reversal zones (e.g., ~15:00 UTC Pre-EU Close, 00:00 UTC Tokyo Open) unless breakout momentum is confirmed with volume >1.5x average.
 - Analyze historical volatility spikes (e.g., periods with >2x average ATR or volume) on 4h and 1d timeframes. Adjust entry and target timing to avoid whipsaws during spikes unless momentum aligns with the trade direction, in which case prioritize breakout entries.
 - Confidence (0.0–1.0):
-  - Base at 0.5, +0.1 per aligned indicator (e.g., RSI, volume, EMA, Fibonacci), -0.1 per conflict.
-  - Include weekly cycle adjustments: +0.1 for bullish signals on strong days (e.g., Wednesday), -0.1 for trades during slowdowns (e.g., Friday-Sunday) unless short-term volume exceeds 1.5x average.
-  - Suggest trades only if confidence ≥0.6; for 'Hold' on existing positions, require confidence ≥0.7; for 'No Action' if confidence <0.6 with no position.
-  - Explicitly state confidence in the output JSON under a 'confidence' key.
+- Base at 0.5, +0.1 per aligned indicator (e.g., RSI, volume, EMA, Fibonacci), -0.1 per conflict.
+- Include weekly cycle and market event adjustments: +0.1 for bullish signals during high-activity periods (e.g., US Open), -0.1 during low-liquidity or reversal zones unless short-term volume exceeds 1.5x average.
+- Suggest trades only if confidence ≥0.6; for 'Hold' on existing positions, require confidence ≥0.7; for 'No Action' if confidence <0.6 with no position.
+- Explicitly state confidence in the output JSON under a 'confidence' key.
 - Focus on relative indicators (e.g., % changes, z-scores) over absolute levels to avoid overfitting.
 - Ensure summary suggestion aligns with the existing position’s side (e.g., 'Hold long position' for longs, 'Hold short position' for shorts) unless suggesting 'Close' or 'Reverse'.
 "#;
