@@ -1,5 +1,5 @@
+use anyhow::bail;
 use m4rs::Candlestick;
-use std::error::Error;
 
 pub fn calculate_stoch_rsi(
     candles: &[Candlestick],
@@ -7,13 +7,13 @@ pub fn calculate_stoch_rsi(
     stoch_period: usize,
     smooth_k: usize,
     smooth_d: usize,
-) -> Result<(Vec<f64>, Vec<f64>), Box<dyn Error>> {
+) -> anyhow::Result<(Vec<f64>, Vec<f64>)> {
     // Step 1: Extract closing prices from M4rsCandlestick
     let closing_prices: Vec<f64> = candles.iter().map(|c| c.close).collect();
 
     // Ensure there are enough candles for calculation
     if closing_prices.len() < rsi_period + stoch_period + smooth_k + smooth_d {
-        return Err("Insufficient data for Stoch RSI calculation".into());
+        bail!("Insufficient data for Stoch RSI calculation")
     }
 
     // Step 2: Calculate RSI (14 periods)
@@ -79,4 +79,18 @@ pub fn calculate_stoch_rsi(
     }
 
     Ok((smoothed_k, d))
+}
+
+pub fn get_stoch_rsi_csv(smoothed_k: &[f64], d: &[f64]) -> String {
+    let mut csv_string = String::new();
+    csv_string.push_str("index,stoch_rsi_k,stoch_rsi_d\n"); // Add CSV header
+
+    // Ensure both vectors have the same length
+    let len = smoothed_k.len().min(d.len());
+
+    for i in 0..len {
+        csv_string.push_str(&format!("{},{:.2},{:.2}\n", i, smoothed_k[i], d[i]));
+    }
+
+    csv_string
 }

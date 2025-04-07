@@ -429,6 +429,7 @@ dependencies = [
  "chrono-tz",
  "dotenvy",
  "jup-sdk",
+ "m4rs",
  "reqwest",
  "serde",
  "serde_json",

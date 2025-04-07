@@ -638,7 +638,7 @@ mod test {
         let token_symbol = "SOL".to_string();
         let pair_symbol = format!("{token_symbol}_USDT");
         let binance_pair_symbol = format!("{token_symbol}USDT");
-        let timeframe = "1h".to_string();
+        let timeframe = "4h".to_string();
 
         let font_data = include_bytes!("../../RobotoMono-Regular.ttf").to_vec();
 

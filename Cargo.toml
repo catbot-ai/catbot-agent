@@ -1,12 +1,13 @@
 [workspace]
 members = [
-     "common",
+    "common",
     # "consumer",
     "feeder",
     # "fetcher",
     # "freezer",
     "cooker",
-    "json_schema_derive", "json_schema", 
+    "json_schema_derive",
+    "json_schema",
     # "agent",
     # "executor",
     # "toolings",
@@ -20,13 +21,14 @@ reqwest = { version = "0.12.12", features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
-strum =  { version ="0.27.1", features = ["derive"] }
+strum = { version = "0.27.1", features = ["derive"] }
 dotenvy = "0.15.7"
 chrono = "0.4"
 chrono-tz = "0.10"
 log = "0.4"
 env_logger = "0.11"
-jup-sdk ={ path = "../jup-sdk-rs" }
+m4rs = "0.12.0"
+jup-sdk = { path = "../jup-sdk-rs" }
 
 [workspace.dev-dependencies]
 tokio = { version = "1", features = ["full"] }

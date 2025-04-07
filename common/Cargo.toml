@@ -12,9 +12,10 @@ strum = { workspace = true }
 jup-sdk = { workspace = true }
 reqwest.workspace = true
 anyhow.workspace = true
+m4rs.workspace = true
 
-worker = { version="0.5.0", features=['http'], optional = true  }
-worker-macros = { version="0.5.0", features=['http'], optional = true  }
+worker = { version = "0.5.0", features = ['http'], optional = true }
+worker-macros = { version = "0.5.0", features = ['http'], optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
