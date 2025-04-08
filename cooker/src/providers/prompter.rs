@@ -111,9 +111,10 @@ mod tests {
             fetch_binance_kline_usdt, fetch_binance_kline_usdt_csv, fetch_orderbook_depth_usdt,
         },
         jup::get_preps_position,
+        rsi::get_stoch_rsi_csv,
         ConciseKline,
     };
-    use std::env;
+    use std::{collections::HashMap, env};
     use tokio;
 
     #[tokio::test]
@@ -149,8 +150,8 @@ mod tests {
 
         // Create an empty PriceHistory struct (all fields None)
         let price_history = PriceHistory {
-            price_history_1m: None,
             price_history_5m: Some("[]".to_string()),
+            price_history_15m: Some("[]".to_string()),
             price_history_1h: Some(kline_data_1h),
             price_history_4h: Some("[]".to_string()),
             price_history_1d: Some("[]".to_string()),
@@ -206,8 +207,8 @@ mod tests {
 
         // Create an empty PriceHistory struct (all fields None)
         let price_history = PriceHistory {
-            price_history_1m: None,
             price_history_5m: Some("[]".to_string()),
+            price_history_15m: Some("[]".to_string()),
             price_history_1h: Some(kline_data_1h),
             price_history_4h: Some("[]".to_string()),
             price_history_1d: Some("[]".to_string()),

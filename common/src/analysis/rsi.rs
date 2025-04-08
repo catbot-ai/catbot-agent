@@ -1,6 +1,10 @@
 use anyhow::bail;
 use m4rs::Candlestick;
 
+use crate::Kline;
+
+use super::m4rs::kline_to_m4rs_candlestick;
+
 pub fn calculate_stoch_rsi(
     candles: &[Candlestick],
     rsi_period: usize,
@@ -93,4 +97,14 @@ pub fn get_stoch_rsi_csv(smoothed_k: &[f64], d: &[f64]) -> String {
     }
 
     csv_string
+}
+
+pub fn get_many_stoch_rsi_csv(klines: Vec<Kline>) -> anyhow::Result<String> {
+    let m4rs_candlesticks = klines
+        .iter()
+        .map(kline_to_m4rs_candlestick)
+        .collect::<Vec<_>>();
+    let (stoch_rsi_k, stoch_rsi_d) = calculate_stoch_rsi(&m4rs_candlesticks, 14, 14, 3, 3)?;
+    let stoch_rsi_csv_string = get_stoch_rsi_csv(&stoch_rsi_k, &stoch_rsi_d);
+    Ok(stoch_rsi_csv_string)
 }

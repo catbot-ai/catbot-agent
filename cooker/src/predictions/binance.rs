@@ -11,12 +11,15 @@ pub async fn get_binance_prompt(
     context: TradingContext,
     orderbook_limit: i32,
 ) -> anyhow::Result<String> {
-    // Fetch 1m kline data: 500 candles = ~8.3 hours
-    let kline_data_1m =
-        fetch_binance_kline_usdt_csv(&context.pair_symbol, "1m", 500 * 3 * 2).await?;
+    // // Fetch 1m kline data: 500 candles = ~8.3 hours
+    // let kline_data_1m =
+    //     fetch_binance_kline_usdt_csv(&context.pair_symbol, "1m", 500 * 3 * 2).await?;
 
     // Fetch 5m kline data: 288 candles = 24h for 1-day short-term analysis
     let kline_data_5m = fetch_binance_kline_usdt_csv(&context.pair_symbol, "5m", 288 * 3).await?;
+
+    // Fetch 15m kline data: 672 candles = 7d for short-term analysis
+    let kline_data_15m = fetch_binance_kline_usdt_csv(&context.pair_symbol, "15m", 96 * 7).await?;
 
     // Fetch 1h kline data: 168 candles = 7d for 1h signal context
     let kline_data_1h = fetch_binance_kline_usdt_csv(&context.pair_symbol, "1h", 168).await?;
@@ -28,8 +31,8 @@ pub async fn get_binance_prompt(
     let kline_data_1d = fetch_binance_kline_usdt_csv(&context.pair_symbol, "1d", 100).await?;
 
     let price_history = PriceHistory {
-        price_history_1m: Some(kline_data_1m),
         price_history_5m: Some(kline_data_5m),
+        price_history_15m: Some(kline_data_15m),
         price_history_1h: Some(kline_data_1h),
         price_history_4h: Some(kline_data_4h),
         price_history_1d: Some(kline_data_1d),

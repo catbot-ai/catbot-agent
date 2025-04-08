@@ -1,24 +1,12 @@
 use chrono::{DateTime, Duration};
 use chrono_tz::Tz;
 use common::Kline;
-use m4rs::Candlestick as M4rsCandlestick;
 use std::error::Error;
 
 pub fn parse_kline_time(timestamp: i64, tz: &Tz) -> DateTime<Tz> {
     DateTime::from_timestamp(timestamp / 1000, 0)
         .unwrap()
         .with_timezone(tz)
-}
-
-pub fn kline_to_m4rs_candlestick(k: &Kline) -> M4rsCandlestick {
-    M4rsCandlestick::new(
-        k.open_time as u64,
-        k.open_price.parse::<f64>().unwrap(),
-        k.high_price.parse::<f64>().unwrap(),
-        k.low_price.parse::<f64>().unwrap(),
-        k.close_price.parse::<f64>().unwrap(),
-        k.volume.parse::<f64>().unwrap(),
-    )
 }
 
 pub fn parse_timeframe_duration(timeframe: &str) -> Duration {

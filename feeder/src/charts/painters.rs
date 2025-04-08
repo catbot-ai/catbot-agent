@@ -1,11 +1,12 @@
 use super::candle::{Chart, LabelStyle, LineStyle, PointStyle};
-use super::helpers::{format_short_number, kline_to_m4rs_candlestick, parse_kline_time};
+use super::helpers::{format_short_number, parse_kline_time};
 use super::image::draw_dashed_line_segment_mut;
 use crate::charts::helpers::{get_visible_range_and_data, parse_timeframe_duration};
 use ab_glyph::ScaleFont;
 use ab_glyph::{Font, PxScale};
 use chrono::{DateTime, TimeZone};
 use chrono_tz::Tz;
+use common::m4rs::kline_to_m4rs_candlestick;
 use common::numbers::{group_by_fractional_part, FractionalPart};
 use common::rsi::calculate_stoch_rsi;
 use common::{Kline, LongShortSignal, OrderBook};
