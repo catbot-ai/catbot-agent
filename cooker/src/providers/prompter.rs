@@ -5,7 +5,6 @@ use common::TradingContext;
 
 use common::transforms::numbers::btree_map_to_csv;
 use common::transforms::numbers::group_by_fractional_part;
-use common::transforms::numbers::top_n_bids_asks;
 use common::transforms::numbers::FractionalPart;
 
 use crate::predictions::prediction_types::PredictionType;
@@ -13,14 +12,12 @@ use crate::providers::instructions::get_instruction;
 use crate::providers::schemas::get_perps_position_schema;
 use crate::providers::schemas::get_schema_instruction;
 
-use super::core::PriceHistory;
-
 #[allow(clippy::too_many_arguments, unused)]
 pub fn build_prompt<T>(
     prediction_type: &PredictionType,
-    model: &T,
+    model: &T, // Model is generic, kept for potential future use/type constraints
     context: TradingContext,
-    maybe_price_history: Option<PriceHistory>,
+    historical_data_content: String,
     orderbook: OrderBook,
     fund_usd: f64,
 ) -> String {
@@ -34,23 +31,25 @@ pub fn build_prompt<T>(
 
     // Handle binance_pair_symbol
     let pair_symbol = context.pair_symbol.clone();
-    let (token_symbol, binance_pair_symbol) = get_token_and_pair_symbol_usdt(&pair_symbol);
+    let (token_symbol, _binance_pair_symbol) = get_token_and_pair_symbol_usdt(&pair_symbol); // Use _ if binance_pair_symbol not needed directly here
 
+    // Order Book Processing
     let (grouped_one_bids, grouped_one_asks) =
         group_by_fractional_part(&orderbook, FractionalPart::One);
 
-    // Limit 10
-    let top_bids_price_amount = top_n_bids_asks(&grouped_one_bids, 10, false);
-    let top_asks_price_amount = top_n_bids_asks(&grouped_one_asks, 10, true);
-
-    println!("top_bids_price_amount:{top_bids_price_amount:#?}");
-    println!("top_asks_price_amount:{top_asks_price_amount:#?}");
-
+    // Convert grouped order book data to CSV (limited to top 10 for clarity if needed, or full)
+    // For the prompt, let's use the full grouped data for now, matching the original code
     let grouped_bids_string = btree_map_to_csv(&grouped_one_bids);
     let grouped_asks_string = btree_map_to_csv(&grouped_one_asks);
 
-    // TODO: take this to the account
-    let min_profit = fund_usd * 0.025;
+    // If you wanted top N instead:
+    // let top_bids_map = top_n_bids_asks(&grouped_one_bids, 10, false);
+    // let top_asks_map = top_n_bids_asks(&grouped_one_asks, 10, true);
+    // let grouped_bids_string = btree_map_to_csv(&top_bids_map);
+    // let grouped_asks_string = btree_map_to_csv(&top_asks_map);
+
+    // TODO: take this to the account (min_profit calculation remains)
+    let _min_profit = fund_usd * 0.025;
 
     // Positions
     let (maybe_preps_positions_string, maybe_position_schema) =
@@ -61,11 +60,15 @@ pub fn build_prompt<T>(
     let schema_instruction =
         get_schema_instruction(prediction_type, &pair_symbol, maybe_position_schema);
 
-    let price_history_string = maybe_price_history
-        .as_ref()
-        .map_or(String::new(), |history| history.to_formatted_string());
+    // historical_data_content is now the pre-formatted string passed as input
+    // Ensure it's not empty or provide a placeholder if it might be.
+    let final_historical_data = if historical_data_content.trim().is_empty() {
+        "No historical data provided or generated.".to_string()
+    } else {
+        historical_data_content // Use the provided string directly
+    };
 
-    // Consolidate
+    // Consolidate into the final prompt
     format!(
         r#"Analyze {pair_symbol} for price movement in the next 4 hours using:
 
@@ -76,19 +79,23 @@ current_datetime={current_datetime}
 current_timestamp={current_timestamp}
 current_price={current_price}
 
-## Open positions:
+## Open Positions:
 {maybe_preps_positions_string}
 
-## Historical Data in CSV:
-{price_history_string}
+## Historical Data:
+{final_historical_data}
 
-## Consolidated Data in CSV:
+## Consolidated Order Book Data (Grouped by 1.0):
 
-**Bids:**
+**Bid:**
+```csv
 {grouped_bids_string}
+```
 
 **Asks:**
+```csv
 {grouped_asks_string}
+```
 
 ## Instructions:
 {instruction}
@@ -104,134 +111,196 @@ current_price={current_price}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::providers::gemini::GeminiModel;
-    use anyhow::Result;
+    use crate::providers::gemini::GeminiModel; // Assuming GeminiModel is defined elsewhere
+    use anyhow::{Context as AnyhowContext, Result}; // Add alias for Context trait
     use common::{
-        binance::{
-            fetch_binance_kline_usdt, fetch_binance_kline_usdt_csv, fetch_orderbook_depth_usdt,
-        },
+        binance::{fetch_binance_kline_usdt, fetch_orderbook_depth_usdt},
         jup::get_preps_position,
-        rsi::get_stoch_rsi_csv,
+        transforms::csv::PriceHistoryBuilder, // Import the builder
         ConciseKline,
+        TradingContext,
     };
-    use std::{collections::HashMap, env};
+    use std::env;
     use tokio;
 
+    // Helper function to create formatted historical data string using PriceHistoryBuilder
+    async fn build_historical_data_report(
+        pair_symbol: &str,
+        // Optional: Add specific intervals if needed for testing different scenarios
+        // kline_intervals: Option<&[&str]>,
+        // stoch_rsi_intervals: Option<&[&str]>
+    ) -> Result<String> {
+        // Use default intervals similar to get_binance_prompt for consistency
+        let required_kline_intervals = ["5m:100", "15m:100", "1h:100", "4h:100", "1d:100"]; // Reduced limits for testing speed
+        let stoch_rsi_intervals = ["1h:100", "4h:100"];
+
+        println!(
+            "Building historical data report for {} using PriceHistoryBuilder...",
+            pair_symbol
+        );
+
+        // Instantiate and configure the builder
+        let full_report = PriceHistoryBuilder::new(pair_symbol, 100) // Base limit (can be overridden per item)
+            .with_klines(&required_kline_intervals)
+            .with_stoch_rsi(&stoch_rsi_intervals)
+            .build()
+            .await
+            .with_context(|| format!("Failed to build historical report for {}", pair_symbol))?;
+
+        Ok(full_report)
+    }
+
     #[tokio::test]
-    async fn test_build_prompt_stage1_empty_price_history() -> Result<(), Box<dyn std::error::Error>>
-    {
+    async fn test_build_prompt_trading_prediction_with_builder(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Define pair symbol
         let token_symbol = "SOL".to_string();
         let pair_symbol = format!("{token_symbol}_USDT");
-        let binance_pair_symbol = format!("{token_symbol}USDT");
-        let timeframe = "1h".to_string();
+        let timeframe = "1h".to_string(); // Example timeframe for context (instruction generation)
 
         // Fetch 1-second kline data to get current price
+        println!("Fetching current price for {}...", pair_symbol);
         let kline_data_1s =
-            fetch_binance_kline_usdt::<ConciseKline>(&binance_pair_symbol, "1s", 1).await?;
-        let current_price = kline_data_1s[0].close;
+            fetch_binance_kline_usdt::<ConciseKline>(&token_symbol, "1s", 1).await?;
+        let current_price = kline_data_1s
+            .first()
+            .map(|k| k.close)
+            .ok_or("Failed to get current price from 1s kline data")?; // Ensure price is available
 
-        // Load environment variables from .env file (optional, handle errors gracefully)
-        dotenvy::from_filename(".env").ok(); // Use .ok() to avoid panic if .env is missing
-        let wallet_address = env::var("WALLET_ADDRESS").ok(); // Use .ok() to handle missing env var
-        let maybe_preps_positions = get_preps_position(wallet_address).await?;
+        // Load environment variables from .env file
+        dotenvy::dotenv().ok(); // Load .env
+        let wallet_address = env::var("WALLET_ADDRESS").ok();
+
+        // Fetch positions (handle potential errors or None result)
+        let maybe_preps_positions = if let Some(addr) = wallet_address {
+            println!("Fetching positions for wallet...");
+            get_preps_position(Some(addr)).await.ok().flatten()
+        } else {
+            println!("WARN: WALLET_ADDRESS not set. Skipping position fetching.");
+            None
+        };
 
         // Context
         let context = TradingContext {
-            token_symbol,
-            pair_symbol,
-            timeframe,
+            token_symbol: token_symbol.clone(),
+            pair_symbol: pair_symbol.clone(), // Builder uses this pair_symbol
+            timeframe: timeframe.clone(),
             current_price,
             maybe_preps_positions,
             maybe_trading_predictions: None,
         };
 
-        let kline_data_1h = fetch_binance_kline_usdt_csv(&binance_pair_symbol, "1h", 1).await?;
-
-        // Create an empty PriceHistory struct (all fields None)
-        let price_history = PriceHistory {
-            price_history_5m: Some("[]".to_string()),
-            price_history_15m: Some("[]".to_string()),
-            price_history_1h: Some(kline_data_1h),
-            price_history_4h: Some("[]".to_string()),
-            price_history_1d: Some("[]".to_string()),
-        };
-
-        // Fetch orderbook (assuming fetch_orderbook_depth returns OrderBook)
-        let orderbook = fetch_orderbook_depth_usdt(&binance_pair_symbol, 1000).await?;
-
-        // Create a default GeminiModel
-        let model = GeminiModel::default();
-
-        // Call the refactored build_prompt with Option<PriceHistory>
-        let prompt = build_prompt(
-            &PredictionType::Trading,
-            &model, // Reference to GeminiModel
-            context,
-            Some(price_history), // Option<PriceHistory> with empty data
-            orderbook,           // OrderBook
-            1000f64,             // fund_usd
+        // --- Generate historical data using PriceHistoryBuilder ---
+        let historical_data_content = build_historical_data_report(&pair_symbol).await?;
+        assert!(
+            !historical_data_content.is_empty(),
+            "Generated historical data report is empty"
         );
 
-        // Print the prompt for verification
-        println!("{}", prompt);
+        // Fetch orderbook
+        println!("Fetching order book for {}...", pair_symbol);
+        let orderbook = fetch_orderbook_depth_usdt(&pair_symbol, 1000).await?; // Use USDT pair symbol
+
+        // Create a model instance (using default for example)
+        let model = GeminiModel::default();
+
+        // --- Call build_prompt with the generated historical data string ---
+        println!("Building final prompt...");
+        let prompt = build_prompt(
+            &PredictionType::Trading, // Use Trading prediction type
+            &model,
+            context,                 // Pass the created context
+            historical_data_content, // Pass the string generated by the builder
+            orderbook,
+            1000.0, // fund_usd
+        );
+
+        println!("----------------------");
+        println!("{prompt}");
+        println!("----------------------");
+        // --- Assertions (Basic Checks) ---
+        println!("Verifying prompt content...");
+        assert!(prompt.contains(&format!("Analyze {}", pair_symbol)));
+        assert!(prompt.contains("## Historical Data:"));
+        assert!(prompt.contains("## Consolidated Order Book Data (Grouped by 1.0):"));
+        assert!(prompt.contains("price,cumulative_amount")); // Check for CSV headers in order book
+        assert!(prompt.contains("## Instructions:"));
+
+        // Optionally print for manual verification during development
+        // println!("--- Trading Prompt (Built with Builder Data) ---");
+        // println!("{}", prompt);
+        println!("Prompt verification successful.");
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_build_prompt_predict_signal_and_candles() -> Result<(), Box<dyn std::error::Error>>
-    {
+    #[ignore] // Ignoring by default: depends on external services and takes time
+    async fn test_build_prompt_graph_prediction_with_builder(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Define pair symbol
         let token_symbol = "SOL".to_string();
         let pair_symbol = format!("{token_symbol}_USDT");
         let binance_pair_symbol = format!("{token_symbol}USDT");
-        let timeframe = "1h".to_string();
+        let timeframe = "4h".to_string(); // Example different timeframe for context
 
-        // Fetch 1-second kline data to get current price
+        // Fetch current price
+        println!("Fetching current price for {}...", binance_pair_symbol);
         let kline_data_1s =
             fetch_binance_kline_usdt::<ConciseKline>(&binance_pair_symbol, "1s", 1).await?;
-        let current_price = kline_data_1s[0].close;
+        let current_price = kline_data_1s
+            .first()
+            .map(|k| k.close)
+            .ok_or("Failed to get current price from 1s kline data")?;
 
-        // Context
+        // Context (no positions needed/fetched for graph prediction example)
         let context = TradingContext {
-            token_symbol,
-            pair_symbol,
-            timeframe,
+            token_symbol: token_symbol.clone(),
+            pair_symbol: pair_symbol.clone(), // Builder uses this
+            timeframe: timeframe.clone(),
             current_price,
-            maybe_preps_positions: None,
+            maybe_preps_positions: None, // Explicitly None for this test
             maybe_trading_predictions: None,
         };
 
-        let kline_data_1h = fetch_binance_kline_usdt_csv(&binance_pair_symbol, "1h", 1).await?;
-
-        // Create an empty PriceHistory struct (all fields None)
-        let price_history = PriceHistory {
-            price_history_5m: Some("[]".to_string()),
-            price_history_15m: Some("[]".to_string()),
-            price_history_1h: Some(kline_data_1h),
-            price_history_4h: Some("[]".to_string()),
-            price_history_1d: Some("[]".to_string()),
-        };
-
-        // Fetch orderbook (assuming fetch_orderbook_depth returns OrderBook)
-        let orderbook = fetch_orderbook_depth_usdt(&binance_pair_symbol, 1000).await?;
-
-        // Create a default GeminiModel
-        let model = GeminiModel::default();
-
-        // Call the refactored build_prompt with Option<PriceHistory>
-        let prompt = build_prompt(
-            &PredictionType::Graph,
-            &model, // Reference to GeminiModel
-            context,
-            Some(price_history), // Option<PriceHistory> with empty data
-            orderbook,           // OrderBook
-            1000f64,             // fund_usd
+        // --- Generate historical data using PriceHistoryBuilder ---
+        let historical_data_content = build_historical_data_report(&pair_symbol).await?;
+        assert!(
+            !historical_data_content.is_empty(),
+            "Generated historical data report is empty"
         );
 
-        // Print the prompt for verification
-        println!("{}", prompt);
+        // Fetch orderbook
+        println!("Fetching order book for {}...", pair_symbol);
+        let orderbook = fetch_orderbook_depth_usdt(&pair_symbol, 1000).await?;
+
+        // Create a model instance
+        let model = GeminiModel::default();
+
+        // --- Call build_prompt with the generated historical data string ---
+        println!("Building final prompt...");
+        let prompt = build_prompt(
+            &PredictionType::Graph, // Use Graph prediction type
+            &model,
+            context,
+            historical_data_content, // Pass the string generated by the builder
+            orderbook,
+            1000.0, // fund_usd (might be less relevant for graph, but kept for consistency)
+        );
+
+        // --- Assertions (Basic Checks) ---
+        println!("Verifying prompt content...");
+        assert!(prompt.contains(&format!("Analyze {}", pair_symbol)));
+        assert!(prompt.contains(&format!("timeframe={}", timeframe))); // Check correct timeframe in input data section
+        assert!(prompt.contains("## Historical Data:"));
+        assert!(prompt.contains("## Consolidated Order Book Data (Grouped by 1.0):"));
+        assert!(prompt.contains("price,cumulative_amount"));
+        assert!(prompt.contains("## Instructions:"));
+
+        // Optionally print for manual verification
+        // println!("--- Graph Prompt (Built with Builder Data) ---");
+        // println!("{}", prompt);
+        println!("Prompt verification successful.");
 
         Ok(())
     }

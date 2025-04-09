@@ -1,9 +1,12 @@
 use super::prediction_types::PredictionType;
-use crate::providers::{core::PriceHistory, gemini::GeminiModel, prompter::build_prompt};
+use crate::providers::{gemini::GeminiModel, prompter::build_prompt};
+use anyhow::Context;
 use common::{
-    binance::{fetch_binance_kline_usdt_csv, fetch_orderbook_depth_usdt},
+    binance::fetch_orderbook_depth_usdt,
+    transforms::csv::PriceHistoryBuilder, // Keep builder
     TradingContext,
 };
+// Removed: Kline, klines_to_csv, HashMap
 
 pub async fn get_binance_prompt(
     prediction_type: &PredictionType,
@@ -11,46 +14,46 @@ pub async fn get_binance_prompt(
     context: TradingContext,
     orderbook_limit: i32,
 ) -> anyhow::Result<String> {
-    // // Fetch 1m kline data: 500 candles = ~8.3 hours
-    // let kline_data_1m =
-    //     fetch_binance_kline_usdt_csv(&context.pair_symbol, "1m", 500 * 3 * 2).await?;
+    // --- Define Required Data Specs ---
+    let required_kline_intervals = [
+        // Include intervals relevant for the desired analysis context
+        "5m:864", "15m:672", "1h:168", "4h:84", "1d:100",
+    ];
 
-    // Fetch 5m kline data: 288 candles = 24h for 1-day short-term analysis
-    let kline_data_5m = fetch_binance_kline_usdt_csv(&context.pair_symbol, "5m", 288 * 3).await?;
+    // Include RSI or other indicators if desired in the report
+    let stoch_rsi_intervals = ["1h:168", "4h:84"];
 
-    // Fetch 15m kline data: 672 candles = 7d for short-term analysis
-    let kline_data_15m = fetch_binance_kline_usdt_csv(&context.pair_symbol, "15m", 96 * 7).await?;
+    // --- Fetch Data and Build Report String using Builder ---
+    println!("Fetching historical data and building report string...");
+    let builder = PriceHistoryBuilder::new(&context.pair_symbol, 100)
+        .with_klines(&required_kline_intervals)
+        .with_stoch_rsi(&stoch_rsi_intervals); // Add RSI to the report
 
-    // Fetch 1h kline data: 168 candles = 7d for 1h signal context
-    let kline_data_1h = fetch_binance_kline_usdt_csv(&context.pair_symbol, "1h", 168).await?;
+    // Get the full report string from the builder
+    let historical_data_content: String = builder
+        .build()
+        .await
+        .context("Failed to build historical data report string using builder")?;
 
-    // Fetch 4h kline data: 84 candles = 14d for 4h signals
-    let kline_data_4h = fetch_binance_kline_usdt_csv(&context.pair_symbol, "4h", 84).await?;
+    // --- Fetch Orderbook ---
+    println!("Fetching order book data...");
+    let orderbook = fetch_orderbook_depth_usdt(&context.pair_symbol, orderbook_limit)
+        .await
+        .context("Failed to fetch orderbook depth")?;
 
-    // Fetch 1d kline data: 100 candles = ~3m for long-term context
-    let kline_data_1d = fetch_binance_kline_usdt_csv(&context.pair_symbol, "1d", 100).await?;
-
-    let price_history = PriceHistory {
-        price_history_5m: Some(kline_data_5m),
-        price_history_15m: Some(kline_data_15m),
-        price_history_1h: Some(kline_data_1h),
-        price_history_4h: Some(kline_data_4h),
-        price_history_1d: Some(kline_data_1d),
-    };
-
-    let orderbook = fetch_orderbook_depth_usdt(&context.pair_symbol, orderbook_limit).await?;
-
-    // --- Build Prompt for Gemini API ---
+    // --- Build Prompt ---
     println!("Building prompt for Gemini API...");
+    // Pass the processed report string directly
     let prompt = build_prompt(
         prediction_type,
         model,
         context,
-        Some(price_history),
+        historical_data_content, // Pass the generated content string
         orderbook,
-        1000f64,
+        1000f64, // Example budget
     );
 
-    println!("{prompt:?}");
+    println!("Prompt generated successfully.");
+    // println!("{prompt:?}");
     Ok(prompt)
 }
