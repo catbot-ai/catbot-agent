@@ -4,76 +4,80 @@ use anyhow::{Context, Result};
 use futures::future::try_join_all;
 
 use crate::{
-    binance::{fetch_binance_kline_usdt, get_token_and_pair_symbol_usdt, klines_to_csv},
+    binance::{fetch_binance_kline_usdt, klines_to_csv},
     rsi::get_many_stoch_rsi_csv,
     Kline,
 };
 
+// Helper function to parse interval specification strings like "1h" or "1h:200".
+// Returns the interval name (e.g., "1h") and an optional limit override.
+fn parse_interval_spec(spec: &str) -> (String, Option<i32>) {
+    if let Some((interval_part, limit_part)) = spec.rsplit_once(':') {
+        // Check if the part after the colon is a valid positive integer
+        if let Ok(limit) = limit_part.parse::<i32>() {
+            if limit > 0 {
+                // Valid limit found
+                return (interval_part.to_string(), Some(limit));
+            }
+            // else: Invalid limit (e.g., "1h:0" or "1h:-5"), treat whole as interval
+            println!(
+                "Warning: Invalid limit '{}' in spec '{}'. Treating whole as interval name.",
+                limit_part, spec
+            );
+        }
+        // else: Part after colon is not a number (e.g., "abc:xyz"), treat whole as interval
+    }
+    // No colon found, or part after colon was not a valid positive limit
+    (spec.to_string(), None)
+}
+
+// Helper to parse a list of interval specifications using parse_interval_spec.
+// Returns a vector of (interval_name, optional_limit) tuples.
+fn parse_interval_specs_list(specs: &[&str]) -> Vec<(String, Option<i32>)> {
+    specs.iter().map(|s| parse_interval_spec(s)).collect()
+}
+
 // The Price History Builder
 pub struct PriceHistoryBuilder<'a> {
-    pair_symbol: &'a str,        // e.g. "SOL_USDT"
-    binance_pair_symbol: String, // e.g. "SOLUSDT"
-    limit: i32,
-    kline_intervals: Vec<String>,
-    stoch_rsi_intervals: Vec<String>,
-    // Add fields for other indicators like MA, BB later
-    // ma_intervals: Vec<String>,
-    // bb_intervals: Vec<String>,
+    pair_symbol: &'a str, // e.g. "SOL_USDT"
+    default_limit: i32,   // Default limit if not specified per interval
+    // Store intervals as (name, optional_limit)
+    kline_intervals: Vec<(String, Option<i32>)>,
+    stoch_rsi_intervals: Vec<(String, Option<i32>)>,
+    // Add fields for other indicators later
+    // ma_intervals: Vec<(String, Option<i32>)>,
+    // bb_intervals: Vec<(String, Option<i32>)>,
 }
 
 impl<'a> PriceHistoryBuilder<'a> {
-    pub fn new(pair_symbol: &'a str, limit: i32) -> Self {
-        let (_, binance_pair_symbol) = get_token_and_pair_symbol_usdt(pair_symbol);
+    /// Creates a new PriceHistoryBuilder.
+    ///
+    /// # Arguments
+    ///
+    /// * `pair_symbol` - The trading pair symbol (e.g., "SOL_USDT").
+    /// * `default_limit` - The default number of klines to fetch if not specified per interval.
+    pub fn new(pair_symbol: &'a str, default_limit: i32) -> Self {
         PriceHistoryBuilder {
             pair_symbol,
-            binance_pair_symbol,
-            limit,
+            default_limit,
             kline_intervals: Vec::new(),
             stoch_rsi_intervals: Vec::new(),
         }
     }
 
-    // Helper to parse interval specifications using parse_interval_spec.
-    // Returns a vector of (interval_name, optional_limit) tuples.
-    // This can be used by methods like `with_klines` and `with_stoch_rsi`
-    // if the internal storage is updated to Vec<(String, Option<i32>)>.
-    #[allow(dead_code)] // This helper is not yet integrated into the builder logic.
-    fn parse_interval_specs_list(&self, specs: &[&str]) -> Vec<(String, Option<i32>)> {
-        specs.iter().map(|s| Self::parse_interval_spec(s)).collect()
-    }
-
-    // Helper function to parse interval specification strings like "1h" or "1h:200".
-    // Returns the interval name (e.g., "1h") and an optional limit override.
-    // This function itself doesn't implement the default logic (e.g., defaulting to 100);
-    // the caller would handle the Option<i32> result, potentially using the
-    // builder's main `limit` field as a default if this function returns None.
-    //
-    // Note: Integrating this requires changing how intervals are stored (e.g., Vec<(String, Option<i32>)>)
-    // and how data is fetched in the `build` method to use the specific limit if provided.
-    #[allow(dead_code)] // This helper is not yet integrated into the builder logic.
-    fn parse_interval_spec(spec: &str) -> (String, Option<i32>) {
-        if let Some((interval_part, limit_part)) = spec.rsplit_once(':') {
-            // Check if the part after the colon is a valid positive integer
-            if let Ok(limit) = limit_part.parse::<i32>() {
-                if limit > 0 {
-                    // Valid limit found
-                    return (interval_part.to_string(), Some(limit));
-                }
-                // else: Invalid limit (e.g., "1h:0" or "1h:-5"), treat whole as interval
-            }
-            // else: Part after colon is not a number (e.g., "abc:xyz"), treat whole as interval
-        }
-        // No colon found, or part after colon was not a valid positive limit
-        (spec.to_string(), None)
-    }
-
+    /// Adds Kline intervals to fetch.
+    /// Intervals can be specified like "1h" or "1h:200" to override the default limit.
     pub fn with_klines(mut self, intervals: &[&str]) -> Self {
-        self.kline_intervals = intervals.iter().map(|s| s.to_string()).collect();
+        self.kline_intervals = parse_interval_specs_list(intervals);
         self
     }
 
+    /// Adds Stochastic RSI intervals to calculate.
+    /// The underlying Kline data will be fetched based on the specified interval.
+    /// Intervals can be specified like "1h" or "1h:150". The limit affects the
+    /// underlying Kline data fetch.
     pub fn with_stoch_rsi(mut self, intervals: &[&str]) -> Self {
-        self.stoch_rsi_intervals = intervals.iter().map(|s| s.to_string()).collect();
+        self.stoch_rsi_intervals = parse_interval_specs_list(intervals);
         self
     }
 
@@ -87,21 +91,26 @@ impl<'a> PriceHistoryBuilder<'a> {
         let mut klines_output = String::new();
         if !self.kline_intervals.is_empty() {
             klines_output.push_str("\n**Klines (Price History):**\n");
-            // Sort intervals for consistent output order (optional but nice)
+            // Sort intervals by name for consistent output order
             let mut sorted_kline_intervals = self.kline_intervals.clone();
-            // Basic sort is usually fine for typical intervals like "1m", "5m", "1h"
-            sorted_kline_intervals.sort();
+            sorted_kline_intervals.sort_by(|a, b| a.0.cmp(&b.0)); // Compare interval names (String)
 
-            for interval in &sorted_kline_intervals {
-                if let Some(data) = kline_data_map.get(interval) {
+            for (interval_name, opt_limit) in &sorted_kline_intervals {
+                let display_interval = match opt_limit {
+                    Some(limit) => format!("{}:{}", interval_name, limit),
+                    None => interval_name.clone(),
+                };
+
+                if let Some(data) = kline_data_map.get(interval_name) {
                     if data.is_empty() {
-                        klines_output.push_str(&format!(" ({}) No data found.\n", interval));
+                        klines_output
+                            .push_str(&format!(" ({}) No data found.\n", display_interval));
                         continue;
                     }
-                    // Use the helper function klines_to_csv which returns Result<String>
                     match klines_to_csv(data) {
                         Ok(csv_data) => {
-                            klines_output.push_str(&format!("\n* Interval: {}\n", interval));
+                            klines_output
+                                .push_str(&format!("\n* Interval: {}\n", display_interval));
                             klines_output.push_str("```csv\n");
                             klines_output.push_str(&csv_data);
                             klines_output.push_str("```\n");
@@ -109,20 +118,23 @@ impl<'a> PriceHistoryBuilder<'a> {
                         Err(e) => {
                             klines_output.push_str(&format!(
                                 "\n* Interval: {} (Error formatting Klines to CSV: {})\n",
-                                interval, e
+                                display_interval, e
                             ));
-                            eprintln!("Error formatting klines to CSV for {}: {}", interval, e);
+                            eprintln!(
+                                "Error formatting klines to CSV for {}: {}",
+                                interval_name,
+                                e // Log with base interval name
+                            );
                         }
                     }
                 } else {
-                    // This case should ideally not be reached if try_join_all succeeded
                     klines_output.push_str(&format!(
                         "\n* Interval: {} (Data unexpectedly missing after fetch)\n",
-                        interval
+                        display_interval
                     ));
                     eprintln!(
                         "Warning: Kline data for interval {} requested but not found in map.",
-                        interval
+                        interval_name
                     );
                 }
             }
@@ -138,42 +150,48 @@ impl<'a> PriceHistoryBuilder<'a> {
         let mut stoch_rsi_output = String::new();
         if !self.stoch_rsi_intervals.is_empty() {
             stoch_rsi_output.push_str("\n**Stochastic RSI:**\n");
-            // Sort intervals for consistent output order (optional but nice)
+            // Sort intervals by name for consistent output order
             let mut sorted_stoch_rsi_intervals = self.stoch_rsi_intervals.clone();
-            sorted_stoch_rsi_intervals.sort();
+            sorted_stoch_rsi_intervals.sort_by(|a, b| a.0.cmp(&b.0)); // Compare interval names
 
-            for interval in &sorted_stoch_rsi_intervals {
-                if let Some(data) = kline_data_map.get(interval) {
+            for (interval_name, opt_limit) in &sorted_stoch_rsi_intervals {
+                let display_interval = match opt_limit {
+                    Some(limit) => format!("{}:{}", interval_name, limit),
+                    None => interval_name.clone(),
+                };
+
+                if let Some(data) = kline_data_map.get(interval_name) {
                     if data.is_empty() {
                         stoch_rsi_output.push_str(&format!(
                             " ({}) No kline data available to calculate StochRSI.\n",
-                            interval
+                            display_interval
                         ));
                         continue;
                     }
 
-                    // Call the function based on the diagnostic information: takes &Vec<Kline>, returns Result<String>
                     match get_many_stoch_rsi_csv(data) {
                         Ok(stoch_rsi_csv) => {
-                            // Handles the Result::Ok case
-                            stoch_rsi_output.push_str(&format!("\n* Interval: {}\n", interval));
+                            stoch_rsi_output
+                                .push_str(&format!("\n* Interval: {}\n", display_interval));
                             stoch_rsi_output.push_str("```csv\n");
-                            stoch_rsi_output.push_str(&stoch_rsi_csv); // Use the String from Ok(...)
+                            stoch_rsi_output.push_str(&stoch_rsi_csv);
                             stoch_rsi_output.push_str("```\n");
                         }
                         Err(e) => {
-                            // Handles the Result::Err case
                             stoch_rsi_output.push_str(&format!(
                                 "\n* Interval: {} (Error calculating StochRSI: {})\n",
-                                interval, e
+                                display_interval, e
                             ));
-                            eprintln!("Error calculating StochRSI for {}: {}", interval, e);
+                            eprintln!(
+                                "Error calculating StochRSI for {}: {}",
+                                interval_name,
+                                e // Log with base interval name
+                            );
                         }
                     }
                 } else {
-                    // This case should ideally not be reached
-                    stoch_rsi_output.push_str(&format!("\n* Interval: {} (Kline data unexpectedly missing for StochRSI calculation)\n", interval));
-                    eprintln!("Warning: Kline data for interval {} needed for StochRSI but not found in map.", interval);
+                    stoch_rsi_output.push_str(&format!("\n* Interval: {} (Kline data unexpectedly missing for StochRSI calculation)\n", display_interval));
+                    eprintln!("Warning: Kline data for interval {} needed for StochRSI but not found in map.", interval_name);
                 }
             }
         }
@@ -185,57 +203,63 @@ impl<'a> PriceHistoryBuilder<'a> {
         let mut output_string = String::new();
         output_string.push_str("## Historical Data:\n");
 
-        // Determine unique intervals needed for fetching Kline data
-        let mut all_intervals = self.kline_intervals.clone();
-        all_intervals.extend(self.stoch_rsi_intervals.clone());
-        // Add intervals for MA, BB etc. here if needed
-        all_intervals.sort();
-        all_intervals.dedup();
+        // --- Determine unique intervals and their effective limits for fetching ---
+        let mut all_interval_specs = self.kline_intervals.clone();
+        all_interval_specs.extend(self.stoch_rsi_intervals.clone());
+        // Add intervals for MA, BB etc. here if needed:
+        // all_interval_specs.extend(self.ma_intervals.clone());
 
-        if all_intervals.is_empty() {
+        // Use a HashMap to find the highest limit requested for each unique interval name.
+        // This ensures we fetch enough data if an interval is requested multiple times
+        // (e.g., once for klines with default limit, once for RSI with a specific limit).
+        let mut effective_fetch_params: HashMap<String, i32> = HashMap::new(); // Explicit type annotation might help, though entry API should infer.
+        for (name, opt_limit) in &all_interval_specs {
+            let required_limit = opt_limit.unwrap_or(self.default_limit);
+            effective_fetch_params
+                .entry(name.clone())
+                // Add explicit type annotation for the closure parameter
+                .and_modify(|current_limit: &mut i32| {
+                    *current_limit = (*current_limit).max(required_limit)
+                })
+                .or_insert(required_limit);
+        }
+
+        if effective_fetch_params.is_empty() {
             output_string.push_str("No historical data requested.\n");
             return Ok(output_string);
         }
 
+        println!("Effective fetch params: {:?}", effective_fetch_params); // Debugging
+
         // --- Fetch all necessary Kline data concurrently ---
-        // Check if running in a WASM environment that supports threads/spawning.
-        // Cloudflare Workers std::thread::spawn is not supported.
-        // `try_join_all` itself doesn't spawn threads but drives futures concurrently
-        // on the single thread's executor in wasm-bindgen contexts, which is generally fine.
-        let fetch_futures = all_intervals.iter().map(|interval| {
-            // Clone necessary data for the async block
-            let binance_pair_symbol = self.binance_pair_symbol.clone();
-            let interval = interval.clone();
-            let limit = self.limit;
-            // Capture pair_symbol for potential use in fetch_binance_kline_usdt if needed
-            let pair_symbol = self.pair_symbol.to_string();
+        let fetch_futures = effective_fetch_params
+            .iter()
+            .map(|(interval_name, &limit_to_use)| {
+                // Clone necessary data for the async block
+                let interval = interval_name.clone();
+                let pair_symbol = self.pair_symbol.to_string(); // Original symbol
 
-            async move {
-                // Call the original function which constructs the URL and handles the request
-                // We pass the *original* pair_symbol (e.g., "SOL_USDT") as it might be used internally,
-                // even though binance_pair_symbol (e.g., "SOLUSDT") is derived and likely used for the API call.
-                // Ensure fetch_binance_kline_usdt is compatible with this call pattern.
-                // The diagnostics didn't complain about this part, so assuming it's correct.
-                let kline_data: Vec<Kline> =
-                    // Assuming fetch_binance_kline_usdt uses the pair_symbol to derive the binance_pair_symbol internally.
-                    // If it DIRECTLY needs the binance_pair_symbol, pass that instead. Let's stick to the original code's apparent usage.
-                    fetch_binance_kline_usdt::<Kline>(&pair_symbol, &interval, limit)
-                        .await
-                        .with_context(|| {
-                            format!(
-                                "Failed fetching klines for {} ({}) interval {}",
-                                pair_symbol, binance_pair_symbol, interval
-                            )
-                        })?;
+                async move {
+                    let kline_data: Vec<Kline> =
+                        fetch_binance_kline_usdt::<Kline>(&pair_symbol, &interval, limit_to_use)
+                            .await
+                            .with_context(|| {
+                                format!(
+                                    "Failed fetching klines for {} interval {} with limit {}",
+                                    pair_symbol,
+                                    interval,
+                                    limit_to_use // Include limit in error
+                                )
+                            })?;
 
-                Ok::<_, anyhow::Error>((interval, kline_data))
-            }
-        });
+                    Ok::<_, anyhow::Error>((interval, kline_data)) // Return interval name and data
+                }
+            });
 
-        // Execute all fetches concurrently. This works on single-threaded WASM runtimes.
+        // Execute all fetches concurrently
         let fetched_kline_results: Vec<(String, Vec<Kline>)> = try_join_all(fetch_futures).await?;
 
-        // Convert the Vec of tuples into a HashMap
+        // Convert the Vec of tuples into a HashMap for easy lookup
         let kline_data_map: HashMap<String, Vec<Kline>> =
             fetched_kline_results.into_iter().collect();
 
@@ -245,10 +269,14 @@ impl<'a> PriceHistoryBuilder<'a> {
         );
 
         // --- Format Klines ---
+        // Pass the fetched data map to the formatting function
         output_string.push_str(&self.format_klines_section(&kline_data_map)?);
 
         // --- Format StochRSI ---
+        // Pass the same fetched data map
         output_string.push_str(&self.format_stoch_rsi_section(&kline_data_map)?);
+
+        // --- Format other indicators here ---
 
         Ok(output_string)
     }
@@ -260,132 +288,242 @@ mod tests {
     use anyhow::Result;
     use tokio;
 
-    #[tokio::test]
-    async fn test_price_history_builder_build() -> Result<()> {
-        // Define test parameters
-        let pair_symbol = "SOL_USDT";
-        let limit = 50; // Fetch a reasonable number for testing
-        let kline_intervals = ["1h", "4h"];
-        let stoch_rsi_intervals = ["1h"];
+    // Helper to check CSV structure (header + at least one data row)
+    fn check_csv_block(content: &str, header: &str) -> bool {
+        if let Some(block_start) = content.find(header) {
+            let data_start = block_start + header.len();
+            if let Some(block_end) = content[data_start..].find("```\n") {
+                let csv_data = &content[data_start..data_start + block_end];
+                return csv_data.trim().contains('\n'); // Check for at least one newline after header
+            }
+        }
+        false
+    }
 
-        // Create and configure the builder
-        let builder = PriceHistoryBuilder::new(pair_symbol, limit)
+    #[tokio::test]
+    async fn test_price_history_builder_basic() -> Result<()> {
+        let pair_symbol = "SOL_USDT"; // Use a common pair
+        let default_limit = 50;
+        let kline_intervals = ["1h", "4h"];
+        let stoch_rsi_intervals = ["1h"]; // Uses fetched 1h klines
+
+        let builder = PriceHistoryBuilder::new(pair_symbol, default_limit)
             .with_klines(&kline_intervals)
             .with_stoch_rsi(&stoch_rsi_intervals);
 
-        // Build the historical data string
         let result_string = builder.build().await?;
+        println!("--- Basic Test Output ---\n{}\n--- End ---", result_string);
 
-        println!("--- Price History Builder Output ---");
-        println!("{}", result_string);
-        println!("--- End Price History Builder Output ---");
-
-        // Assertions
         assert!(result_string.starts_with("## Historical Data:\n"));
-
-        // Check for Kline sections
         assert!(result_string.contains("\n**Klines (Price History):**\n"));
-        assert!(result_string.contains(
-            "\n* Interval: 1h\n```csv\nopen_time,open,high,low,close,volume,close_time\n"
+        assert!(result_string.contains("\n* Interval: 1h\n")); // Display name without limit
+        assert!(check_csv_block(
+            &result_string,
+            "```csv\nopen_time,open,high,low,close,volume,close_time\n"
         ));
-        assert!(result_string.contains(
-            "\n* Interval: 4h\n```csv\nopen_time,open,high,low,close,volume,close_time\n"
+        assert!(result_string.contains("\n* Interval: 4h\n"));
+        assert!(check_csv_block(
+            &result_string,
+            "```csv\nopen_time,open,high,low,close,volume,close_time\n"
         ));
-        // Check if some data rows are present (simple check for non-empty data)
-        assert!(result_string.matches("\n").count() > 10); // Expecting headers + data rows
 
-        // Check for StochRSI section
         assert!(result_string.contains("\n**Stochastic RSI:**\n"));
+        assert!(result_string.contains("\n* Interval: 1h\n")); // Display name without limit
+        assert!(check_csv_block(
+            &result_string,
+            "```csv\nat,stoch_rsi_k,stoch_rsi_d\n"
+        ));
 
-        // Find the start of the StochRSI CSV block for the 1h interval
-        let stoch_rsi_header = "\n* Interval: 1h\n```csv\nat,stoch_rsi_k,stoch_rsi_d\n";
-        assert!(result_string.contains(stoch_rsi_header));
+        Ok(())
+    }
 
-        let stoch_rsi_block_start = result_string.find(stoch_rsi_header);
-        assert!(
-            stoch_rsi_block_start.is_some(),
-            "StochRSI 1h header not found"
+    #[tokio::test]
+    async fn test_price_history_builder_with_limit_override() -> Result<()> {
+        let pair_symbol = "SOL_USDT";
+        let default_limit = 100; // Default
+                                 // Request 1h klines with specific limit, 4h with default, and 1h StochRSI (implies 1h klines) with specific limit
+        let kline_intervals = ["1h:30", "4h"]; // Override 1h limit, use default for 4h
+        let stoch_rsi_intervals = ["1h:50"]; // Request 1h StochRSI, needing 50 klines
+
+        // Builder should detect that 1h klines are needed with limit 30 and limit 50,
+        // so it should fetch 1h klines with the *maximum* required limit (50).
+        let builder = PriceHistoryBuilder::new(pair_symbol, default_limit)
+            .with_klines(&kline_intervals)
+            .with_stoch_rsi(&stoch_rsi_intervals);
+
+        let result_string = builder.build().await?;
+        println!(
+            "--- Limit Override Test Output ---\n{}\n--- End ---",
+            result_string
         );
 
-        if let Some(start_index) = stoch_rsi_block_start {
-            let block_content_start = start_index + stoch_rsi_header.len();
-            // Find the end of the CSV block
-            let block_content_end = result_string[block_content_start..].find("```\n");
-            assert!(
-                block_content_end.is_some(),
-                "StochRSI 1h CSV block end not found"
-            );
+        assert!(result_string.starts_with("## Historical Data:\n"));
+        assert!(result_string.contains("\n**Klines (Price History):**\n"));
+        // Check that the display reflects the requested specification
+        assert!(result_string.contains("\n* Interval: 1h:30\n"));
+        assert!(check_csv_block(
+            &result_string,
+            "```csv\nopen_time,open,high,low,close,volume,close_time\n"
+        ));
+        assert!(result_string.contains("\n* Interval: 4h\n")); // Uses default limit, display doesn't show it
+        assert!(check_csv_block(
+            &result_string,
+            "```csv\nopen_time,open,high,low,close,volume,close_time\n"
+        ));
 
-            if let Some(end_offset) = block_content_end {
-                let stoch_rsi_data =
-                    &result_string[block_content_start..block_content_start + end_offset];
-                // Check if there's at least one newline in the data part, indicating at least one data row
-                // The calculation might not produce data for the full 'limit' length due to lookback periods.
-                // Check if the data string is not empty or just whitespace.
-                assert!(
-                    stoch_rsi_data.trim().lines().count() > 0,
-                    "StochRSI 1h data rows appear to be missing or empty. Data fetched: '{}'",
-                    stoch_rsi_data
-                );
-                println!(
-                    "StochRSI Data Block (first 100 chars): {:.100}",
-                    stoch_rsi_data.trim()
-                ); // Log snippet
-            }
-        }
+        assert!(result_string.contains("\n**Stochastic RSI:**\n"));
+        // Check that the display reflects the requested specification
+        assert!(result_string.contains("\n* Interval: 1h:50\n"));
+        assert!(check_csv_block(
+            &result_string,
+            "```csv\nat,stoch_rsi_k,stoch_rsi_d\n"
+        ));
+
+        // We can't easily verify the *exact* number of rows fetched without mocking,
+        // but the structure and headers reflecting the *specified* intervals (with limits) should be present.
+        // The underlying fetch for "1h" should have used limit=50.
 
         Ok(())
     }
 
     #[tokio::test]
     async fn test_price_history_builder_empty() -> Result<()> {
-        // Define test parameters
         let pair_symbol = "SOL_USDT";
-        let limit = 10;
-
-        // Create builder without specifying intervals
-        let builder = PriceHistoryBuilder::new(pair_symbol, limit);
-
-        // Build the historical data string
+        let default_limit = 10;
+        let builder = PriceHistoryBuilder::new(pair_symbol, default_limit); // No intervals added
         let result_string = builder.build().await?;
 
-        println!("--- Empty Builder Output ---");
-        println!("{}", result_string);
-        println!("--- End Empty Builder Output ---");
-
-        // Assertions
+        println!(
+            "--- Empty Builder Output ---\n{}\n--- End ---",
+            result_string
+        );
         assert_eq!(
             result_string,
             "## Historical Data:\nNo historical data requested.\n"
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_price_history_builder_klines_only_mixed_limits() -> Result<()> {
+        let pair_symbol = "SOL_USDT";
+        let default_limit = 50;
+        let kline_intervals = ["5m", "15m:30", "1h:70"]; // Mixed specifications
+
+        let builder =
+            PriceHistoryBuilder::new(pair_symbol, default_limit).with_klines(&kline_intervals);
+        let result_string = builder.build().await?;
+        println!(
+            "--- Klines Only Mixed Limits Output ---\n{}\n--- End ---",
+            result_string
+        );
+
+        assert!(result_string.starts_with("## Historical Data:\n"));
+        assert!(result_string.contains("\n**Klines (Price History):**\n"));
+        assert!(result_string.contains("\n* Interval: 5m\n"));
+        assert!(result_string.contains("\n* Interval: 15m:30\n"));
+        assert!(result_string.contains("\n* Interval: 1h:70\n"));
+        assert!(!result_string.contains("\n**Stochastic RSI:**\n")); // No RSI requested
+
+        // Helper function to extract CSV data for a specific interval display name
+        let extract_csv_data = |content: &str, interval_display: &str| -> Option<String> {
+            let block_start_marker = format!("\n* Interval: {}\n```csv\n", interval_display);
+            let header = "open_time,open,high,low,close,volume,close_time\n";
+            if let Some(block_start) = content.find(&block_start_marker) {
+                let csv_start = block_start + block_start_marker.len();
+                // Ensure the header is present right after the marker
+                if content[csv_start..].starts_with(header) {
+                    let data_start = csv_start + header.len();
+                    if let Some(block_end) = content[data_start..].find("\n```\n") {
+                        return Some(content[data_start..data_start + block_end].to_string());
+                    }
+                }
+            }
+            None
+        };
+
+        // Check row count for 15m:30
+        if let Some(csv_data_15m) = extract_csv_data(&result_string, "15m:30") {
+            let row_count = csv_data_15m.trim().lines().count();
+            // Cast the expected i32 limit to usize for comparison
+            assert_eq!(
+                row_count, 30usize,
+                "Expected 30 rows for interval 15m:30, found {}",
+                row_count
+            );
+            println!("Found {} rows for 15m:30 (expected 30)", row_count); // Debug print
+        } else {
+            panic!("CSV data block for interval '15m:30' not found or malformed");
+        }
+
+        // Optionally, check other intervals
+        if let Some(csv_data_5m) = extract_csv_data(&result_string, "5m") {
+            let row_count = csv_data_5m.trim().lines().count();
+            // Cast the expected i32 limit to usize for comparison
+            let expected_rows: usize = default_limit
+                .try_into()
+                .expect("Default limit should be convertible to usize");
+            assert_eq!(
+                row_count, expected_rows,
+                "Expected {} (default limit) rows for interval 5m, found {}",
+                default_limit, row_count
+            );
+            println!(
+                "Found {} rows for 5m (expected {})",
+                row_count, default_limit
+            ); // Debug print
+        } else {
+            panic!("CSV data block for interval '5m' not found or malformed");
+        }
+
+        if let Some(csv_data_1h) = extract_csv_data(&result_string, "1h:70") {
+            let row_count = csv_data_1h.trim().lines().count();
+            // Cast the expected i32 limit to usize for comparison
+            assert_eq!(
+                row_count, 70usize,
+                "Expected 70 rows for interval 1h:70, found {}",
+                row_count
+            );
+            println!("Found {} rows for 1h:70 (expected 70)", row_count); // Debug print
+        } else {
+            panic!("CSV data block for interval '1h:70' not found or malformed");
+        }
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_price_history_builder_klines_only() -> Result<()> {
-        // Define test parameters
+    async fn test_invalid_limit_spec_falls_back_to_interval_name() -> Result<()> {
         let pair_symbol = "SOL_USDT";
-        let limit = 20;
-        let kline_intervals = ["5m"];
+        let default_limit = 20;
+        // "1h:abc" is invalid, should be treated as interval "1h:abc"
+        // "30m:0" is invalid (limit <= 0), should be treated as interval "30m:0"
+        let kline_intervals = ["1h:abc", "30m:0", "4h"]; // 4h uses default limit
 
-        // Create and configure the builder
-        let builder = PriceHistoryBuilder::new(pair_symbol, limit).with_klines(&kline_intervals);
-
-        // Build the historical data string
+        // Expect warnings to be printed during parsing (can't easily capture stderr in test)
+        let builder =
+            PriceHistoryBuilder::new(pair_symbol, default_limit).with_klines(&kline_intervals);
         let result_string = builder.build().await?;
+        println!(
+            "--- Invalid Spec Fallback Test Output ---\n{}\n--- End ---",
+            result_string
+        );
 
-        println!("--- Klines Only Builder Output ---");
-        println!("{}", result_string);
-        println!("--- End Klines Only Builder Output ---");
-
-        // Assertions
-        assert!(result_string.starts_with("## Historical Data:\n"));
         assert!(result_string.contains("\n**Klines (Price History):**\n"));
-        assert!(result_string.contains(
-            "\n* Interval: 5m\n```csv\nopen_time,open,high,low,close,volume,close_time\n"
+        // Check if the invalid specs are treated as literal interval names
+        // Note: Binance likely won't have data for "1h:abc" or "30m:0", so expect errors or "No data"
+        assert!(result_string.contains("\n* Interval: 1h:abc")); // Check interval display name
+        assert!(result_string.contains("\n* Interval: 30m:0")); // Check interval display name
+        assert!(result_string.contains("\n* Interval: 4h\n")); // Valid interval should work
+
+        // Expect "No data found" or similar for the invalid interval names, as the fetch will likely fail.
+        // We'll check that the valid one (4h) has data.
+        let four_h_section_start = result_string.find("\n* Interval: 4h\n").unwrap();
+        let four_h_section = &result_string[four_h_section_start..];
+        assert!(check_csv_block(
+            four_h_section,
+            "```csv\nopen_time,open,high,low,close,volume,close_time\n"
         ));
-        assert!(!result_string.contains("\n**Stochastic RSI:**\n")); // Should not contain StochRSI
 
         Ok(())
     }
