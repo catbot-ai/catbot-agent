@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Context, Result};
-
 use reqwest::Client;
 use serde_json::Value as JsonValue;
 
@@ -120,6 +119,32 @@ pub async fn fetch_binance_kline_usdt_csv(
         csv_string.push('\n');
     }
 
+    Ok(csv_string)
+}
+
+pub fn klines_to_csv(klines: &[Kline]) -> anyhow::Result<String> {
+    let mut csv_string = String::new();
+    // Add header
+    csv_string.push_str("open_time,open,high,low,close,volume,close_time\n");
+
+    // Add each Kline record
+    for kline in klines {
+        let values = kline.to_array()?;
+        let mut is_first = true;
+        for value in values {
+            if !is_first {
+                csv_string.push(',');
+            }
+            // Handle potential non-number values gracefully if Kline::to_array can return them
+            match value {
+                JsonValue::Number(n) => csv_string.push_str(&n.to_string()),
+                JsonValue::String(s) => csv_string.push_str(&s), // Or handle as error if only numbers expected
+                _ => csv_string.push_str(""), // Or some placeholder/error indication
+            }
+            is_first = false;
+        }
+        csv_string.push('\n');
+    }
     Ok(csv_string)
 }
 

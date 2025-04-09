@@ -11,9 +11,10 @@ pub fn calculate_stoch_rsi(
     stoch_period: usize,
     smooth_k: usize,
     smooth_d: usize,
-) -> anyhow::Result<(Vec<f64>, Vec<f64>)> {
+) -> anyhow::Result<(Vec<u64>, Vec<f64>, Vec<f64>)> {
     // Step 1: Extract closing prices from M4rsCandlestick
     let closing_prices: Vec<f64> = candles.iter().map(|c| c.close).collect();
+    let closing_at: Vec<u64> = candles.iter().map(|c| c.at).collect();
 
     // Ensure there are enough candles for calculation
     if closing_prices.len() < rsi_period + stoch_period + smooth_k + smooth_d {
@@ -82,29 +83,33 @@ pub fn calculate_stoch_rsi(
         d[i] = k_slice.iter().sum::<f64>() / smooth_d as f64;
     }
 
-    Ok((smoothed_k, d))
+    Ok((closing_at, smoothed_k, d))
 }
 
-pub fn get_stoch_rsi_csv(smoothed_k: &[f64], d: &[f64]) -> String {
+pub fn get_stoch_rsi_csv(closing_at: &[u64], smoothed_k: &[f64], d: &[f64]) -> String {
     let mut csv_string = String::new();
-    csv_string.push_str("index,stoch_rsi_k,stoch_rsi_d\n"); // Add CSV header
+    csv_string.push_str("index,at,stoch_rsi_k,stoch_rsi_d\n"); // Add CSV header
 
     // Ensure both vectors have the same length
     let len = smoothed_k.len().min(d.len());
 
     for i in 0..len {
-        csv_string.push_str(&format!("{},{:.2},{:.2}\n", i, smoothed_k[i], d[i]));
+        csv_string.push_str(&format!(
+            "{},{},{:.2},{:.2}\n",
+            i, closing_at[i], smoothed_k[i], d[i]
+        ));
     }
 
     csv_string
 }
 
-pub fn get_many_stoch_rsi_csv(klines: Vec<Kline>) -> anyhow::Result<String> {
+pub fn get_many_stoch_rsi_csv(klines: &Vec<Kline>) -> anyhow::Result<String> {
     let m4rs_candlesticks = klines
         .iter()
         .map(kline_to_m4rs_candlestick)
         .collect::<Vec<_>>();
-    let (stoch_rsi_k, stoch_rsi_d) = calculate_stoch_rsi(&m4rs_candlesticks, 14, 14, 3, 3)?;
-    let stoch_rsi_csv_string = get_stoch_rsi_csv(&stoch_rsi_k, &stoch_rsi_d);
+    let (closing_at, stoch_rsi_k, stoch_rsi_d) =
+        calculate_stoch_rsi(&m4rs_candlesticks, 14, 14, 3, 3)?;
+    let stoch_rsi_csv_string = get_stoch_rsi_csv(&closing_at, &stoch_rsi_k, &stoch_rsi_d);
     Ok(stoch_rsi_csv_string)
 }
