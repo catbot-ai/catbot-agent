@@ -33,6 +33,40 @@ impl<'a> PriceHistoryBuilder<'a> {
         }
     }
 
+    // Helper to parse interval specifications using parse_interval_spec.
+    // Returns a vector of (interval_name, optional_limit) tuples.
+    // This can be used by methods like `with_klines` and `with_stoch_rsi`
+    // if the internal storage is updated to Vec<(String, Option<i32>)>.
+    #[allow(dead_code)] // This helper is not yet integrated into the builder logic.
+    fn parse_interval_specs_list(&self, specs: &[&str]) -> Vec<(String, Option<i32>)> {
+        specs.iter().map(|s| Self::parse_interval_spec(s)).collect()
+    }
+
+    // Helper function to parse interval specification strings like "1h" or "1h:200".
+    // Returns the interval name (e.g., "1h") and an optional limit override.
+    // This function itself doesn't implement the default logic (e.g., defaulting to 100);
+    // the caller would handle the Option<i32> result, potentially using the
+    // builder's main `limit` field as a default if this function returns None.
+    //
+    // Note: Integrating this requires changing how intervals are stored (e.g., Vec<(String, Option<i32>)>)
+    // and how data is fetched in the `build` method to use the specific limit if provided.
+    #[allow(dead_code)] // This helper is not yet integrated into the builder logic.
+    fn parse_interval_spec(spec: &str) -> (String, Option<i32>) {
+        if let Some((interval_part, limit_part)) = spec.rsplit_once(':') {
+            // Check if the part after the colon is a valid positive integer
+            if let Ok(limit) = limit_part.parse::<i32>() {
+                if limit > 0 {
+                    // Valid limit found
+                    return (interval_part.to_string(), Some(limit));
+                }
+                // else: Invalid limit (e.g., "1h:0" or "1h:-5"), treat whole as interval
+            }
+            // else: Part after colon is not a number (e.g., "abc:xyz"), treat whole as interval
+        }
+        // No colon found, or part after colon was not a valid positive limit
+        (spec.to_string(), None)
+    }
+
     pub fn with_klines(mut self, intervals: &[&str]) -> Self {
         self.kline_intervals = intervals.iter().map(|s| s.to_string()).collect();
         self
