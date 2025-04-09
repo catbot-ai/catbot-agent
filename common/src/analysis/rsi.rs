@@ -88,15 +88,19 @@ pub fn calculate_stoch_rsi(
 
 pub fn get_stoch_rsi_csv(closing_at: &[u64], smoothed_k: &[f64], d: &[f64]) -> String {
     let mut csv_string = String::new();
-    csv_string.push_str("index,at,stoch_rsi_k,stoch_rsi_d\n"); // Add CSV header
+    csv_string.push_str("at,stoch_rsi_k,stoch_rsi_d\n"); // Add CSV header
 
     // Ensure both vectors have the same length
     let len = smoothed_k.len().min(d.len());
 
     for i in 0..len {
+        if smoothed_k[i] <= 0.0 || d[i] <= 0.0 {
+            continue; // Skip this row if K or D is not positive
+        }
+
         csv_string.push_str(&format!(
-            "{},{},{:.2},{:.2}\n",
-            i, closing_at[i], smoothed_k[i], d[i]
+            "{},{:.2},{:.2}\n",
+            closing_at[i], smoothed_k[i], d[i]
         ));
     }
 

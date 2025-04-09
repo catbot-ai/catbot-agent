@@ -45,6 +45,107 @@ impl<'a> PriceHistoryBuilder<'a> {
 
     // Add methods like .with_ma(), .with_bb() here later
 
+    // --- Format Klines ---
+    fn format_klines_section(
+        &self,
+        kline_data_map: &HashMap<String, Vec<Kline>>,
+    ) -> Result<String> {
+        let mut klines_output = String::new();
+        if !self.kline_intervals.is_empty() {
+            klines_output.push_str("\n**Klines (Price History):**\n");
+            // Sort intervals for consistent output order (optional but nice)
+            let mut sorted_kline_intervals = self.kline_intervals.clone();
+            // Basic sort is usually fine for typical intervals like "1m", "5m", "1h"
+            sorted_kline_intervals.sort();
+
+            for interval in &sorted_kline_intervals {
+                if let Some(data) = kline_data_map.get(interval) {
+                    if data.is_empty() {
+                        klines_output.push_str(&format!(" ({}) No data found.\n", interval));
+                        continue;
+                    }
+                    // Use the helper function klines_to_csv which returns Result<String>
+                    match klines_to_csv(data) {
+                        Ok(csv_data) => {
+                            klines_output.push_str(&format!("\n* Interval: {}\n", interval));
+                            klines_output.push_str("```csv\n");
+                            klines_output.push_str(&csv_data);
+                            klines_output.push_str("```\n");
+                        }
+                        Err(e) => {
+                            klines_output.push_str(&format!(
+                                "\n* Interval: {} (Error formatting Klines to CSV: {})\n",
+                                interval, e
+                            ));
+                            eprintln!("Error formatting klines to CSV for {}: {}", interval, e);
+                        }
+                    }
+                } else {
+                    // This case should ideally not be reached if try_join_all succeeded
+                    klines_output.push_str(&format!(
+                        "\n* Interval: {} (Data unexpectedly missing after fetch)\n",
+                        interval
+                    ));
+                    eprintln!(
+                        "Warning: Kline data for interval {} requested but not found in map.",
+                        interval
+                    );
+                }
+            }
+        }
+        Ok(klines_output)
+    }
+
+    // --- Format StochRSI ---
+    fn format_stoch_rsi_section(
+        &self,
+        kline_data_map: &HashMap<String, Vec<Kline>>,
+    ) -> Result<String> {
+        let mut stoch_rsi_output = String::new();
+        if !self.stoch_rsi_intervals.is_empty() {
+            stoch_rsi_output.push_str("\n**Stochastic RSI:**\n");
+            // Sort intervals for consistent output order (optional but nice)
+            let mut sorted_stoch_rsi_intervals = self.stoch_rsi_intervals.clone();
+            sorted_stoch_rsi_intervals.sort();
+
+            for interval in &sorted_stoch_rsi_intervals {
+                if let Some(data) = kline_data_map.get(interval) {
+                    if data.is_empty() {
+                        stoch_rsi_output.push_str(&format!(
+                            " ({}) No kline data available to calculate StochRSI.\n",
+                            interval
+                        ));
+                        continue;
+                    }
+
+                    // Call the function based on the diagnostic information: takes &Vec<Kline>, returns Result<String>
+                    match get_many_stoch_rsi_csv(data) {
+                        Ok(stoch_rsi_csv) => {
+                            // Handles the Result::Ok case
+                            stoch_rsi_output.push_str(&format!("\n* Interval: {}\n", interval));
+                            stoch_rsi_output.push_str("```csv\n");
+                            stoch_rsi_output.push_str(&stoch_rsi_csv); // Use the String from Ok(...)
+                            stoch_rsi_output.push_str("```\n");
+                        }
+                        Err(e) => {
+                            // Handles the Result::Err case
+                            stoch_rsi_output.push_str(&format!(
+                                "\n* Interval: {} (Error calculating StochRSI: {})\n",
+                                interval, e
+                            ));
+                            eprintln!("Error calculating StochRSI for {}: {}", interval, e);
+                        }
+                    }
+                } else {
+                    // This case should ideally not be reached
+                    stoch_rsi_output.push_str(&format!("\n* Interval: {} (Kline data unexpectedly missing for StochRSI calculation)\n", interval));
+                    eprintln!("Warning: Kline data for interval {} needed for StochRSI but not found in map.", interval);
+                }
+            }
+        }
+        Ok(stoch_rsi_output)
+    }
+
     /// Fetches all required data concurrently and formats it into a single string.
     pub async fn build(&self) -> Result<String> {
         let mut output_string = String::new();
@@ -110,93 +211,10 @@ impl<'a> PriceHistoryBuilder<'a> {
         );
 
         // --- Format Klines ---
-        if !self.kline_intervals.is_empty() {
-            output_string.push_str("\n**Klines (Price History):**\n");
-            // Sort intervals for consistent output order (optional but nice)
-            let mut sorted_kline_intervals = self.kline_intervals.clone();
-            // Basic sort is usually fine for typical intervals like "1m", "5m", "1h"
-            sorted_kline_intervals.sort();
-
-            for interval in &sorted_kline_intervals {
-                if let Some(data) = kline_data_map.get(interval) {
-                    if data.is_empty() {
-                        output_string.push_str(&format!(" ({}) No data found.\n", interval));
-                        continue;
-                    }
-                    // Use the helper function klines_to_csv which returns Result<String>
-                    match klines_to_csv(data) {
-                        Ok(csv_data) => {
-                            output_string.push_str(&format!("\n* Interval: {}\n", interval));
-                            output_string.push_str("```csv\n");
-                            output_string.push_str(&csv_data);
-                            output_string.push_str("```\n");
-                        }
-                        Err(e) => {
-                            output_string.push_str(&format!(
-                                "\n* Interval: {} (Error formatting Klines to CSV: {})\n",
-                                interval, e
-                            ));
-                            eprintln!("Error formatting klines to CSV for {}: {}", interval, e);
-                        }
-                    }
-                } else {
-                    // This case should ideally not be reached if try_join_all succeeded
-                    output_string.push_str(&format!(
-                        "\n* Interval: {} (Data unexpectedly missing after fetch)\n",
-                        interval
-                    ));
-                    eprintln!(
-                        "Warning: Kline data for interval {} requested but not found in map.",
-                        interval
-                    );
-                }
-            }
-        }
+        output_string.push_str(&self.format_klines_section(&kline_data_map)?);
 
         // --- Format StochRSI ---
-        if !self.stoch_rsi_intervals.is_empty() {
-            output_string.push_str("\n**Stochastic RSI:**\n");
-            // Sort intervals for consistent output order (optional but nice)
-            let mut sorted_stoch_rsi_intervals = self.stoch_rsi_intervals.clone();
-            sorted_stoch_rsi_intervals.sort();
-
-            for interval in &sorted_stoch_rsi_intervals {
-                if let Some(data) = kline_data_map.get(interval) {
-                    if data.is_empty() {
-                        output_string.push_str(&format!(
-                            " ({}) No kline data available to calculate StochRSI.\n",
-                            interval
-                        ));
-                        continue;
-                    }
-
-                    // Call the function based on the diagnostic information: takes two &[f64], returns Result<String>
-                    match get_many_stoch_rsi_csv(data) {
-                        Ok(stoch_rsi_csv) => {
-                            // Handles the Result::Ok case
-                            output_string.push_str(&format!("\n* Interval: {}\n", interval));
-                            output_string.push_str("```csv\n");
-                            output_string.push_str(&stoch_rsi_csv); // Use the String from Ok(...)
-                            output_string.push_str("```\n");
-                        }
-                        Err(e) => {
-                            // Handles the Result::Err case
-                            output_string.push_str(&format!(
-                                "\n* Interval: {} (Error calculating StochRSI: {})\n",
-                                interval, e
-                            ));
-                            eprintln!("Error calculating StochRSI for {}: {}", interval, e);
-                        }
-                    }
-                } else {
-                    // This case should ideally not be reached
-                    output_string.push_str(&format!("\n* Interval: {} (Kline data unexpectedly missing for StochRSI calculation)\n", interval));
-                    eprintln!("Warning: Kline data for interval {} needed for StochRSI but not found in map.", interval);
-                }
-            }
-        }
-
-        // --- Add formatting for MA, BB etc. here later ---
+        output_string.push_str(&self.format_stoch_rsi_section(&kline_data_map)?);
 
         Ok(output_string)
     }
@@ -206,7 +224,7 @@ impl<'a> PriceHistoryBuilder<'a> {
 mod tests {
     use super::*;
     use anyhow::Result;
-    use tokio; // Make sure tokio is a dev dependency
+    use tokio;
 
     #[tokio::test]
     async fn test_price_history_builder_build() -> Result<()> {
@@ -246,7 +264,7 @@ mod tests {
         assert!(result_string.contains("\n**Stochastic RSI:**\n"));
 
         // Find the start of the StochRSI CSV block for the 1h interval
-        let stoch_rsi_header = "\n* Interval: 1h\n```csv\nindex,at,stoch_rsi_k,stoch_rsi_d\n";
+        let stoch_rsi_header = "\n* Interval: 1h\n```csv\nat,stoch_rsi_k,stoch_rsi_d\n";
         assert!(result_string.contains(stoch_rsi_header));
 
         let stoch_rsi_block_start = result_string.find(stoch_rsi_header);
