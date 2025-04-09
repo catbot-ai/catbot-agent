@@ -236,7 +236,8 @@ pub fn draw_chart(
             // Convert visible_data to M4rsCandlestick and calculate Stoch RSI
             let past_m4rs_candles: Vec<M4rsCandlestick> =
                 visible_data.iter().map(kline_to_m4rs_candlestick).collect();
-            let (stoch_rsi_k, stoch_rsi_d) = calculate_stoch_rsi(&past_m4rs_candles, 14, 14, 3, 3)?;
+            let (_, stoch_rsi_k, stoch_rsi_d) =
+                calculate_stoch_rsi(&past_m4rs_candles, 14, 14, 3, 3)?;
 
             // Align Stoch RSI values with timestamps
             let stoch_rsi_lines: Vec<(DateTime<Tz>, f32, f32)> = visible_data
@@ -1080,7 +1081,7 @@ pub fn draw_stoch_rsi_detail(
     if !klines.is_empty() {
         let past_m4rs_candles: Vec<M4rsCandlestick> =
             klines.iter().map(kline_to_m4rs_candlestick).collect();
-        let (stoch_rsi_k, stoch_rsi_d) = calculate_stoch_rsi(&past_m4rs_candles, 14, 14, 3, 3)?;
+        let (_, stoch_rsi_k, stoch_rsi_d) = calculate_stoch_rsi(&past_m4rs_candles, 14, 14, 3, 3)?;
         let stoch_rsi_detail = format!(
             "Stoch RSI 14 14 3 3 {:.2} {:.2}",
             stoch_rsi_k.last().unwrap(),
