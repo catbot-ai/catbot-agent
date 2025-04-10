@@ -67,9 +67,65 @@ impl<'a> PriceHistoryBuilder<'a> {
         self
     }
 
+    /// Fetches the required Kline data sequentially, one interval at a time.
+    async fn fetch_data(&self) -> Result<HashMap<String, Vec<Kline>>> {
+        let mut all_interval_specs = self.kline_intervals.clone();
+        all_interval_specs.extend(self.stoch_rsi_intervals.clone());
+        // Extend with other indicator intervals here...
+
+        let mut effective_fetch_params: HashMap<String, i32> = HashMap::new();
+        for (name, opt_limit) in &all_interval_specs {
+            let required_limit = opt_limit.unwrap_or(self.default_limit);
+            effective_fetch_params
+                .entry(name.clone())
+                .and_modify(|current_limit| *current_limit = (*current_limit).max(required_limit))
+                .or_insert(required_limit);
+        }
+
+        if effective_fetch_params.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        println!(
+            "Builder: Effective fetch params for {}: {:?}",
+            self.pair_symbol, effective_fetch_params
+        );
+
+        let mut kline_data_map: HashMap<String, Vec<Kline>> = HashMap::new();
+
+        // Fetch data one by one
+        for (interval_name, &limit_to_use) in &effective_fetch_params {
+            let interval = interval_name.clone();
+            let pair_symbol_for_fetch = self.pair_symbol.to_string();
+
+            println!(
+                "Builder: Fetching data for {} interval {} with limit {}",
+                pair_symbol_for_fetch, interval, limit_to_use
+            );
+
+            let kline_data: Vec<Kline> =
+                fetch_binance_kline_usdt::<Kline>(&pair_symbol_for_fetch, &interval, limit_to_use)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "Builder: Failed fetching klines for {} interval {} with limit {}",
+                            pair_symbol_for_fetch, interval, limit_to_use
+                        )
+                    })?;
+
+            kline_data_map.insert(interval.clone(), kline_data);
+        }
+
+        println!(
+            "Builder: Fetched kline data for intervals: {:?}",
+            kline_data_map.keys()
+        );
+        Ok(kline_data_map)
+    }
+
     // --- Internal Data Fetching Logic ---
     /// Fetches the required Kline data concurrently.
-    async fn fetch_data(&self) -> Result<HashMap<String, Vec<Kline>>> {
+    async fn fetch_data_concurrently(&self) -> Result<HashMap<String, Vec<Kline>>> {
         let mut all_interval_specs = self.kline_intervals.clone();
         all_interval_specs.extend(self.stoch_rsi_intervals.clone());
         // Extend with other indicator intervals here...
