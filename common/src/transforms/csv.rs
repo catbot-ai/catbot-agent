@@ -1,7 +1,5 @@
-use std::collections::HashMap;
-
 use anyhow::{Context, Result};
-use futures::future::try_join_all;
+use std::collections::HashMap;
 
 use crate::{
     binance::{fetch_binance_kline_usdt, klines_to_csv},
@@ -68,7 +66,7 @@ impl<'a> PriceHistoryBuilder<'a> {
     }
 
     /// Fetches the required Kline data sequentially, one interval at a time.
-    async fn fetch_data(&self) -> Result<HashMap<String, Vec<Kline>>> {
+    async fn fetch_each_intervals(&self) -> Result<HashMap<String, Vec<Kline>>> {
         let mut all_interval_specs = self.kline_intervals.clone();
         all_interval_specs.extend(self.stoch_rsi_intervals.clone());
         // Extend with other indicator intervals here...
@@ -115,65 +113,6 @@ impl<'a> PriceHistoryBuilder<'a> {
 
             kline_data_map.insert(interval.clone(), kline_data);
         }
-
-        println!(
-            "Builder: Fetched kline data for intervals: {:?}",
-            kline_data_map.keys()
-        );
-        Ok(kline_data_map)
-    }
-
-    // --- Internal Data Fetching Logic ---
-    /// Fetches the required Kline data concurrently.
-    async fn fetch_data_concurrently(&self) -> Result<HashMap<String, Vec<Kline>>> {
-        let mut all_interval_specs = self.kline_intervals.clone();
-        all_interval_specs.extend(self.stoch_rsi_intervals.clone());
-        // Extend with other indicator intervals here...
-
-        let mut effective_fetch_params: HashMap<String, i32> = HashMap::new();
-        for (name, opt_limit) in &all_interval_specs {
-            let required_limit = opt_limit.unwrap_or(self.default_limit);
-            effective_fetch_params
-                .entry(name.clone())
-                .and_modify(|current_limit| *current_limit = (*current_limit).max(required_limit))
-                .or_insert(required_limit);
-        }
-
-        if effective_fetch_params.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        println!(
-            "Builder: Effective fetch params for {}: {:?}",
-            self.pair_symbol, effective_fetch_params
-        );
-
-        let fetch_futures = effective_fetch_params
-            .iter()
-            .map(|(interval_name, &limit_to_use)| {
-                let interval = interval_name.clone();
-                let pair_symbol_for_fetch = self.pair_symbol.to_string();
-
-                async move {
-                    let kline_data: Vec<Kline> = fetch_binance_kline_usdt::<Kline>(
-                        &pair_symbol_for_fetch,
-                        &interval,
-                        limit_to_use,
-                    )
-                    .await
-                    .with_context(|| {
-                        format!(
-                            "Builder: Failed fetching klines for {} interval {} with limit {}",
-                            pair_symbol_for_fetch, interval, limit_to_use
-                        )
-                    })?;
-                    Ok::<_, anyhow::Error>((interval, kline_data))
-                }
-            });
-
-        let fetched_kline_results: Vec<(String, Vec<Kline>)> = try_join_all(fetch_futures).await?;
-        let kline_data_map: HashMap<String, Vec<Kline>> =
-            fetched_kline_results.into_iter().collect();
 
         println!(
             "Builder: Fetched kline data for intervals: {:?}",
@@ -322,7 +261,7 @@ impl<'a> PriceHistoryBuilder<'a> {
             return Ok(output_string);
         }
 
-        let kline_data_map = self.fetch_data().await?;
+        let kline_data_map = self.fetch_each_intervals().await?;
 
         if kline_data_map.is_empty() && any_data_requested {
             output_string
