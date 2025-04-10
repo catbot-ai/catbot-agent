@@ -8,7 +8,7 @@ use chrono::{DateTime, TimeZone};
 use chrono_tz::Tz;
 use common::m4rs::kline_to_m4rs_candlestick;
 use common::numbers::{group_by_fractional_part, FractionalPart};
-use common::rsi::calculate_stoch_rsi;
+use common::rsi::{calculate_stoch_rsi, get_latest_bb_ma};
 use common::{Kline, LongShortSignal, OrderBook};
 use image::{ImageBuffer, Rgb};
 use imageproc::drawing::{
@@ -807,37 +807,9 @@ pub fn draw_bollinger_detail(
     font: &impl Font,
 ) -> Result<(), Box<dyn Error>> {
     if !klines.is_empty() {
-        let past_m4rs_candles: Vec<M4rsCandlestick> =
-            klines.iter().map(kline_to_m4rs_candlestick).collect();
-        let bb_result = bolinger_band(&past_m4rs_candles, 20)?;
-        let latest_bb = bb_result.last().unwrap();
-        let ma_7 = past_m4rs_candles
-            .iter()
-            .rev()
-            .take(7)
-            .map(|c| c.close)
-            .sum::<f64>()
-            / 7.0;
-        let ma_25 = past_m4rs_candles
-            .iter()
-            .rev()
-            .take(25)
-            .map(|c| c.close)
-            .sum::<f64>()
-            / 25.0;
-        let ma_99 = past_m4rs_candles
-            .iter()
-            .rev()
-            .take(99)
-            .map(|c| c.close)
-            .sum::<f64>()
-            / 99.0;
-        let ta_detail = format!(
-            "MA 7 close 0 SMA 9 {:.2}\nMA 25 close 0 SMA 9 {:.2}\nMA 99 close 0 SMA 9 {:.2}\nBB 20 2 {:.2} {:.2} {:.2}",
-            ma_7, ma_25, ma_99, latest_bb.avg, latest_bb.avg + 2.0 * latest_bb.sigma, latest_bb.avg - 2.0 * latest_bb.sigma
-        );
+        let ma_bb_detail = get_latest_bb_ma(klines)?;
         let mut y_offset = 50.0;
-        for line in ta_detail.lines() {
+        for line in ma_bb_detail.lines() {
             draw_label(
                 img,
                 font,

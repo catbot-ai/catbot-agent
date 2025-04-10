@@ -1,9 +1,7 @@
-use anyhow::bail;
-use m4rs::Candlestick;
-
-use crate::Kline;
-
 use super::m4rs::kline_to_m4rs_candlestick;
+use crate::Kline;
+use anyhow::bail;
+use m4rs::{bolinger_band, Candlestick};
 
 pub fn calculate_stoch_rsi(
     candles: &[Candlestick],
@@ -86,7 +84,7 @@ pub fn calculate_stoch_rsi(
     Ok((closing_at, smoothed_k, d))
 }
 
-pub fn get_stoch_rsi_csv(closing_at: &[u64], smoothed_k: &[f64], d: &[f64]) -> String {
+pub fn parse_stoch_rsi_csv(closing_at: &[u64], smoothed_k: &[f64], d: &[f64]) -> String {
     let mut csv_string = String::new();
     csv_string.push_str("at,stoch_rsi_k,stoch_rsi_d\n"); // Add CSV header
 
@@ -107,13 +105,75 @@ pub fn get_stoch_rsi_csv(closing_at: &[u64], smoothed_k: &[f64], d: &[f64]) -> S
     csv_string
 }
 
-pub fn get_many_stoch_rsi_csv(klines: &Vec<Kline>) -> anyhow::Result<String> {
+pub fn get_stoch_rsi_csv(klines: &Vec<Kline>) -> anyhow::Result<String> {
     let m4rs_candlesticks = klines
         .iter()
         .map(kline_to_m4rs_candlestick)
         .collect::<Vec<_>>();
     let (closing_at, stoch_rsi_k, stoch_rsi_d) =
         calculate_stoch_rsi(&m4rs_candlesticks, 14, 14, 3, 3)?;
-    let stoch_rsi_csv_string = get_stoch_rsi_csv(&closing_at, &stoch_rsi_k, &stoch_rsi_d);
-    Ok(stoch_rsi_csv_string)
+    let csv_string = parse_stoch_rsi_csv(&closing_at, &stoch_rsi_k, &stoch_rsi_d);
+    Ok(csv_string)
+}
+
+pub fn parse_bb_csv(past_bb_lines: &Vec<(u64, f32, f32, f32)>) -> String {
+    let mut csv_string = String::new();
+    csv_string.push_str("at,avg,upper,lower\n"); // Add CSV header
+
+    for &(at, avg, upper, lower) in past_bb_lines {
+        csv_string.push_str(&format!("{},{:.2},{:.2},{:.2}\n", at, avg, upper, lower));
+    }
+
+    csv_string
+}
+
+pub fn get_bb_csv(klines: &Vec<Kline>) -> anyhow::Result<String> {
+    let past_m4rs_candles: Vec<Candlestick> =
+        klines.iter().map(kline_to_m4rs_candlestick).collect();
+    let bb_result = bolinger_band(&past_m4rs_candles, 20)?;
+    let bb_lines: Vec<(u64, f32, f32, f32)> = bb_result
+        .iter()
+        .map(|entry| {
+            let t = entry.at;
+            let avg = entry.avg as f32;
+            let upper = (entry.avg + 2.0 * entry.sigma) as f32;
+            let lower = (entry.avg - 2.0 * entry.sigma) as f32;
+            (t, avg, upper, lower)
+        })
+        .collect();
+    let csv_string = parse_bb_csv(&bb_lines);
+    Ok(csv_string)
+}
+
+pub fn get_latest_bb_ma(klines: &[Kline]) -> anyhow::Result<String> {
+    let past_m4rs_candles: Vec<Candlestick> =
+        klines.iter().map(kline_to_m4rs_candlestick).collect();
+    let bb_result = bolinger_band(&past_m4rs_candles, 20)?;
+    let latest_bb = bb_result.last().unwrap();
+    let ma_7 = past_m4rs_candles
+        .iter()
+        .rev()
+        .take(7)
+        .map(|c| c.close)
+        .sum::<f64>()
+        / 7.0;
+    let ma_25 = past_m4rs_candles
+        .iter()
+        .rev()
+        .take(25)
+        .map(|c| c.close)
+        .sum::<f64>()
+        / 25.0;
+    let ma_99 = past_m4rs_candles
+        .iter()
+        .rev()
+        .take(99)
+        .map(|c| c.close)
+        .sum::<f64>()
+        / 99.0;
+
+    Ok(format!(
+        "MA 7 close 0 SMA 9 {:.2}\nMA 25 close 0 SMA 9 {:.2}\nMA 99 close 0 SMA 9 {:.2}\nBB 20 2 {:.2} {:.2} {:.2}",
+        ma_7, ma_25, ma_99, latest_bb.avg, latest_bb.avg + 2.0 * latest_bb.sigma, latest_bb.avg - 2.0 * latest_bb.sigma
+    ))
 }

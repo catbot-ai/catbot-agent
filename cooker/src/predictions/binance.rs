@@ -32,6 +32,14 @@ pub async fn get_binance_prompt(
                 .map(String::as_str)
                 .collect::<Vec<_>>()
                 .as_slice(),
+        )
+        .with_latest_bb_ma(
+            context
+                .lastest_bb_ma_intervals
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .as_slice(),
         );
 
     // Get the full report string from the builder

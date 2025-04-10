@@ -127,12 +127,14 @@ mod tests {
     async fn build_historical_data_report(
         pair_symbol: &str,
         // Optional: Add specific intervals if needed for testing different scenarios
-        // kline_intervals: Option<&[&str]>,
-        // stoch_rsi_intervals: Option<&[&str]>
+        kline_intervals: &[&str],
+        stoch_rsi_intervals: &[&str],
+        latest_bb_ma_intervals: &[&str],
     ) -> Result<String> {
         // Use default intervals similar to get_binance_prompt for consistency
-        let kline_intervals = ["5m:100", "15m:100", "1h:100", "4h:100", "1d:100"]; // Reduced limits for testing speed
-        let stoch_rsi_intervals = ["1h:100", "4h:100"];
+        // let kline_intervals = ["5m:100", "15m:100", "1h:100", "4h:100", "1d:100"]; // Reduced limits for testing speed
+        // let stoch_rsi_intervals = ["4h:100"];
+        // let latest_bb_ma_intervals = ["4h:100"];
 
         println!(
             "Building historical data report for {} using PriceHistoryBuilder...",
@@ -143,6 +145,7 @@ mod tests {
         let full_report = PriceHistoryBuilder::new(pair_symbol, 100) // Base limit (can be overridden per item)
             .with_klines(&kline_intervals)
             .with_stoch_rsi(&stoch_rsi_intervals)
+            .with_latest_bb_ma(&latest_bb_ma_intervals)
             .build()
             .await
             .with_context(|| format!("Failed to build historical report for {}", pair_symbol))?;
@@ -189,11 +192,33 @@ mod tests {
             maybe_preps_positions,
             maybe_trading_predictions: None,
             kline_intervals: ["1h:24".to_string()].to_vec(),
-            stoch_rsi_intervals: ["1h".to_string()].to_vec(),
+            stoch_rsi_intervals: ["4h".to_string()].to_vec(),
+            lastest_bb_ma_intervals: ["1h".to_string(), "4h".to_string()].to_vec(),
         };
 
         // --- Generate historical data using PriceHistoryBuilder ---
-        let historical_data_content = build_historical_data_report(&pair_symbol).await?;
+        let historical_data_content = build_historical_data_report(
+            &pair_symbol,
+            &context
+                .kline_intervals
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .as_slice(),
+            &context
+                .stoch_rsi_intervals
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .as_slice(),
+            &context
+                .lastest_bb_ma_intervals
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )
+        .await?;
         assert!(
             !historical_data_content.is_empty(),
             "Generated historical data report is empty"
@@ -264,11 +289,33 @@ mod tests {
             maybe_preps_positions: None, // Explicitly None for this test
             maybe_trading_predictions: None,
             kline_intervals: ["1h:24".to_string()].to_vec(),
-            stoch_rsi_intervals: ["1h".to_string()].to_vec(),
+            stoch_rsi_intervals: ["4h".to_string()].to_vec(),
+            lastest_bb_ma_intervals: ["1h".to_string(), "4h".to_string()].to_vec(),
         };
 
         // --- Generate historical data using PriceHistoryBuilder ---
-        let historical_data_content = build_historical_data_report(&pair_symbol).await?;
+        let historical_data_content = build_historical_data_report(
+            &pair_symbol,
+            &context
+                .kline_intervals
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .as_slice(),
+            &context
+                .stoch_rsi_intervals
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .as_slice(),
+            &context
+                .lastest_bb_ma_intervals
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )
+        .await?;
         assert!(
             !historical_data_content.is_empty(),
             "Generated historical data report is empty"

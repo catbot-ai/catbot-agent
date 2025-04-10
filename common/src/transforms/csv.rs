@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use crate::{
     binance::{fetch_binance_kline_usdt, klines_to_csv},
-    rsi::get_many_stoch_rsi_csv,
+    rsi::{get_latest_bb_ma, get_stoch_rsi_csv},
     Kline,
 };
 
@@ -36,8 +36,9 @@ pub struct PriceHistoryBuilder<'a> {
     default_limit: i32,
     kline_intervals: Vec<(String, Option<i32>)>,
     stoch_rsi_intervals: Vec<(String, Option<i32>)>,
-    // Add fields for other indicators later
-    // ma_intervals: Vec<(String, Option<i32>)>,
+    bb_intervals: Vec<(String, Option<i32>)>,
+    ma_intervals: Vec<(String, Option<i32>)>,
+    latest_bb_ma_intervals: Vec<(String, Option<i32>)>,
 }
 
 impl<'a> PriceHistoryBuilder<'a> {
@@ -48,6 +49,9 @@ impl<'a> PriceHistoryBuilder<'a> {
             default_limit,
             kline_intervals: Vec::new(),
             stoch_rsi_intervals: Vec::new(),
+            bb_intervals: Vec::new(),
+            ma_intervals: Vec::new(),
+            latest_bb_ma_intervals: Vec::new(),
         }
     }
 
@@ -65,11 +69,24 @@ impl<'a> PriceHistoryBuilder<'a> {
         self
     }
 
+    pub fn with_bb(mut self, intervals: &[&str]) -> Self {
+        self.bb_intervals
+            .extend(parse_interval_specs_list(intervals));
+        self
+    }
+
+    pub fn with_latest_bb_ma(mut self, intervals: &[&str]) -> Self {
+        self.latest_bb_ma_intervals
+            .extend(parse_interval_specs_list(intervals));
+        self
+    }
+
     /// Fetches the required Kline data sequentially, one interval at a time.
     async fn fetch_each_intervals(&self) -> Result<HashMap<String, Vec<Kline>>> {
         let mut all_interval_specs = self.kline_intervals.clone();
         all_interval_specs.extend(self.stoch_rsi_intervals.clone());
-        // Extend with other indicator intervals here...
+        all_interval_specs.extend(self.bb_intervals.clone());
+        all_interval_specs.extend(self.latest_bb_ma_intervals.clone());
 
         let mut effective_fetch_params: HashMap<String, i32> = HashMap::new();
         for (name, opt_limit) in &all_interval_specs {
@@ -210,7 +227,7 @@ impl<'a> PriceHistoryBuilder<'a> {
                     ));
                     continue;
                 }
-                match get_many_stoch_rsi_csv(data) {
+                match get_stoch_rsi_csv(data) {
                     Ok(stoch_rsi_csv) => {
                         stoch_rsi_output
                             .push_str(&format!("\n* Stochastic RSI: {}\n", interval_name));
@@ -240,6 +257,126 @@ impl<'a> PriceHistoryBuilder<'a> {
         Ok(stoch_rsi_output)
     }
 
+    fn format_bb_section(&self, kline_data_map: &HashMap<String, Vec<Kline>>) -> Result<String> {
+        if self.bb_intervals.is_empty() {
+            return Ok(String::new());
+        }
+
+        let mut output = String::new();
+        output.push_str("\n**Boilinger Band:**\n");
+
+        let mut sorted_requested_bb = self.bb_intervals.clone();
+        sorted_requested_bb.sort_by(|a, b| a.0.cmp(&b.0));
+
+        for (interval_name, opt_limit) in &sorted_requested_bb {
+            let display_interval = match opt_limit {
+                Some(limit) => format!("{}:{}", interval_name, limit),
+                None => interval_name.clone(),
+            };
+
+            if let Some(data) = kline_data_map.get(interval_name) {
+                if data.is_empty() {
+                    output.push_str(&format!(
+                        " ({}) No kline data available to calculate Boilinger Band.\n",
+                        display_interval
+                    ));
+                    continue;
+                }
+                match get_latest_bb_ma(data) {
+                    Ok(csv) => {
+                        output.push_str(&format!("\n* Boilinger Band: {}\n", interval_name));
+                        output.push_str("```csv\n");
+                        output.push_str(&csv);
+                        output.push_str("```\n");
+                    }
+                    Err(e) => {
+                        output.push_str(&format!(
+                            "\n* Interval: {} (Error calculating Boilinger Band: {})\n",
+                            display_interval, e
+                        ));
+                        eprintln!(
+                            "Error calculating Boilinger Band for {}: {}",
+                            interval_name, e
+                        );
+                    }
+                }
+            } else {
+                output.push_str(&format!(
+                    "\n* Interval: {} (Boilinger Band data unexpectedly missing for Boilinger Band calculation)\n",
+                    display_interval
+                ));
+                eprintln!(
+                    "Warning: Boilinger Band data for interval {} needed for Boilinger Band but not found in map.",
+                    interval_name
+                );
+            }
+        }
+        Ok(output)
+    }
+
+    fn format_latest_bb_ma_section(
+        &self,
+        kline_data_map: &HashMap<String, Vec<Kline>>,
+    ) -> Result<String> {
+        if self.latest_bb_ma_intervals.is_empty() {
+            return Ok(String::new());
+        }
+
+        let mut output = String::new();
+        output.push_str("\n**Boilinger Band and Moving Average:**\n");
+
+        let mut sorted_requested_bb_ma = self.latest_bb_ma_intervals.clone();
+        sorted_requested_bb_ma.sort_by(|a, b| a.0.cmp(&b.0));
+
+        for (interval_name, opt_limit) in &sorted_requested_bb_ma {
+            let display_interval = match opt_limit {
+                Some(limit) => format!("{}:{}", interval_name, limit),
+                None => interval_name.clone(),
+            };
+
+            if let Some(data) = kline_data_map.get(interval_name) {
+                if data.is_empty() {
+                    output.push_str(&format!(
+                        " ({}) No kline data available to calculate Boilinger Band and Moving Average.\n",
+                        display_interval
+                    ));
+                    continue;
+                }
+                match get_latest_bb_ma(data) {
+                    Ok(detail) => {
+                        output.push_str(&format!(
+                            "\n* Boilinger Band and Moving Average: {}\n",
+                            interval_name
+                        ));
+                        output.push_str("```\n");
+                        output.push_str(&detail);
+                        output.push_str("\n```\n");
+                    }
+                    Err(e) => {
+                        output.push_str(&format!(
+                            "\n* Interval: {} (Error calculating Boilinger Band and Moving Average: {})\n",
+                            display_interval, e
+                        ));
+                        eprintln!(
+                            "Error calculating Boilinger Band and Moving Average for {}: {}",
+                            interval_name, e
+                        );
+                    }
+                }
+            } else {
+                output.push_str(&format!(
+                        "\n* Interval: {} (Boilinger Band data unexpectedly missing for Boilinger Band calculation)\n",
+                        display_interval
+                    ));
+                eprintln!(
+                        "Warning: Boilinger Band data for interval {} needed for Boilinger Band but not found in map.",
+                        interval_name
+                    );
+            }
+        }
+        Ok(output)
+    }
+
     // --- Public API Method ---
 
     /// **Fetches required data and formats it into a single Markdown report string.**
@@ -253,8 +390,11 @@ impl<'a> PriceHistoryBuilder<'a> {
 
         let klines_requested = !self.kline_intervals.is_empty();
         let rsi_requested = !self.stoch_rsi_intervals.is_empty();
+        let bb_requested = !self.bb_intervals.is_empty();
+        let latest_bb_requested = !self.latest_bb_ma_intervals.is_empty();
+
         // Add checks for other indicators...
-        let any_data_requested = klines_requested || rsi_requested; // || other_requested ...
+        let any_data_requested = klines_requested || rsi_requested || bb_requested; // || other_requested ...
 
         if !any_data_requested {
             output_string.push_str("No historical data intervals specified.\n");
@@ -278,8 +418,18 @@ impl<'a> PriceHistoryBuilder<'a> {
         if klines_requested {
             output_string.push_str(&self.format_klines_section(&kline_data_map)?);
         }
+
         if rsi_requested {
             output_string.push_str(&self.format_stoch_rsi_section(&kline_data_map)?);
+        }
+
+        if bb_requested {
+            output_string.push_str(&self.format_bb_section(&kline_data_map)?);
+        }
+
+        println!("latest_bb_requested:{latest_bb_requested}");
+        if latest_bb_requested {
+            output_string.push_str(&self.format_latest_bb_ma_section(&kline_data_map)?);
         }
 
         Ok(output_string)
