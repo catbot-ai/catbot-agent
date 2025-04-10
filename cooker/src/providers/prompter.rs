@@ -131,7 +131,7 @@ mod tests {
         // stoch_rsi_intervals: Option<&[&str]>
     ) -> Result<String> {
         // Use default intervals similar to get_binance_prompt for consistency
-        let required_kline_intervals = ["5m:100", "15m:100", "1h:100", "4h:100", "1d:100"]; // Reduced limits for testing speed
+        let kline_intervals = ["5m:100", "15m:100", "1h:100", "4h:100", "1d:100"]; // Reduced limits for testing speed
         let stoch_rsi_intervals = ["1h:100", "4h:100"];
 
         println!(
@@ -141,7 +141,7 @@ mod tests {
 
         // Instantiate and configure the builder
         let full_report = PriceHistoryBuilder::new(pair_symbol, 100) // Base limit (can be overridden per item)
-            .with_klines(&required_kline_intervals)
+            .with_klines(&kline_intervals)
             .with_stoch_rsi(&stoch_rsi_intervals)
             .build()
             .await
@@ -188,6 +188,8 @@ mod tests {
             current_price,
             maybe_preps_positions,
             maybe_trading_predictions: None,
+            kline_intervals: ["1h:24".to_string()].to_vec(),
+            stoch_rsi_intervals: ["1h".to_string()].to_vec(),
         };
 
         // --- Generate historical data using PriceHistoryBuilder ---
@@ -261,6 +263,8 @@ mod tests {
             current_price,
             maybe_preps_positions: None, // Explicitly None for this test
             maybe_trading_predictions: None,
+            kline_intervals: ["1h:24".to_string()].to_vec(),
+            stoch_rsi_intervals: ["1h".to_string()].to_vec(),
         };
 
         // --- Generate historical data using PriceHistoryBuilder ---

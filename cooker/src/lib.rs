@@ -52,6 +52,8 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
             None,
             None,
             None,
+            None,
+            None,
         )
         .await;
 
@@ -161,6 +163,8 @@ pub async fn predict_with_gemini(
     maybe_images: Option<Vec<ImageData>>,
     maybe_prompt: Option<String>,
     maybe_trading_predictions: Option<Vec<RefinedTradingPrediction>>,
+    maybe_kline_intervals: Option<Vec<String>>,
+    maybe_stoch_rsi_intervals: Option<Vec<String>>,
 ) -> anyhow::Result<String, String> {
     let gemini_model = if maybe_images.is_some() {
         println!("✨ Some images");
@@ -188,6 +192,22 @@ pub async fn predict_with_gemini(
         None => None,
     };
 
+    // Use provided intervals and fallback
+    let kline_intervals = maybe_kline_intervals.unwrap_or(
+        vec!["5m:864", "15m:672", "1h:168", "4h:84", "1d:100"]
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>(),
+    );
+
+    // Include RSI or other indicators if desired in the report
+    let stoch_rsi_intervals = maybe_stoch_rsi_intervals.unwrap_or(
+        vec!["1h:168", "4h:84"]
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>(),
+    );
+
     // Use provided timeframe or default to "4h"
     let timeframe = maybe_timeframe.unwrap_or_else(|| "4h".to_owned());
 
@@ -198,6 +218,8 @@ pub async fn predict_with_gemini(
         current_price,
         maybe_preps_positions,
         maybe_trading_predictions,
+        kline_intervals,
+        stoch_rsi_intervals,
     };
 
     let prompt = get_binance_prompt(
@@ -281,6 +303,8 @@ mod tests {
             None,
             None,
             None,
+            None,
+            None,
         )
         .await
         .unwrap();
@@ -302,6 +326,8 @@ mod tests {
             gemini_api_key,
             pair_symbol.to_string(),
             1000,
+            None,
+            None,
             None,
             None,
             None,
@@ -344,6 +370,8 @@ mod tests {
             None,                   // No wallet address
             Some("1h".to_string()), // Custom timeframe
             Some(images),           // Pass the image data
+            None,
+            None,
             None,
             None,
         )

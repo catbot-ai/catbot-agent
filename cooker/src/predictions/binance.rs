@@ -14,20 +14,25 @@ pub async fn get_binance_prompt(
     context: TradingContext,
     orderbook_limit: i32,
 ) -> anyhow::Result<String> {
-    // --- Define Required Data Specs ---
-    let required_kline_intervals = [
-        // Include intervals relevant for the desired analysis context
-        "5m:864", "15m:672", "1h:168", "4h:84", "1d:100",
-    ];
-
-    // Include RSI or other indicators if desired in the report
-    let stoch_rsi_intervals = ["1h:168", "4h:84"];
-
     // --- Fetch Data and Build Report String using Builder ---
     println!("Fetching historical data and building report string...");
     let builder = PriceHistoryBuilder::new(&context.pair_symbol, 100)
-        .with_klines(&required_kline_intervals)
-        .with_stoch_rsi(&stoch_rsi_intervals); // Add RSI to the report
+        .with_klines(
+            context
+                .kline_intervals
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )
+        .with_stoch_rsi(
+            context
+                .stoch_rsi_intervals
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .as_slice(),
+        );
 
     // Get the full report string from the builder
     let historical_data_content: String = builder
