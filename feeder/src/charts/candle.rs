@@ -11,8 +11,8 @@ use chrono_tz::Tz;
 use common::Kline;
 use common::LongShortSignal;
 use common::OrderBook;
-use image::Rgb;
 use image::ImageBuffer;
+use image::Rgb;
 use imageproc::drawing::draw_line_segment_mut;
 use imageproc::drawing::text_size;
 use plotters::prelude::*;
@@ -142,8 +142,8 @@ impl Chart {
         mut self,
         scale_x: f32,
         scale_y: f32,
-        color: Rgb<u8>, 
-        background_color: Rgb<u8>, 
+        color: Rgb<u8>,
+        background_color: Rgb<u8>,
         offset_x: i32,
         offset_y: i32,
     ) -> Self {
@@ -202,12 +202,8 @@ impl Chart {
         candle_width: u32,
         chart_width: u32,
     ) -> Result<(DateTime<Tz>, DateTime<Tz>, Vec<Kline>), Box<dyn Error>> {
-        let (start_visible, end_visible, visible_candles) = get_visible_range_and_data(
-            all_candles,
-            timezone,
-            candle_width,
-            chart_width,
-        )?;
+        let (start_visible, end_visible, visible_candles) =
+            get_visible_range_and_data(all_candles, timezone, candle_width, chart_width)?;
 
         // Ensure start_visible is earlier than end_visible
         if start_visible > end_visible {
@@ -256,12 +252,18 @@ impl Chart {
         let chart_width_f32 = chart_width as f64;
 
         let lowest_x = if visible_time_range != 0.0 {
-            ((parse_kline_time(lowest_price_time, &self.timezone).timestamp() as f64 - start_visible.timestamp() as f64) / visible_time_range * chart_width_f32) as f32
+            ((parse_kline_time(lowest_price_time, &self.timezone).timestamp() as f64
+                - start_visible.timestamp() as f64)
+                / visible_time_range
+                * chart_width_f32) as f32
         } else {
             0.0
         };
         let highest_x = if visible_time_range != 0.0 {
-            ((parse_kline_time(highest_price_time, &self.timezone).timestamp() as f64 - start_visible.timestamp() as f64) / visible_time_range * chart_width_f32) as f32
+            ((parse_kline_time(highest_price_time, &self.timezone).timestamp() as f64
+                - start_visible.timestamp() as f64)
+                / visible_time_range
+                * chart_width_f32) as f32
         } else {
             0.0
         };
@@ -277,7 +279,8 @@ impl Chart {
             chart_height as f32 / 2.0
         };
         let highest_y = if price_range != 0.0 {
-            (chart_height * (1.0 - ((highest_price - min_price * 0.95) as f64 / price_range))) as f32
+            (chart_height * (1.0 - ((highest_price - min_price * 0.95) as f64 / price_range)))
+                as f32
         } else {
             chart_height as f32 / 2.0
         };
@@ -295,7 +298,11 @@ impl Chart {
         let font_color = Rgb([255, 255, 255]);
         let border_color = Rgb([255, 255, 255]);
 
-        let new_label_low_x = if label_low_x > chart_width2 { lowest_x - label_width - candle_w2 } else { lowest_x + 12.0 };
+        let new_label_low_x = if label_low_x > chart_width2 {
+            lowest_x - label_width - candle_w2
+        } else {
+            lowest_x + 12.0
+        };
         let low_bounding_rect = draw_hallow_label(
             img,
             font,
@@ -307,10 +314,18 @@ impl Chart {
             border_color,
         )?;
 
-        let new_label_high_x = if label_high_x > chart_width2 { highest_x - label_width - candle_w2 - 6.0 } else { highest_x + 12.0 };
+        let new_label_high_x = if label_high_x > chart_width2 {
+            highest_x - label_width - candle_w2 - 6.0
+        } else {
+            highest_x + 12.0
+        };
 
         // Under other label?
-        let new_label_high_x = if label_high_x < 300.0 { 300.0 } else { new_label_high_x };
+        let new_label_high_x = if label_high_x < 300.0 && label_high_y < 160.0 {
+            300.0
+        } else {
+            new_label_high_x
+        };
 
         let high_bounding_rect = draw_hallow_label(
             img,
@@ -325,7 +340,11 @@ impl Chart {
 
         // Draw line from candlestick to the LOW label
         let line_color = Rgb([255, 255, 255]);
-        let line_x2 = if label_low_x > chart_width2 { low_bounding_rect.left() + low_bounding_rect.width() as i32 } else { low_bounding_rect.left() as i32 };
+        let line_x2 = if label_low_x > chart_width2 {
+            low_bounding_rect.left() + low_bounding_rect.width() as i32
+        } else {
+            low_bounding_rect.left() as i32
+        };
         draw_line_segment_mut(
             img,
             (lowest_x, lowest_y),
@@ -333,7 +352,11 @@ impl Chart {
             line_color,
         );
 
-        let line_x2 = if label_high_x > chart_width2 { high_bounding_rect.left() + high_bounding_rect.width() as i32 } else { high_bounding_rect.left() as i32 };
+        let line_x2 = if label_high_x > chart_width2 {
+            high_bounding_rect.left() + high_bounding_rect.width() as i32
+        } else {
+            high_bounding_rect.left() as i32
+        };
         draw_line_segment_mut(
             img,
             (highest_x - 2.0, highest_y),
@@ -342,7 +365,7 @@ impl Chart {
         );
 
         // Horizon line
-        let line_color = Rgb([255/3, 255/3, 255/3]); 
+        let line_color = Rgb([255 / 3, 255 / 3, 255 / 3]);
         draw_dashed_line_segment_mut(
             img,
             (0.0, lowest_y),
@@ -405,7 +428,8 @@ impl Chart {
         let mut buffer = vec![0; (plot_width * root_height * 3) as usize];
 
         let first_candle_time = parse_kline_time(all_candles[0].open_time, timezone);
-        let last_candle_time = parse_kline_time(all_candles[all_candles.len() - 1].open_time, timezone);
+        let last_candle_time =
+            parse_kline_time(all_candles[all_candles.len() - 1].open_time, timezone);
 
         let prices: Vec<f32> = all_candles
             .iter()
@@ -444,18 +468,20 @@ impl Chart {
             ImageBuffer::from_raw(plot_width, root_height, buffer)
                 .ok_or("Failed to create Rgb ImageBuffer")?;
 
-        let cropped_img: ImageBuffer<Rgb<u8>, Vec<u8>> =
-            image::imageops::crop_imm(&rgb_img, plot_width.saturating_sub(root_width), 0, root_width, root_height).to_image();
+        let cropped_img: ImageBuffer<Rgb<u8>, Vec<u8>> = image::imageops::crop_imm(
+            &rgb_img,
+            plot_width.saturating_sub(root_width),
+            0,
+            root_width,
+            root_height,
+        )
+        .to_image();
 
         let mut cropped_img: ImageBuffer<Rgb<u8>, Vec<u8>> = cropped_img;
 
         let candle_width = 9.0;
-        let (start_visible, end_visible, visible_candles) = self.get_visible_time_range(
-            &all_candles,
-            timezone,
-            candle_width as u32,
-            chart_width,
-        )?;
+        let (start_visible, end_visible, visible_candles) =
+            self.get_visible_time_range(&all_candles, timezone, candle_width as u32, chart_width)?;
 
         // Pass candle_width to draw_low_high_labels
         self.draw_low_high_labels(
@@ -489,7 +515,10 @@ impl Chart {
         )?;
 
         let now = Utc::now();
-        let end_label = now.with_timezone(&chrono_tz::Asia::Tokyo).format("%Y-%m-%d %H:%M").to_string();
+        let end_label = now
+            .with_timezone(&chrono_tz::Asia::Tokyo)
+            .format("%Y-%m-%d %H:%M")
+            .to_string();
         let (end_label_width, _) = text_size(label_scale, &font, &end_label);
         draw_label(
             &mut cropped_img,
@@ -600,7 +629,10 @@ impl Chart {
     ) -> Result<(f32, f32), Box<dyn Error>> {
         let mut top_chart = ChartBuilder::on(&root_area.split_vertically((50).percent()).0)
             .margin_right(margin_right)
-            .build_cartesian_2d(first_candle_time..last_candle_time, min_price * 0.95..max_price * 1.05)?;
+            .build_cartesian_2d(
+                first_candle_time..last_candle_time,
+                min_price * 0.95..max_price * 1.05,
+            )?;
 
         let (lower_bound, upper_bound) = draw_chart(
             root_area,
@@ -643,9 +675,10 @@ mod test {
         let font_data = include_bytes!("../../RobotoMono-Regular.ttf").to_vec();
 
         let limit = 24 * 10;
-        let candle_data = fetch_binance_kline_usdt::<Kline>(&binance_pair_symbol, &timeframe, limit)
-            .await
-            .unwrap();
+        let candle_data =
+            fetch_binance_kline_usdt::<Kline>(&binance_pair_symbol, &timeframe, limit)
+                .await
+                .unwrap();
 
         let orderbook = fetch_orderbook_depth_usdt(&binance_pair_symbol, 2000)
             .await
@@ -662,25 +695,32 @@ mod test {
             let long_target_price = last_candle.close_price.parse::<f64>().unwrap();
 
             past_signals.push(LongShortSignal {
-            predicted:PredictedLongShortSignal {
-                pair_symbol: pair_symbol.to_owned(),
-                direction:"long".to_string(),
-                confidence:0.85,
-                entry_price:long_entry_price,
-                target_price:long_target_price,
-                stop_loss:long_entry_price*0.95,
-                entry_time:long_entry_time,
-                target_time:long_target_time,
-                rationale:"Mock long signal based on price movement".to_string(),
-            }, 
-            entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(long_entry_time / 1000, 0)
+                predicted: PredictedLongShortSignal {
+                    pair_symbol: pair_symbol.to_owned(),
+                    direction: "long".to_string(),
+                    confidence: 0.85,
+                    entry_price: long_entry_price,
+                    target_price: long_target_price,
+                    stop_loss: long_entry_price * 0.95,
+                    entry_time: long_entry_time,
+                    target_time: long_target_time,
+                    rationale: "Mock long signal based on price movement".to_string(),
+                },
+                entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(
+                    long_entry_time / 1000,
+                    0,
+                )
                 .unwrap()
                 .with_timezone(&chrono_tz::Asia::Tokyo)
                 .to_string(),
-            target_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(long_target_time / 1000, 0)
+                target_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(
+                    long_target_time / 1000,
+                    0,
+                )
                 .unwrap()
                 .with_timezone(&chrono_tz::Asia::Tokyo)
-                .to_string(), });
+                .to_string(),
+            });
 
             let last_minus_30_candle = &candle_data[candle_data.len() - 31];
             let last_minus_20_candle = &candle_data[candle_data.len() - 21];
@@ -702,20 +742,26 @@ mod test {
                     target_time: short_target_time,
                     rationale: "Mock short signal based on price movement".to_string(),
                 },
-                entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(short_entry_time / 1000, 0)
-                    .unwrap()
-                    .with_timezone(&chrono_tz::Asia::Tokyo)
-                    .to_string(),
-                target_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(short_target_time / 1000, 0)
-                    .unwrap()
-                    .with_timezone(&chrono_tz::Asia::Tokyo)
-                    .to_string(),
+                entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(
+                    short_entry_time / 1000,
+                    0,
+                )
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
+                target_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(
+                    short_target_time / 1000,
+                    0,
+                )
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
             });
 
             for signal in &past_signals {
                 println!(
                     "{} Signal: Entry Time: {}, Entry Price: {}, Target Time: {}, Target Price: {}, Stop Loss: {}",
-                    signal.predicted.direction, signal.entry_time_local, signal.predicted.entry_price, 
+                    signal.predicted.direction, signal.entry_time_local, signal.predicted.entry_price,
                     signal.target_time_local, signal.predicted.target_price, signal.predicted.stop_loss
                 );
             }
@@ -750,21 +796,27 @@ mod test {
                     target_time: long_target_time,
                     rationale: "Mock long signal expecting 5% upward movement".to_string(),
                 },
-                entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(long_entry_time / 1000, 0)
-                    .unwrap()
-                    .with_timezone(&chrono_tz::Asia::Tokyo)
-                    .to_string(),
-                target_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(long_target_time / 1000, 0)
-                    .unwrap()
-                    .with_timezone(&chrono_tz::Asia::Tokyo)
-                    .to_string(),
+                entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(
+                    long_entry_time / 1000,
+                    0,
+                )
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
+                target_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(
+                    long_target_time / 1000,
+                    0,
+                )
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
             });
-        
+
             let short_entry_time = long_target_time;
             let short_entry_price = last_close_price * 0.99;
             let short_target_price = short_entry_price * 0.80;
             let short_target_time = short_entry_time + hour_ms;
-        
+
             signals.push(LongShortSignal {
                 predicted: PredictedLongShortSignal {
                     pair_symbol: pair_symbol.to_owned(),
@@ -775,22 +827,29 @@ mod test {
                     stop_loss: short_entry_price * 1.03,
                     entry_time: short_entry_time,
                     target_time: short_target_time,
-                    rationale: "Mock short signal targeting 20% profit from 1% below current price".to_string(),
+                    rationale: "Mock short signal targeting 20% profit from 1% below current price"
+                        .to_string(),
                 },
-                entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(short_entry_time / 1000, 0)
-                    .unwrap()
-                    .with_timezone(&chrono_tz::Asia::Tokyo)
-                    .to_string(),
-                target_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(short_target_time / 1000, 0)
-                    .unwrap()
-                    .with_timezone(&chrono_tz::Asia::Tokyo)
-                    .to_string(),
+                entry_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(
+                    short_entry_time / 1000,
+                    0,
+                )
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
+                target_time_local: chrono::DateTime::<chrono::Utc>::from_timestamp(
+                    short_target_time / 1000,
+                    0,
+                )
+                .unwrap()
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .to_string(),
             });
 
             for signal in &past_signals {
                 println!(
                     "{} Signal: Entry Time: {}, Entry Price: {}, Target Time: {}, Target Price: {}, Stop Loss: {}",
-                    signal.predicted.direction, signal.entry_time_local, signal.predicted.entry_price, 
+                    signal.predicted.direction, signal.entry_time_local, signal.predicted.entry_price,
                     signal.target_time_local, signal.predicted.target_price, signal.predicted.stop_loss
                 );
             }
