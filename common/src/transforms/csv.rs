@@ -75,6 +75,12 @@ impl<'a> PriceHistoryBuilder<'a> {
         self
     }
 
+    pub fn with_ma(mut self, intervals: &[&str]) -> Self {
+        self.ma_intervals
+            .extend(parse_interval_specs_list(intervals));
+        self
+    }
+
     pub fn with_latest_bb_ma(mut self, intervals: &[&str]) -> Self {
         self.latest_bb_ma_intervals
             .extend(parse_interval_specs_list(intervals));
