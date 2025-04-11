@@ -1,11 +1,26 @@
+use super::constants::HEAD_SCALE;
+use super::constants::LABEL_COLOR;
+use super::constants::TRANSPARENT_BLACK_50;
 use super::helpers::get_visible_range_and_data;
 use super::helpers::parse_kline_time;
 use super::image::draw_dashed_line_segment_mut;
+use super::indicators::draw_bollinger_detail;
+use super::indicators::draw_macd_detail;
+use super::indicators::draw_orderbook;
+use super::indicators::draw_past_signals;
+use super::indicators::draw_stoch_rsi_detail;
+use super::indicators::draw_volume_detail;
+use super::labels::draw_hallow_label;
+use super::labels::draw_label;
+use super::labels::draw_labels;
 use super::painters::*;
+use super::signals::draw_signals;
 use crate::charts::png::encode_png;
+use ab_glyph::Font;
 use ab_glyph::FontArc;
 use ab_glyph::PxScale;
 use chrono::DateTime;
+use chrono::TimeZone;
 use chrono::Utc;
 use chrono_tz::Tz;
 use common::Kline;
@@ -15,6 +30,7 @@ use image::ImageBuffer;
 use image::Rgb;
 use imageproc::drawing::draw_line_segment_mut;
 use imageproc::drawing::text_size;
+use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
 use std::error::Error;
 
@@ -656,6 +672,109 @@ impl Chart {
 
         Ok((lower_bound, upper_bound))
     }
+}
+
+pub fn calculate_candle_width<Tz: TimeZone>(
+    chart: &ChartContext<
+        impl DrawingBackend,
+        Cartesian2d<RangedDateTime<DateTime<Tz>>, RangedCoordf32>,
+    >,
+    num_candles: u8,
+) -> u32 {
+    // Get drawing area dimensions and x-axis range
+    let drawing_area = chart.plotting_area();
+    let pixel_width = drawing_area.dim_in_pixel().0 as f32;
+
+    // Estimate candle width in pixels: distribute total pixel width across candles
+    if num_candles > 0 {
+        (pixel_width / num_candles as f32).clamp(1.0, 20.0) as u32
+    } else {
+        6u32 // Fallback for empty data
+    }
+}
+
+pub fn draw_candlesticks<F>(
+    chart: &mut ChartContext<
+        '_,
+        BitMapBackend<'_>,
+        Cartesian2d<RangedDateTime<DateTime<Tz>>, RangedCoordf32>,
+    >,
+    candle_data: &[Kline],
+    timezone: &Tz,
+    color_selector: F,
+    last_past_time: i64,
+    candle_width: u32,
+) -> Result<(), Box<dyn Error>>
+where
+    F: Fn(bool, bool) -> RGBAColor,
+{
+    chart
+        .configure_mesh()
+        .light_line_style(BLACK)
+        .x_max_light_lines(1)
+        .y_max_light_lines(1)
+        .draw()?;
+
+    chart.draw_series(candle_data.iter().map(|k| {
+        let time = parse_kline_time(k.open_time - 6000 * 60 * 3, timezone);
+        let open = k.open_price.parse::<f32>().unwrap();
+        let high = k.high_price.parse::<f32>().unwrap();
+        let low = k.low_price.parse::<f32>().unwrap();
+        let close = k.close_price.parse::<f32>().unwrap();
+        let is_bullish = close >= open;
+        let is_predicted = last_past_time < k.open_time;
+        let color = color_selector(is_bullish, is_predicted);
+
+        // Use candle_width for the width of each candlestick
+        CandleStick::new(
+            time,
+            open,
+            high,
+            low,
+            close,
+            ShapeStyle::from(&color).filled(),
+            ShapeStyle::from(&color).filled(),
+            candle_width, // Ensure integer for CandleStick
+        )
+    }))?;
+    Ok(())
+}
+
+pub fn draw_candle_detail(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    chart: &Chart,
+    font: &impl Font,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(past_candle_data) = &chart.past_candle_data {
+        let latest_candle = past_candle_data.last().unwrap();
+        let open = latest_candle.open_price.parse::<f32>().unwrap();
+        let high = latest_candle.high_price.parse::<f32>().unwrap();
+        let low = latest_candle.low_price.parse::<f32>().unwrap();
+        let close = latest_candle.close_price.parse::<f32>().unwrap();
+        let change = (close - open) / open * 100.0;
+        let candle_detail = format!(
+            "{} {} O {:.2} H {:.2} L {:.2} C {:.2} {} ({:.2}%)",
+            chart.metadata.title.split(' ').next().unwrap_or(""),
+            chart.timeframe,
+            open,
+            high,
+            low,
+            close,
+            if change >= 0.0 { "+" } else { "" },
+            change
+        );
+        draw_label(
+            img,
+            font,
+            &candle_detail,
+            10.0,
+            10.0,
+            HEAD_SCALE,
+            LABEL_COLOR,
+            Some(TRANSPARENT_BLACK_50),
+        )?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
