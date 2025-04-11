@@ -14,7 +14,7 @@ use imageproc::rect::Rect;
 use m4rs::{bolinger_band, macd, Candlestick as M4rsCandlestick};
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
-pub use plotters::style::full_palette::{BLACK, GREEN, GREEN_200, GREEN_900, RED_200, RED_900};
+pub use plotters::style::full_palette::{BLACK, GREEN_200, GREEN_900, RED_200, RED_900};
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -359,11 +359,11 @@ pub fn draw_past_signals(
     signals: &Vec<LongShortSignal>,
 ) -> Result<(), Box<dyn Error>> {
     // Draw long signals (green)
-    let long_circle_style = ShapeStyle::from(&GREEN).filled();
-    let long_line_style = ShapeStyle::from(&GREEN).stroke_width(2);
+    let long_circle_style = ShapeStyle::from(&B_GREEN).filled();
+    let long_line_style = ShapeStyle::from(&B_GREEN).stroke_width(2);
 
-    let short_circle_style = ShapeStyle::from(&GREEN).filled();
-    let short_line_style = ShapeStyle::from(&GREEN).stroke_width(2);
+    let short_circle_style = ShapeStyle::from(&B_GREEN).filled();
+    let short_line_style = ShapeStyle::from(&B_GREEN).stroke_width(2);
 
     for signal in signals {
         let entry_dt = parse_kline_time(signal.predicted.entry_time, timezone);

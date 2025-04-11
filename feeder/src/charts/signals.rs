@@ -1,26 +1,14 @@
-use super::candle::{Chart, LineStyle, PointStyle};
-use super::helpers::parse_kline_time;
 use super::image::draw_dashed_line_segment_mut;
-use super::indicators::{draw_bollinger_bands, draw_macd, draw_volume_bars};
 use super::labels::{draw_hallow_label, draw_label};
-use crate::charts::helpers::get_visible_range_and_data;
 use ab_glyph::Font;
-use ab_glyph::ScaleFont;
-use chrono::{DateTime, TimeZone};
-use chrono_tz::Tz;
-use common::m4rs::kline_to_m4rs_candlestick;
 
-use common::rsi::calculate_stoch_rsi;
-use common::{Kline, LongShortSignal};
+use common::LongShortSignal;
 use image::{ImageBuffer, Rgb};
 use imageproc::drawing::draw_line_segment_mut;
 use imageproc::rect::Rect;
-use m4rs::{macd, Candlestick as M4rsCandlestick};
-use plotters::coord::types::RangedCoordf32;
-use plotters::prelude::*;
 
 use super::constants::*;
-pub use plotters::style::full_palette::{BLACK, GREEN, RED, WHITE, YELLOW};
+pub use plotters::style::full_palette::{BLACK, GREEN, RED};
 use std::error::Error;
 
 pub fn draw_signals(

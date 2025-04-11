@@ -38,6 +38,3 @@ pub const NUM_RED: Rgb<u8> = Rgb([B_RED.0, B_RED.1, B_RED.2]);
 pub const NUM_GREEN: Rgb<u8> = Rgb([B_GREEN.0, B_GREEN.1, B_GREEN.2]);
 // Price Line
 pub const PRICE_LINE_COLOR: Rgb<u8> = PRICE_BG_COLOR;
-// Signals
-pub const GREEN: RGBColor = B_GREEN;
-pub const RED: RGBColor = B_RED;
