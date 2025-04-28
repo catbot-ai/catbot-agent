@@ -53,20 +53,28 @@ pub const INPUT_INSTRUCTION: &str = r#"
 "#;
 
 pub const MAIN_TRADE_INSTRUCTION: &str = r#"
-- Predict the next price top or bottom using:
-  - Bollinger Bands for overbought/oversold levels (use 2.5 standard deviations for trending markets).
-  - EMA crossovers (e.g., 9-period EMA vs. 21-period EMA) across all timeframes.
-  - Fibonacci levels (e.g., 38.2%/61.8% retracement for shorts, 61.8%/100%/161.8% extension for longs) aligned with recent swing highs/lows.
-  - Recent price action and volume trends from order book; prioritize breakout patterns with volume confirmation.
-- Suggest entry timing based on short-term signals (5m, 15m, 1h) aligning with predicted tops/bottoms:
-  - Bullish entries: Confirm with 5m reversal patterns (e.g., hammer, engulfing) or 15m momentum surge.
-  - Bearish entries: Confirm with 5m rejection patterns (e.g., shooting star) or 15m momentum fade.
-- Provide target_price with ≥3% profit potential in trending markets or ≥1.5% in ranging markets, calculated independently of any existing position’s target:
-  - Longs: Target above upper Bollinger Band, recent high, or Fibonacci 61.8%/100%/161.8% extension; scale target higher if ATR >1.5x average.
-  - Shorts: Target below lower Bollinger Band, recent low, or Fibonacci 61.8%/100% retracement; scale target higher if ATR >1.5x average.
-- Include stop_loss to limit risk below profit potential, derived from volatility, support/resistance, or recent price action, independent of existing position parameters:
-  - Set stop_loss at 1.5x ATR for ranging markets, 2x ATR for trending markets.
-  - Ensure stop_loss respects key levels (e.g., below support for longs, above resistance for shorts) with a 1% buffer.
+**Structured Trade Evaluation**
+Before making your final trading recommendation, perform the following structured evaluation:
+1. **Viability Assessment**:
+   - List up to three reasons why this trade is viable (e.g., specific indicator signals, price levels, volume patterns).
+   - List up to two reasons why this trade might not be viable (e.g., conflicting indicators, market conditions, liquidity issues).
+2. **Logical Integrity Check**:
+   - For the most compelling supporting factor, provide evidence from the data that confirms it and state any assumptions you are making.
+   - For the most significant risk factor, provide evidence and state assumptions.
+3. **Market Fit Analysis**:
+   - Determine how this trade aligns with the current broader market trends (e.g., is it with the trend, against it, in a ranging market?).
+   - Consider if this trade fits with your typical trading strategy (e.g., day trading, swing trading, position trading).
+4. **Implementation Requirements**:
+   - Ensure the trade can be executed with the available data and tools:
+     - Key resources: Real-time data, order book, historical data.
+     - Critical capabilities: Indicator analysis, entry/target/stop-loss calculation.
+     - Time to revenue: Expected holding period.
+     - Initial investment: Capital required for the trade.
+5. **Final Recommendation**:
+   - Based on the above analysis, decide on the trading action (e.g., Buy, Sell, Hold, Close, Reverse).
+   - Set entry_price, target_price, and stop_loss accordingly.
+   - Assign a confidence level (0.0–1.0) based on the strength of supporting factors and risks.
+In your output JSON, include in the 'rationale' field a summary of this structured evaluation, highlighting key points from each step.
 "#;
 
 pub const SUB_PERPS_INSTRUCTION: &str = r#"
