@@ -196,7 +196,7 @@ pub async fn predict_with_gemini(
 
     // Use provided intervals and fallback
     let kline_intervals = maybe_kline_intervals.unwrap_or(
-        vec!["5m:864", "15m:672", "1h:168", "4h:84", "1d:100"]
+        vec!["15m:336", "1h:168", "4h:84", "1d:100"]
             .into_iter()
             .map(str::to_string)
             .collect::<Vec<_>>(),
@@ -211,7 +211,7 @@ pub async fn predict_with_gemini(
     );
 
     let lastest_bb_ma_intervals = maybe_lastest_bb_ma_intervals.unwrap_or(
-        vec!["15m:672", "1h:168", "4h:84", "1d:100"]
+        vec!["15m:336", "1h:168", "4h:84", "1d:100"]
             .into_iter()
             .map(str::to_string)
             .collect::<Vec<_>>(),
