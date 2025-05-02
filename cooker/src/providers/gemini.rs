@@ -76,12 +76,18 @@ pub struct UsageMetadata {
 #[allow(clippy::enum_variant_names)]
 pub enum GeminiModel {
     #[default]
+    /// Cost efficiency and low latency
     #[strum(serialize = "gemini-2.0-flash-lite")]
     Gemini2FlashLite,
+    /// Next generation features, speed, thinking, realtime streaming, and multimodal generation
     #[strum(serialize = "gemini-2.0-flash")]
     Gemini2Flash,
-    #[strum(serialize = "gemini-2.0-flash-thinking-exp-01-21")]
-    Gemini2FlashThinkingExp,
+    /// Adaptive thinking, cost efficiency
+    #[strum(serialize = "gemini-2.5-flash-preview-04-17")]
+    Gemini2FlashPreview,
+    /// Enhanced thinking and reasoning, multimodal understanding, advanced coding, and more
+    #[strum(serialize = "gemini-2.5-pro-preview-03-25")]
+    Gemini2FlashProPreview,
 }
 
 pub struct GeminiProvider {
