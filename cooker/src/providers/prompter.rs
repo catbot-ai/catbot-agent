@@ -143,9 +143,9 @@ mod tests {
 
         // Instantiate and configure the builder
         let full_report = PriceHistoryBuilder::new(pair_symbol, 100) // Base limit (can be overridden per item)
-            .with_klines(&kline_intervals)
-            .with_stoch_rsi(&stoch_rsi_intervals)
-            .with_latest_bb_ma(&latest_bb_ma_intervals)
+            .with_klines(kline_intervals)
+            .with_stoch_rsi(stoch_rsi_intervals)
+            .with_latest_bb_ma(latest_bb_ma_intervals)
             .build()
             .await
             .with_context(|| format!("Failed to build historical report for {}", pair_symbol))?;
@@ -199,19 +199,19 @@ mod tests {
         // --- Generate historical data using PriceHistoryBuilder ---
         let historical_data_content = build_historical_data_report(
             &pair_symbol,
-            &context
+            context
                 .kline_intervals
                 .iter()
                 .map(String::as_str)
                 .collect::<Vec<_>>()
                 .as_slice(),
-            &context
+            context
                 .stoch_rsi_intervals
                 .iter()
                 .map(String::as_str)
                 .collect::<Vec<_>>()
                 .as_slice(),
-            &context
+            context
                 .latest_bb_ma_intervals
                 .iter()
                 .map(String::as_str)
@@ -296,19 +296,19 @@ mod tests {
         // --- Generate historical data using PriceHistoryBuilder ---
         let historical_data_content = build_historical_data_report(
             &pair_symbol,
-            &context
+            context
                 .kline_intervals
                 .iter()
                 .map(String::as_str)
                 .collect::<Vec<_>>()
                 .as_slice(),
-            &context
+            context
                 .stoch_rsi_intervals
                 .iter()
                 .map(String::as_str)
                 .collect::<Vec<_>>()
                 .as_slice(),
-            &context
+            context
                 .latest_bb_ma_intervals
                 .iter()
                 .map(String::as_str)

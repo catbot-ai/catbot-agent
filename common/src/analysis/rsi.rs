@@ -105,7 +105,7 @@ pub fn parse_stoch_rsi_csv(closing_at: &[u64], smoothed_k: &[f64], d: &[f64]) ->
     csv_string
 }
 
-pub fn get_stoch_rsi_csv(klines: &Vec<Kline>) -> anyhow::Result<String> {
+pub fn get_stoch_rsi_csv(klines: &[Kline]) -> anyhow::Result<String> {
     let m4rs_candlesticks = klines
         .iter()
         .map(kline_to_m4rs_candlestick)
@@ -127,7 +127,7 @@ pub fn parse_bb_csv(past_bb_lines: &Vec<(u64, f32, f32, f32)>) -> String {
     csv_string
 }
 
-pub fn get_bb_csv(klines: &Vec<Kline>) -> anyhow::Result<String> {
+pub fn get_bb_csv(klines: &[Kline]) -> anyhow::Result<String> {
     let past_m4rs_candles: Vec<Candlestick> =
         klines.iter().map(kline_to_m4rs_candlestick).collect();
     let bb_result = bolinger_band(&past_m4rs_candles, 20)?;
