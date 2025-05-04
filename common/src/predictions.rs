@@ -314,7 +314,7 @@ pub struct TradingContext {
     pub maybe_trading_predictions: Option<Vec<RefinedTradingPrediction>>,
     pub kline_intervals: Vec<String>,
     pub stoch_rsi_intervals: Vec<String>,
-    pub lastest_bb_ma_intervals: Vec<String>,
+    pub latest_bb_ma_intervals: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

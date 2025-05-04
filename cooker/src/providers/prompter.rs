@@ -193,7 +193,7 @@ mod tests {
             maybe_trading_predictions: None,
             kline_intervals: ["1h:24".to_string()].to_vec(),
             stoch_rsi_intervals: ["4h".to_string()].to_vec(),
-            lastest_bb_ma_intervals: ["1h".to_string(), "4h".to_string()].to_vec(),
+            latest_bb_ma_intervals: ["1h".to_string(), "4h".to_string()].to_vec(),
         };
 
         // --- Generate historical data using PriceHistoryBuilder ---
@@ -212,7 +212,7 @@ mod tests {
                 .collect::<Vec<_>>()
                 .as_slice(),
             &context
-                .lastest_bb_ma_intervals
+                .latest_bb_ma_intervals
                 .iter()
                 .map(String::as_str)
                 .collect::<Vec<_>>()
@@ -290,7 +290,7 @@ mod tests {
             maybe_trading_predictions: None,
             kline_intervals: ["1h:24".to_string()].to_vec(),
             stoch_rsi_intervals: ["4h".to_string()].to_vec(),
-            lastest_bb_ma_intervals: ["1h".to_string(), "4h".to_string()].to_vec(),
+            latest_bb_ma_intervals: ["1h".to_string(), "4h".to_string()].to_vec(),
         };
 
         // --- Generate historical data using PriceHistoryBuilder ---
@@ -309,7 +309,7 @@ mod tests {
                 .collect::<Vec<_>>()
                 .as_slice(),
             &context
-                .lastest_bb_ma_intervals
+                .latest_bb_ma_intervals
                 .iter()
                 .map(String::as_str)
                 .collect::<Vec<_>>()

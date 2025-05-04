@@ -163,7 +163,7 @@ pub async fn predict_with_gemini(
     maybe_trading_predictions: Option<Vec<RefinedTradingPrediction>>,
     maybe_kline_intervals: Option<Vec<String>>,
     maybe_stoch_rsi_intervals: Option<Vec<String>>,
-    maybe_lastest_bb_ma_intervals: Option<Vec<String>>,
+    maybe_latest_bb_ma_intervals: Option<Vec<String>>,
 ) -> anyhow::Result<String, String> {
     let gemini_model = if maybe_images.is_some() {
         println!("✨ Some images");
@@ -207,7 +207,7 @@ pub async fn predict_with_gemini(
             .collect::<Vec<_>>(),
     );
 
-    let lastest_bb_ma_intervals = maybe_lastest_bb_ma_intervals.unwrap_or(
+    let latest_bb_ma_intervals = maybe_latest_bb_ma_intervals.unwrap_or(
         vec!["15m:336", "1h:168", "4h:84", "1d:100"]
             .into_iter()
             .map(str::to_string)
@@ -226,7 +226,7 @@ pub async fn predict_with_gemini(
         maybe_trading_predictions,
         kline_intervals,
         stoch_rsi_intervals,
-        lastest_bb_ma_intervals,
+        latest_bb_ma_intervals,
     };
 
     let prompt = get_binance_prompt(
