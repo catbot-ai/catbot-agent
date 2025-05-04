@@ -1,6 +1,7 @@
 name = "catbot-feeder"
 main = "build/worker/shim.mjs"
 compatibility_date = "2025-02-13"
+keep_vars = true
 services = [
   { binding = "COOKER", service = "catbot-cooker" }
 ]

@@ -1,6 +1,7 @@
 name = "catbot-cooker"
 main = "build/worker/shim.mjs"
 compatibility_date = "2025-02-13"
+keep_vars = true
 
 [build]
 command = "cargo install -q worker-build && worker-build --release"
