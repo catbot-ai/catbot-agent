@@ -4,3 +4,8 @@ compatibility_date = "2025-05-03"
 
 [build]
 command = "cargo install -q worker-build && worker-build --release"
+
+[[kv_namespaces]]
+binding = "SIGNALS"
+preview_id = "d6c0ca806a044f11bdb1354b4edca7a5"
+id = "150cf00e48b541be99197d21606712e2"
