@@ -7,10 +7,10 @@ pub const PREFIX_INSTRUCTION: &str = r#"
 - Detect momentum and reversals with key indicators:
   - Bullish: Stochastic RSI <30 (or rising from <20), price near or below lower Bollinger Band, rising bid volume >1.2x ask volume, EMA (9) crosses above EMA (21), or MACD line crosses above signal line.
   - Bearish: Stochastic RSI >70 (or falling from >80), price near or above upper Bollinger Band, rising ask volume >1.2x bid volume, EMA (9) crosses below EMA (21), or MACD line crosses below signal line.
-- Use Fibonacci retracement/extension levels on 4h and 1d timeframes to identify key support/resistance zones:
+- Use Fibonacci retracement/extension levels on 4h and 1d intervals to identify key support/resistance zones:
   - Bullish: Target 61.8%, 100%, or 161.8% extension above recent swing high if momentum confirms; consider 38.2% retracement as support for entries.
   - Bearish: Target 61.8%, 100%, or 161.8% retracement below recent swing low if volume supports; consider 38.2% extension as resistance for entries.
-- Analyze bid/ask volume and price action across all timeframes:
+- Analyze bid/ask volume and price action across all intervals:
   - Bullish signals: Bids outpace asks by >1.2x, price-volume divergence supports upside, or buying volume spikes at support.
   - Bearish signals: Asks outpace bids by >1.2x, price-volume divergence supports downside, or selling volume spikes at resistance.
 - Account for weekly cycles and news events:
@@ -36,7 +36,7 @@ Time_UTC,Event,Note
   - Increase confidence (+0.15) for signals aligning with high-activity periods (e.g., 13:30 UTC US Open, 07:00 UTC EU Open) if volume or momentum supports; emphasize bullish signals during uptrend confirmation.
   - Decrease confidence (-0.1) during low-liquidity or high-risk periods (e.g., 03:30 UTC China Lunch Break, 20:00 UTC US Close) unless short-term indicators (5m, 15m) strongly contradict with volume >1.5x average.
   - Shift entry/target timing to avoid reversal zones (e.g., ~15:00 UTC Pre-EU Close, 00:00 UTC Tokyo Open) unless breakout momentum is confirmed with volume >1.5x average.
-- Analyze historical volatility spikes (e.g., periods with >1.5x average ATR or volume) on 4h and 1d timeframes. Adjust entry and target timing to avoid whipsaws during spikes unless momentum aligns with the trade direction, in which case prioritize breakout entries with higher targets.
+- Analyze historical volatility spikes (e.g., periods with >1.5x average ATR or volume) on 4h and 1d intervals. Adjust entry and target timing to avoid whipsaws during spikes unless momentum aligns with the trade direction, in which case prioritize breakout entries with higher targets.
 - Confidence (0.0–1.0):
   - Base at 0.5, +0.1 per aligned indicator (e.g., RSI, volume, EMA, MACD, Fibonacci), -0.05 per conflict to reduce signal suppression.
   - Include weekly cycle and market event adjustments: +0.15 for bullish signals during high-activity periods or uptrends, -0.1 during low-liquidity or reversal zones unless short-term volume exceeds 1.5x average.
@@ -49,7 +49,7 @@ Time_UTC,Event,Note
 pub const INPUT_INSTRUCTION: &str = r#"
 - Kline data is provided as a CSV format.
 - Timestamps are in milliseconds (e.g., 1741870260000); prices and volume are floats (e.g., 123.45, 1000.5).
-- Assume data is sorted by open_time ascending and matches the requested timeframe (e.g., 5m, 15m, 1h).
+- Assume data is sorted by open_time ascending and matches the requested interval (e.g., 5m, 15m, 1h).
 "#;
 
 pub const MAIN_TRADE_INSTRUCTION: &str = r#"
@@ -103,7 +103,7 @@ pub const SUB_PERPS_INSTRUCTION: &str = r#"
 "#;
 
 pub const SUB_GRAPH_INSTRUCTION: &str = r#"
-- Predict 24 klines value for 1h timeframe based on technical analysis and market momentum:
+- Predict 24 klines value for 1h interval based on technical analysis and market momentum:
   - Use 5m and 15m for short-term trend confirmation, 4h and 1d for broader context.
   - Incorporate bullish signals (e.g., MACD crossover, volume spikes) to balance predictions.
 - Ensure that suggested long/short signals match predicted klines time and value.
@@ -131,7 +131,7 @@ pub const SUFFIX_INSTRUCTION: &str = r#"
 - Must generate valid JSON output with clear rationale for bullish/bearish suggestions.
 "#;
 
-pub fn get_instruction(prediction_type: &PredictionType, _timeframe: String) -> String {
+pub fn get_instruction(prediction_type: &PredictionType, _interval: String) -> String {
     match prediction_type {
         PredictionType::Trading => {
             format!(

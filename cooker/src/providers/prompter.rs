@@ -56,7 +56,7 @@ pub fn build_prompt<T>(
         get_perps_position_schema(context.maybe_preps_positions);
 
     // Instructions
-    let instruction = get_instruction(prediction_type, context.timeframe);
+    let instruction = get_instruction(prediction_type, context.interval);
     let schema_instruction =
         get_schema_instruction(prediction_type, &pair_symbol, maybe_position_schema);
 
@@ -159,7 +159,7 @@ mod tests {
         // Define pair symbol
         let token_symbol = "SOL".to_string();
         let pair_symbol = format!("{token_symbol}_USDT");
-        let timeframe = "1h".to_string(); // Example timeframe for context (instruction generation)
+        let interval = "1h".to_string(); // Example interval for context (instruction generation)
 
         // Fetch 1-second kline data to get current price
         println!("Fetching current price for {}...", pair_symbol);
@@ -187,7 +187,7 @@ mod tests {
         let context = TradingContext {
             token_symbol: token_symbol.clone(),
             pair_symbol: pair_symbol.clone(), // Builder uses this pair_symbol
-            timeframe: timeframe.clone(),
+            interval: interval.clone(),
             current_price,
             maybe_preps_positions,
             maybe_trading_predictions: None,
@@ -269,7 +269,7 @@ mod tests {
         let token_symbol = "SOL".to_string();
         let pair_symbol = format!("{token_symbol}_USDT");
         let binance_pair_symbol = format!("{token_symbol}USDT");
-        let timeframe = "4h".to_string(); // Example different timeframe for context
+        let interval = "4h".to_string(); // Example different interval for context
 
         // Fetch current price
         println!("Fetching current price for {}...", binance_pair_symbol);
@@ -284,7 +284,7 @@ mod tests {
         let context = TradingContext {
             token_symbol: token_symbol.clone(),
             pair_symbol: pair_symbol.clone(), // Builder uses this
-            timeframe: timeframe.clone(),
+            interval: interval.clone(),
             current_price,
             maybe_preps_positions: None, // Explicitly None for this test
             maybe_trading_predictions: None,
@@ -342,7 +342,7 @@ mod tests {
         // --- Assertions (Basic Checks) ---
         println!("Verifying prompt content...");
         assert!(prompt.contains(&format!("Analyze {}", pair_symbol)));
-        assert!(prompt.contains(&format!("timeframe={}", timeframe))); // Check correct timeframe in input data section
+        assert!(prompt.contains(&format!("interval={}", interval))); // Check correct interval in input data section
         assert!(prompt.contains("## Historical Data:"));
         assert!(prompt.contains("## Consolidated Order Book Data (Grouped by 1.0):"));
         assert!(prompt.contains("price,cumulative_amount"));

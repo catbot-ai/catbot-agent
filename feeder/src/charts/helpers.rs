@@ -9,14 +9,14 @@ pub fn parse_kline_time(timestamp: i64, tz: &Tz) -> DateTime<Tz> {
         .with_timezone(tz)
 }
 
-pub fn parse_timeframe_duration(timeframe: &str) -> Duration {
-    let (value, unit) = timeframe.split_at(timeframe.len() - 1);
+pub fn parse_interval_duration(interval: &str) -> Duration {
+    let (value, unit) = interval.split_at(interval.len() - 1);
     let value = value.parse::<i64>().unwrap();
     match unit {
         "m" => Duration::minutes(value),
         "h" => Duration::hours(value),
         "d" => Duration::days(value),
-        _ => panic!("Unsupported timeframe unit"),
+        _ => panic!("Unsupported interval unit"),
     }
 }
 

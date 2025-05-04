@@ -63,13 +63,13 @@ pub async fn call_worker_service<T: DeserializeOwned>(
 pub async fn fetch_graph_prediction(
     api_url: &str,
     pair_symbol: &str,
-    timeframe: &str, // TODO
+    interval: &str, // TODO
     api_key: Option<&str>,
 ) -> Result<RefinedGraphPredictionResponse> {
     let client = Client::new();
 
     // url
-    let url = format!("{api_url}/{pair_symbol}/{timeframe}");
+    let url = format!("{api_url}/{pair_symbol}/{interval}");
 
     // Build the request
     let mut request = client.get(url);
@@ -114,9 +114,9 @@ mod tests {
     pub async fn get_mock_graph_prediction() -> String {
         // Load real data from Binance
         let binance_pair_symbol = "SOLUSDT";
-        let timeframe = "1h";
+        let interval = "1h";
         let limit = 24;
-        let candle_data = fetch_binance_kline_usdt::<Kline>(binance_pair_symbol, timeframe, limit)
+        let candle_data = fetch_binance_kline_usdt::<Kline>(binance_pair_symbol, interval, limit)
             .await
             .unwrap();
 
@@ -182,7 +182,7 @@ mod tests {
                 "target_time": target_time,
                 "target_time_local": target_time_local,
                 "target_price": last_candle.close_price.parse::<f64>().unwrap() * 1.03,
-                "timeframe": "1h"
+                "interval": "1h"
             }]
         });
 
@@ -195,9 +195,9 @@ mod tests {
         let api_url = std::env::var("PREDICTION_API_URL").expect("PREDICTION_API_URL must be set");
 
         let pair_symbol = "SOL_USDT";
-        let timeframe = "1h";
+        let interval = "1h";
 
-        let prediction = fetch_graph_prediction(&api_url, pair_symbol, timeframe, None)
+        let prediction = fetch_graph_prediction(&api_url, pair_symbol, interval, None)
             .await
             .unwrap();
 

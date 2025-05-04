@@ -308,7 +308,7 @@ where
 pub struct TradingContext {
     pub token_symbol: String,
     pub pair_symbol: String,
-    pub timeframe: String,
+    pub interval: String,
     pub current_price: f64,
     pub maybe_preps_positions: Option<Vec<PerpsPosition>>,
     pub maybe_trading_predictions: Option<Vec<RefinedTradingPrediction>>,

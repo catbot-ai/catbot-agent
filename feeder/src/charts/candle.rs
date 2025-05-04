@@ -64,7 +64,7 @@ pub struct ChartMetaData {
 #[derive(Default, Clone)]
 pub struct Chart {
     pub timezone: Tz,
-    pub timeframe: String,
+    pub interval: String,
     pub past_candle_data: Option<Vec<Kline>>,
     pub predicted_candle: Option<Vec<Kline>>,
     pub metadata: ChartMetaData,
@@ -85,9 +85,9 @@ pub struct Chart {
 }
 
 impl Chart {
-    pub fn new(timeframe: &str, timezone: Tz) -> Self {
+    pub fn new(interval: &str, timezone: Tz) -> Self {
         Chart {
-            timeframe: timeframe.to_string(),
+            interval: interval.to_string(),
             timezone,
             ..Default::default()
         }
@@ -663,7 +663,7 @@ impl Chart {
             margin_right,
             plot_width,
             last_past_time,
-            &self.timeframe,
+            &self.interval,
         )?;
 
         if let Some(ref past_signals) = self.past_signals {
@@ -755,7 +755,7 @@ pub fn draw_candle_detail(
         let candle_detail = format!(
             "{} {} O {:.2} H {:.2} L {:.2} C {:.2} {} ({:.2}%)",
             chart.metadata.title.split(' ').next().unwrap_or(""),
-            chart.timeframe,
+            chart.interval,
             open,
             high,
             low,
@@ -789,13 +789,13 @@ mod test {
         let token_symbol = "SOL".to_string();
         let pair_symbol = format!("{token_symbol}_USDT");
         let binance_pair_symbol = format!("{token_symbol}USDT");
-        let timeframe = "4h".to_string();
+        let interval = "4h".to_string();
 
         let font_data = include_bytes!("../../RobotoMono-Regular.ttf").to_vec();
 
         let limit = 24 * 10;
         let candle_data =
-            fetch_binance_kline_usdt::<Kline>(&binance_pair_symbol, &timeframe, limit)
+            fetch_binance_kline_usdt::<Kline>(&binance_pair_symbol, &interval, limit)
                 .await
                 .unwrap();
 
@@ -982,7 +982,7 @@ mod test {
         // .unwrap()
         // .klines;
 
-        let png = Chart::new(&timeframe, Tokyo)
+        let png = Chart::new(&interval, Tokyo)
             .with_past_candle(candle_data)
             .with_title(&pair_symbol)
             .with_font_data(font_data)

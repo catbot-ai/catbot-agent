@@ -1,6 +1,6 @@
 use super::helpers::{format_short_number, parse_kline_time};
 use super::labels::draw_label;
-use crate::charts::helpers::parse_timeframe_duration;
+use crate::charts::helpers::parse_interval_duration;
 use ab_glyph::Font;
 use chrono::DateTime;
 use chrono_tz::Tz;
@@ -110,7 +110,7 @@ pub fn draw_volume_bars(
     >,
     maybe_klines: &Option<Vec<Kline>>,
     timezone: &Tz,
-    timeframe: &str,
+    interval: &str,
     last_past_time: i64,
 ) -> Result<(), Box<dyn Error>> {
     if let Some(klines) = maybe_klines {
@@ -123,7 +123,7 @@ pub fn draw_volume_bars(
         chart.draw_series(klines.iter().flat_map(|k| {
             let time: DateTime<Tz> = parse_kline_time(k.open_time, timezone);
             let volume = k.volume.parse::<f32>().unwrap();
-            let bar_width = parse_timeframe_duration(timeframe);
+            let bar_width = parse_interval_duration(interval);
             let open = k.open_price.parse::<f32>().unwrap();
             let close = k.close_price.parse::<f32>().unwrap();
             let is_bullish = close >= open;
@@ -197,7 +197,7 @@ pub fn draw_macd(
     >,
     maybe_klines: &Option<Vec<Kline>>,
     timezone: &Tz,
-    timeframe: &str,
+    interval: &str,
     last_past_time: i64,
 ) -> Result<(), Box<dyn Error>> {
     chart
@@ -237,7 +237,7 @@ pub fn draw_macd(
 
         let plotting_area = chart.plotting_area();
         let mut previous_h: Option<f32> = None;
-        let bar_width = parse_timeframe_duration(timeframe);
+        let bar_width = parse_interval_duration(interval);
 
         for (t, _, _, h) in macd_lines.iter() {
             let is_lower = previous_h.map_or(false, |prev| *h < prev);

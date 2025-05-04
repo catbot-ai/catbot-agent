@@ -40,7 +40,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
         orderbook_limit: i32,
         pair_symbol: String,
         maybe_wallet_address: Option<String>,
-        maybe_timeframe: Option<String>,
+        maybe_interval: Option<String>,
     ) -> Result<Response> {
         let output_result = predict_with_gemini(
             &prediction_type,
@@ -48,7 +48,7 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
             pair_symbol,
             orderbook_limit,
             maybe_wallet_address,
-            maybe_timeframe,
+            maybe_interval,
             None,
             None,
             None,
@@ -107,29 +107,26 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
             )
             .await
         })
-        // Endpoint: /api/v1/predict/:token/:timeframe
-        .get_async(
-            "/api/v1/predict/:token/:timeframe",
-            |_req, ctx| async move {
-                let pair_symbol = match ctx.param("token") {
-                    Some(token) => token.to_owned(),
-                    None => return Response::error("Bad Request - Missing Token", 400),
-                };
+        // Endpoint: /api/v1/predict/:token/:interval
+        .get_async("/api/v1/predict/:token/:interval", |_req, ctx| async move {
+            let pair_symbol = match ctx.param("token") {
+                Some(token) => token.to_owned(),
+                None => return Response::error("Bad Request - Missing Token", 400),
+            };
 
-                // Get timeframe
-                let timeframe = ctx.param("timeframe");
+            // Get interval
+            let interval = ctx.param("interval");
 
-                handle_prediction_request(
-                    PredictionType::Graph,
-                    gemini_api_key,
-                    orderbook_limit,
-                    pair_symbol,
-                    None,
-                    timeframe.cloned(),
-                )
-                .await
-            },
-        )
+            handle_prediction_request(
+                PredictionType::Graph,
+                gemini_api_key,
+                orderbook_limit,
+                pair_symbol,
+                None,
+                interval.cloned(),
+            )
+            .await
+        })
         // Endpoint: /api/v1/rebalance/:token/:wallet_address",
         .get_async(
             "/api/v1/rebalance/:token/:wallet_address",
@@ -160,7 +157,7 @@ pub async fn predict_with_gemini(
     pair_symbol: String,
     orderbook_limit: i32,
     maybe_wallet_address: Option<String>,
-    maybe_timeframe: Option<String>,
+    maybe_interval: Option<String>,
     maybe_images: Option<Vec<ImageData>>,
     maybe_prompt: Option<String>,
     maybe_trading_predictions: Option<Vec<RefinedTradingPrediction>>,
@@ -217,13 +214,13 @@ pub async fn predict_with_gemini(
             .collect::<Vec<_>>(),
     );
 
-    // Use provided timeframe or default to "4h"
-    let timeframe = maybe_timeframe.unwrap_or_else(|| "4h".to_owned());
+    // Use provided interval or default to "4h"
+    let interval = maybe_interval.unwrap_or_else(|| "4h".to_owned());
 
     let context = TradingContext {
         token_symbol,
         pair_symbol,
-        timeframe,
+        interval,
         current_price,
         maybe_preps_positions,
         maybe_trading_predictions,
@@ -355,7 +352,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_prediction_with_image_and_timeframe() {
+    async fn test_prediction_with_image_and_interval() {
         // Load environment variables from .env file
         dotenvy::from_filename(".env").expect("No .env file found");
 
@@ -373,14 +370,14 @@ mod tests {
             data: base64_image,
         }];
 
-        // Call the prediction function with image and timeframe
+        // Call the prediction function with image and interval
         let result = predict_with_gemini(
             &PredictionType::Graph,
             gemini_api_key,
             pair_symbol.to_string(),
             1000,
             None,                   // No wallet address
-            Some("1h".to_string()), // Custom timeframe
+            Some("1h".to_string()), // Custom interval
             Some(images),           // Pass the image data
             None,
             None,

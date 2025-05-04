@@ -37,7 +37,7 @@ pub fn draw_chart(
     margin_right: u32,
     final_width: u32,
     last_past_time: i64,
-    timeframe: &str,
+    interval: &str,
 ) -> Result<(f32, f32), Box<dyn Error>> {
     root.fill(&B_BLACK)?;
 
@@ -132,7 +132,7 @@ pub fn draw_chart(
                 &mut volume_chart,
                 &Some(visible_data.into_iter().collect()),
                 timezone,
-                &chart.timeframe,
+                &chart.interval,
                 last_past_time,
             )?;
         }
@@ -169,7 +169,7 @@ pub fn draw_chart(
                 &mut macd_chart,
                 &Some(visible_data.into_iter().collect()),
                 timezone,
-                &chart.timeframe,
+                &chart.interval,
                 last_past_time,
             )?;
         }

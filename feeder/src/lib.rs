@@ -13,8 +13,8 @@ use std::ops::Deref;
 use worker::*;
 
 // TODO: call service binding
-async fn gen_candle(pair_symbol: String, timeframe: String) -> anyhow::Result<Vec<Kline>> {
-    let kline_data_1m = fetch_binance_kline_usdt::<Kline>(&pair_symbol, &timeframe, 240).await?;
+async fn gen_candle(pair_symbol: String, interval: String) -> anyhow::Result<Vec<Kline>> {
+    let kline_data_1m = fetch_binance_kline_usdt::<Kline>(&pair_symbol, &interval, 240).await?;
     Ok(kline_data_1m)
 }
 
@@ -55,12 +55,12 @@ pub async fn handle_chart_prediction(
             .expect("Expect PREDICTION_API_URL")
             .to_string();
 
-        // Get timeframe
+        // Get interval
         let binding = "1h".to_string();
-        let timeframe = ctx.param("timeframe").unwrap_or(&binding);
+        let interval = ctx.param("interval").unwrap_or(&binding);
 
         // Finalize api_url
-        let relative_path = format!("{pair_symbol}/{timeframe}");
+        let relative_path = format!("{pair_symbol}/{interval}");
         let api_url_string = format!("{api_url}/{relative_path}");
         let api_url = Url::parse(&api_url_string).unwrap();
 
@@ -77,7 +77,7 @@ pub async fn handle_chart_prediction(
         let pair_symbol = pair_symbol.clone();
         let candle_data = gen_candle(
             pair_symbol.deref().to_string(),
-            timeframe.deref().to_string(),
+            interval.deref().to_string(),
         )
         .await;
 
@@ -90,7 +90,7 @@ pub async fn handle_chart_prediction(
 
         // TODO: Define chart metadata
         // let chart_metadata = ChartMetaData {
-        //     title: format!("{pair_symbol} {timeframe}"),
+        //     title: format!("{pair_symbol} {interval}"),
         // };
 
         let orderbook = fetch_orderbook_depth_usdt(&pair_symbol, 2000).await;
@@ -106,7 +106,7 @@ pub async fn handle_chart_prediction(
             let prediction_result = {
                 #[cfg(not(feature = "service_binding"))]
                 {
-                    fetch_graph_prediction(api_url, &pair_symbol, timeframe, None)
+                    fetch_graph_prediction(api_url, &pair_symbol, interval, None)
                         .await
                         .map_err(|e| {
                             worker::Error::RustError(format!(
@@ -151,7 +151,7 @@ pub async fn handle_chart_prediction(
         };
 
         // Get image
-        let buffer_result = Chart::new(timeframe, Tokyo)
+        let buffer_result = Chart::new(interval, Tokyo)
             .with_past_candle(candle_data)
             // So sad this didn't work as expected due to poor results
             // .with_predicted_candle(predicted_klines)
@@ -195,10 +195,10 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
 
     router
         .get_async("/", handle_root)
-        // .get_async("/api/v1/suggest/:pair_symbol/:timeframe", handle_hello)
-        .get_async("/api/v1/chart/:pair_symbol/:timeframe", handle_chart)
+        // .get_async("/api/v1/suggest/:pair_symbol/:interval", handle_hello)
+        .get_async("/api/v1/chart/:pair_symbol/:interval", handle_chart)
         .get_async(
-            "/api/v1/chart_signals/:pair_symbol/:timeframe",
+            "/api/v1/chart_signals/:pair_symbol/:interval",
             handle_chart_signals,
         )
         .run(req, env)
