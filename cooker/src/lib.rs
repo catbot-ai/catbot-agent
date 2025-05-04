@@ -19,6 +19,104 @@ pub async fn handle_root(_req: Request, _ctx: RouteContext<()>) -> worker::Resul
     )
 }
 
+// --- Builder Pattern Implementation ---
+
+#[derive(Clone, Debug)]
+pub struct PredictionRequest {
+    prediction_type: PredictionType,
+    gemini_api_key: String,
+    pair_symbol: String,
+    orderbook_limit: i32,
+    wallet_address: Option<String>,
+    interval: Option<String>,
+    images: Option<Vec<ImageData>>,
+    prompt: Option<String>,
+    trading_predictions: Option<Vec<RefinedTradingPrediction>>,
+    kline_intervals: Option<Vec<String>>,
+    stoch_rsi_intervals: Option<Vec<String>>,
+    latest_bb_ma_intervals: Option<Vec<String>>,
+}
+
+#[derive(Clone)]
+pub struct PredictionRequestBuilder {
+    request: PredictionRequest,
+}
+
+impl PredictionRequestBuilder {
+    pub fn new(
+        prediction_type: PredictionType,
+        gemini_api_key: String,
+        pair_symbol: String,
+        orderbook_limit: i32,
+    ) -> Self {
+        Self {
+            request: PredictionRequest {
+                prediction_type,
+                gemini_api_key,
+                pair_symbol,
+                orderbook_limit,
+                wallet_address: None,
+                interval: None,
+                images: None,
+                prompt: None,
+                trading_predictions: None,
+                kline_intervals: None,
+                stoch_rsi_intervals: None,
+                latest_bb_ma_intervals: None,
+            },
+        }
+    }
+
+    pub fn wallet_address(mut self, wallet_address: Option<String>) -> Self {
+        self.request.wallet_address = wallet_address;
+        self
+    }
+
+    pub fn interval(mut self, interval: Option<String>) -> Self {
+        self.request.interval = interval;
+        self
+    }
+
+    pub fn images(mut self, images: Option<Vec<ImageData>>) -> Self {
+        self.request.images = images;
+        self
+    }
+
+    pub fn prompt(mut self, prompt: Option<String>) -> Self {
+        self.request.prompt = prompt;
+        self
+    }
+
+    pub fn trading_predictions(
+        mut self,
+        predictions: Option<Vec<RefinedTradingPrediction>>,
+    ) -> Self {
+        self.request.trading_predictions = predictions;
+        self
+    }
+
+    pub fn kline_intervals(mut self, intervals: Option<Vec<String>>) -> Self {
+        self.request.kline_intervals = intervals;
+        self
+    }
+
+    pub fn stoch_rsi_intervals(mut self, intervals: Option<Vec<String>>) -> Self {
+        self.request.stoch_rsi_intervals = intervals;
+        self
+    }
+
+    pub fn latest_bb_ma_intervals(mut self, intervals: Option<Vec<String>>) -> Self {
+        self.request.latest_bb_ma_intervals = intervals;
+        self
+    }
+
+    pub async fn predict(self) -> anyhow::Result<String, String> {
+        predict_with_gemini(self.request).await
+    }
+}
+
+// --- End Builder Pattern Implementation ---
+
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
     console_error_panic_hook::set_once();
@@ -42,20 +140,16 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
         maybe_wallet_address: Option<String>,
         maybe_interval: Option<String>,
     ) -> Result<Response> {
-        let output_result = predict_with_gemini(
-            &prediction_type,
+        let output_result = PredictionRequestBuilder::new(
+            prediction_type, // Pass prediction_type directly
             gemini_api_key.to_owned(),
             pair_symbol,
             orderbook_limit,
-            maybe_wallet_address,
-            maybe_interval,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
         )
+        .wallet_address(maybe_wallet_address)
+        .interval(maybe_interval)
+        // Other fields default to None
+        .predict() // Call predict on the builder
         .await;
 
         match output_result {
@@ -152,47 +246,40 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
 }
 
 pub async fn predict_with_gemini(
-    prediction_type: &PredictionType,
-    gemini_api_key: String,
-    pair_symbol: String,
-    orderbook_limit: i32,
-    maybe_wallet_address: Option<String>,
-    maybe_interval: Option<String>,
-    maybe_images: Option<Vec<ImageData>>,
-    maybe_prompt: Option<String>,
-    maybe_trading_predictions: Option<Vec<RefinedTradingPrediction>>,
-    maybe_kline_intervals: Option<Vec<String>>,
-    maybe_stoch_rsi_intervals: Option<Vec<String>>,
-    maybe_latest_bb_ma_intervals: Option<Vec<String>>,
+    // Accept the PredictionRequest struct directly
+    request: PredictionRequest,
 ) -> anyhow::Result<String, String> {
-    let gemini_model = if maybe_images.is_some() {
+    // Access fields from the request struct
+    let gemini_model = if request.images.is_some() {
         println!("✨ Some images");
         GeminiModel::Gemini2Flash
     } else {
         GeminiModel::default()
     };
 
-    let provider = GeminiProvider::new_v1beta(&gemini_api_key);
-    let (token_symbol, _) = get_token_and_pair_symbol_usdt(&pair_symbol);
+    let provider = GeminiProvider::new_v1beta(&request.gemini_api_key);
+    let (token_symbol, _) = get_token_and_pair_symbol_usdt(&request.pair_symbol);
 
     // Get price
     // TODO: more oracle?
-    let kline_data_1s = fetch_binance_kline_usdt::<ConciseKline>(&pair_symbol, "1s", 1)
+    let kline_data_1s = fetch_binance_kline_usdt::<ConciseKline>(&request.pair_symbol, "1s", 1)
         .await
         .expect("Failed to get price.");
     let current_price = kline_data_1s[0].close;
 
     // Get position from wallet_address if provided
-    let maybe_preps_positions = match maybe_wallet_address {
-        Some(wallet_address) => match get_preps_position(Some(wallet_address)).await {
+    let maybe_preps_positions = match &request.wallet_address {
+        // Borrow request.wallet_address
+        Some(wallet_address) => match get_preps_position(Some(wallet_address.clone())).await {
+            // Clone wallet_address if needed
             Ok(positions) => positions,
             Err(error) => return Err(format!("Error getting position: {:?}", error.to_string())),
         },
         None => None,
     };
 
-    // Use provided intervals and fallback
-    let kline_intervals = maybe_kline_intervals.unwrap_or(
+    // Use provided intervals and fallback from request
+    let kline_intervals = request.kline_intervals.unwrap_or(
         vec!["15m:336", "1h:168", "4h:84", "1d:100"]
             .into_iter()
             .map(str::to_string)
@@ -200,59 +287,63 @@ pub async fn predict_with_gemini(
     );
 
     // Include RSI or other indicators if desired in the report
-    let stoch_rsi_intervals = maybe_stoch_rsi_intervals.unwrap_or(
+    let stoch_rsi_intervals = request.stoch_rsi_intervals.unwrap_or(
         vec!["1h:168", "4h:84"]
             .into_iter()
             .map(str::to_string)
             .collect::<Vec<_>>(),
     );
 
-    let latest_bb_ma_intervals = maybe_latest_bb_ma_intervals.unwrap_or(
+    let latest_bb_ma_intervals = request.latest_bb_ma_intervals.unwrap_or(
         vec!["15m:336", "1h:168", "4h:84", "1d:100"]
             .into_iter()
             .map(str::to_string)
             .collect::<Vec<_>>(),
     );
 
-    // Use provided interval or default to "4h"
-    let interval = maybe_interval.unwrap_or_else(|| "4h".to_owned());
+    // Use provided interval or default to "4h" from request
+    let interval = request.interval.unwrap_or_else(|| "4h".to_owned());
 
     let context = TradingContext {
         token_symbol,
-        pair_symbol,
+        pair_symbol: request.pair_symbol, // Move pair_symbol from request
         interval,
         current_price,
         maybe_preps_positions,
-        maybe_trading_predictions,
+        maybe_trading_predictions: request.trading_predictions, // Move trading_predictions from request
         kline_intervals,
         stoch_rsi_intervals,
         latest_bb_ma_intervals,
     };
 
-    let prompt = get_binance_prompt(
-        prediction_type,
+    // Use request fields for get_binance_prompt
+    let base_prompt = get_binance_prompt(
+        &request.prediction_type,
         &gemini_model,
         context.clone(),
-        orderbook_limit,
+        request.orderbook_limit,
     )
     .await
     .map_err(|e| e.to_string())?;
 
-    let prompt = if maybe_prompt.is_some() {
-        prompt + "\n" + &maybe_prompt.unwrap_or_default()
+    // Handle optional additional prompt from request
+    let prompt = if let Some(extra_prompt) = request.prompt {
+        // Move prompt from request
+        base_prompt + "\n" + &extra_prompt
     } else {
-        prompt
+        base_prompt
     };
 
-    // Use empty vec if no images provided
-    let images = maybe_images.unwrap_or_default();
+    // Use empty vec if no images provided from request
+    let images = request.images.unwrap_or_default(); // Move images from request
 
-    match prediction_type {
+    // Use request.prediction_type for matching
+    match request.prediction_type {
         PredictionType::Trading => {
             let prediction_result =
                 TradePredictor::<TradingPrediction>::new(&provider, &gemini_model, &prompt)
                     .with_context(context.clone())
-                    .with_images(images)
+                    .with_images(images) // Pass moved images
                     .run()
                     .await;
 
@@ -268,7 +359,7 @@ pub async fn predict_with_gemini(
             let prediction_result =
                 TradePredictor::<GraphPrediction>::new(&provider, &gemini_model, &prompt)
                     .with_context(context.clone())
-                    .with_images(images)
+                    .with_images(images) // Pass moved images
                     .run()
                     .await;
 
@@ -280,15 +371,15 @@ pub async fn predict_with_gemini(
                 Err(error) => Err(error.to_string()),
             }
         }
-        PredictionType::Rebalance => todo!(),
+        PredictionType::Rebalance => todo!("Rebalance prediction not yet implemented"), // Updated todo! message
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        predict_with_gemini, predictions::prediction_types::PredictionType,
-        providers::gemini::ImageData,
+        predictions::prediction_types::PredictionType, providers::gemini::ImageData,
+        PredictionRequestBuilder,
     };
     use base64::Engine;
 
@@ -300,20 +391,15 @@ mod tests {
         let pair_symbol = "SOL_USDC";
         let wallet_address = std::env::var("WALLET_ADDRESS").ok();
 
-        let result = predict_with_gemini(
-            &PredictionType::Trading,
+        // Use the builder
+        let result = PredictionRequestBuilder::new(
+            PredictionType::Trading,
             gemini_api_key,
             pair_symbol.to_string(),
             1000,
-            wallet_address,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
         )
+        .wallet_address(wallet_address) // Set wallet address if available
+        .predict() // Call predict
         .await
         .unwrap();
         println!(
@@ -329,20 +415,15 @@ mod tests {
         let gemini_api_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY must be set");
         let pair_symbol = "SOL_USDT";
 
-        let result = predict_with_gemini(
-            &PredictionType::Graph,
+        // Use the builder
+        let result = PredictionRequestBuilder::new(
+            PredictionType::Graph,
             gemini_api_key,
             pair_symbol.to_string(),
             1000,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
         )
+        // No optional fields set here
+        .predict() // Call predict
         .await
         .unwrap();
         println!(
@@ -370,21 +451,16 @@ mod tests {
             data: base64_image,
         }];
 
-        // Call the prediction function with image and interval
-        let result = predict_with_gemini(
-            &PredictionType::Graph,
+        // Call the prediction function using the builder
+        let result = PredictionRequestBuilder::new(
+            PredictionType::Graph,
             gemini_api_key,
             pair_symbol.to_string(),
             1000,
-            None,                   // No wallet address
-            Some("1h".to_string()), // Custom interval
-            Some(images),           // Pass the image data
-            None,
-            None,
-            None,
-            None,
-            None,
         )
+        .interval(Some("1h".to_string())) // Set custom interval
+        .images(Some(images)) // Set image data
+        .predict() // Call predict
         .await;
 
         // Handle the result

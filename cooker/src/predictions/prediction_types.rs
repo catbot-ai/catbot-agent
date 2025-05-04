@@ -1,5 +1,5 @@
 // Enum for the different types of prediction requests
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PredictionType {
     Trading,
     Graph,

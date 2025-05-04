@@ -265,7 +265,7 @@ impl AiProvider for GeminiProvider {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug, Clone)]
 pub struct ImageData {
     pub mime_type: String,
     pub data: String, // Base64 encoded image data
