@@ -9,12 +9,14 @@ use worker::*;
 /// Generic function to call a relative path on another worker service.
 #[cfg(feature = "service_binding")]
 pub async fn call_worker_service<T: DeserializeOwned>(
-    req: Request,      // The original incoming request object
-    fetcher: &Fetcher, // The service binding fetcher
+    req: Request,        // The original incoming request object
+    fetcher: &Fetcher,   // The service binding fetcher
     relative_path: &str, // The relative path to call on the target service (e.g., "api/v1/predict/...")
 ) -> Result<T> {
     // Convert the request to HttpRequest
-    let mut http_request: worker::HttpRequest = req.try_into().context("Failed to convert Request to HttpRequest")?;
+    let mut http_request: worker::HttpRequest = req
+        .try_into()
+        .context("Failed to convert Request to HttpRequest")?;
 
     // Get the original URI parts
     let original_uri = http_request.uri();
@@ -41,34 +43,22 @@ pub async fn call_worker_service<T: DeserializeOwned>(
         .map_err(|e| anyhow::anyhow!("Worker fetch failed: {}", e))?; // Convert worker::Error
 
     // Convert back to worker::Response to read the body
-    let mut cf_response: Response = resp.try_into().context("Failed to convert FetcherResponse to Response")?;
+    let mut cf_response: Response = resp
+        .try_into()
+        .context("Failed to convert FetcherResponse to Response")?;
     let response_text = cf_response
         .text()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to read worker response text: {}", e))?; // Convert worker::Error
 
     // Deserialize the JSON response text
-    serde_json::from_str(&response_text)
-        .with_context(|| format!("Failed to deserialize worker response into {}", std::any::type_name::<T>()))
+    serde_json::from_str(&response_text).with_context(|| {
+        format!(
+            "Failed to deserialize worker response into {}",
+            std::any::type_name::<T>()
+        )
+    })
 }
-
-
-// fetch_graph_prediction_from_worker now uses the generic call_worker_service
-#[cfg(feature = "service_binding")]
-pub async fn fetch_graph_prediction_from_worker(
-    req: Request,
-    fetcher: &Fetcher,
-    pair_symbol: &str,
-    timeframe: &str,
-) -> Result<RefinedGraphPredictionResponse> {
-    // Construct the specific path for this endpoint
-    let relative_path = format!("api/v1/predict/{}/{}", pair_symbol, timeframe);
-
-    // Call the generic function
-    call_worker_service::<RefinedGraphPredictionResponse>(req, fetcher, &relative_path).await
-        .context("Failed to fetch graph prediction from worker service") // Add context
-}
-
 
 pub async fn fetch_graph_prediction(
     api_url: &str,
@@ -236,7 +226,6 @@ mod tests {
         assert!(current_time_dt > now);
         assert!(current_datetime_dt > now.with_timezone(&chrono_tz::Asia::Tokyo));
 
-
         // Verify klines
         let klines = json_value["klines"].as_array().unwrap();
         assert_eq!(klines.len(), 24); // 24 candles
@@ -246,10 +235,9 @@ mod tests {
             let current_kline_time = current_kline[0].as_i64().unwrap(); // Renamed variable
             let next_kline_time = next_kline[0].as_i64().unwrap(); // Renamed variable
             assert_eq!(next_kline_time - current_kline_time, 3_600_000); // 1-hour interval
-            // This check might be too strict if the mock data generation logic changes slightly
-            // assert!(current_kline_time > now.timestamp_millis()); // Consider removing or adjusting this check if mock data generation has variability
+                                                                         // This check might be too strict if the mock data generation logic changes slightly
+                                                                         // assert!(current_kline_time > now.timestamp_millis()); // Consider removing or adjusting this check if mock data generation has variability
         }
-
 
         // Verify signal times
         let signals = json_value["signals"].as_array().unwrap();

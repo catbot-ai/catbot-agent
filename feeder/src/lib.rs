@@ -3,9 +3,11 @@ mod charts;
 use charts::candle::Chart;
 use chrono_tz::Asia::Tokyo;
 use common::binance::fetch_orderbook_depth_usdt;
-use common::cooker::fetch_graph_prediction_from_worker;
+// Import the generic service caller and the specific prediction function
+use common::cooker::call_worker_service;
 use common::sources::binance::fetch_binance_kline_usdt;
 use common::Kline;
+use common::RefinedGraphPredictionResponse; // Import the response type
 
 use std::ops::Deref;
 use worker::*;
@@ -58,7 +60,9 @@ pub async fn handle_chart_prediction(
         let timeframe = ctx.param("timeframe").unwrap_or(&binding);
 
         // Finalize api_url
-        let api_url = format!("{api_url}/{pair_symbol}/{timeframe}");
+        let relative_path = format!("{pair_symbol}/{timeframe}");
+        let api_url_string = format!("{api_url}/{relative_path}");
+        let api_url = Url::parse(&api_url_string).unwrap();
 
         // Get font
         let kv_store = ctx.kv("ASSETS").unwrap();
@@ -98,22 +102,39 @@ pub async fn handle_chart_prediction(
         };
 
         let signals = if is_signals {
-            // TODO: Extract signal for plot the chart
+            // Call directly
             #[cfg(not(feature = "service_binding"))]
-            let prediction = fetch_graph_prediction(&api_url, &pair_symbol, &timeframe, None).await;
+            let prediction = {
+                fetch_graph_prediction(&api_url, &pair_symbol, timeframe, None)
+                    .await
+                    .map_err(|e| {
+                        worker::Error::RustError(format!("Failed direct prediction fetch: {}", e))
+                    })
+            };
 
+            // Call via service binding
             #[cfg(feature = "service_binding")]
-            let fetcher = ctx.env.service("COOKER")?;
-            let prediction =
-                fetch_graph_prediction_from_worker(req, &fetcher, &pair_symbol, timeframe).await;
+            let prediction = {
+                // Use the generic service caller with a relative path
+                let fetcher = ctx.env.service("COOKER")?;
+                let relative_path = api_url.path();
+                call_worker_service::<RefinedGraphPredictionResponse>(req, &fetcher, relative_path)
+                    .await
+                    .map_err(|e| {
+                        worker::Error::RustError(format!("Failed service binding call: {}", e))
+                    })
+            };
 
             let predicted = match prediction {
                 Ok(predicted_candle_data) => predicted_candle_data,
-                Err(error) => {
+                Err(worker_err) => {
+                    // Log the underlying error if possible
+                    console_error!("Prediction fetch failed: {}", worker_err);
+                    // Return a worker::Response error
                     return Response::error(
-                        format!("Bad Request - Missing prediction data from {api_url}: {error}"),
+                        format!("Bad Request - Missing prediction data: {}", worker_err),
                         400,
-                    )
+                    );
                 }
             };
             predicted.signals
