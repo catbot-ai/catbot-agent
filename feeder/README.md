@@ -14,7 +14,7 @@ npx wrangler kv key put --binding=ASSETS "RobotoMono-Regular.ttf" --path=RobotoM
 
 ```
 # local
-npx wrangler dev --live-reload
+npx wrangler dev --live-reload --port 9090
 ```
 
 ## Develop (remote)
