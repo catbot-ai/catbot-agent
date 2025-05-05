@@ -106,6 +106,7 @@ pub struct GeminiCallBuilder<'a> {
     function_declarations: Vec<JsonValue>,
 }
 
+#[allow(unused)]
 impl<'a> GeminiCallBuilder<'a> {
     pub fn new(provider: &'a GeminiProvider, model: &'a GeminiModel, prompt: String) -> Self {
         Self {

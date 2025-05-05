@@ -18,6 +18,7 @@ pub struct TradeDecision {
     pub rationale: String,
 }
 
+#[allow(unused)]
 pub async fn analyze_and_decide_trade(
     provider: &GeminiProvider,
     model: &GeminiModel,
