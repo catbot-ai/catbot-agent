@@ -63,7 +63,6 @@ pub async fn get_binance_prompt(
         context,
         historical_data_content, // Pass the generated content string
         orderbook,
-        1000f64, // Example budget
     );
 
     println!("Prompt generated successfully.");
