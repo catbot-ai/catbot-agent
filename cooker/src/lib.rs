@@ -268,10 +268,9 @@ pub async fn predict_with_gemini(
     let current_price = kline_data_1s[0].close;
 
     // Get position from wallet_address if provided
-    let maybe_preps_positions = match &request.wallet_address {
-        // Borrow request.wallet_address
+    let maybe_preps_positions = None;
+    match &request.wallet_address {
         Some(wallet_address) => match get_preps_position(Some(wallet_address.clone())).await {
-            // Clone wallet_address if needed
             Ok(positions) => positions,
             Err(error) => return Err(format!("Error getting position: {:?}", error.to_string())),
         },
