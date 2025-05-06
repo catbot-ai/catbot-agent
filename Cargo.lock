@@ -1497,6 +1497,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "currency_rs",
+ "futures-channel",
+ "futures-util",
+ "js-sys",
+ "log",
  "once_cell",
  "reqwest",
  "serde",
@@ -1504,6 +1508,9 @@ dependencies = [
  "strum",
  "strum_macros",
  "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "worker",
 ]
 
 [[package]]
