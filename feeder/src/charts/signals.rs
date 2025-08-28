@@ -23,6 +23,9 @@ pub fn draw_signals(
         let y = price_bounding_rect.top() as f32 + (AXIS_SCALE.y - ORDER_LABEL_SCALE.y) / 2.0;
         let h = price_bounding_rect.height() as f32;
 
+        // Too high
+        println!("price_bounding_rect.top:{}", price_bounding_rect.top());
+
         let target_percent =
             ((signal.predicted.target_price - current_price) / current_price) * 100.0;
         let stop_percent = ((signal.predicted.stop_loss - current_price) / current_price) * 100.0;

@@ -96,9 +96,7 @@ current_price={current_price}
 {instruction}
 
 ## Output in JSON:
-```json
 {schema_instruction}
-```
 "#
     )
 }

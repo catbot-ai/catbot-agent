@@ -24,7 +24,7 @@ pub struct GeminiResponse {
 pub struct Candidate {
     pub content: Content,
     pub finish_reason: String,
-    pub avg_logprobs: f64,
+    pub avg_logprobs: Option<f64>,
 }
 
 #[derive(Deserialize, Debug, Serialize)]
@@ -77,17 +77,17 @@ pub struct UsageMetadata {
 pub enum GeminiModel {
     #[default]
     /// Cost efficiency and low latency
-    #[strum(serialize = "gemini-2.0-flash-lite")]
-    Gemini2FlashLite,
+    #[strum(serialize = "gemini-2.5-flash-lite")]
+    Gemini25FlashLite,
     /// Next generation features, speed, thinking, realtime streaming, and multimodal generation
-    #[strum(serialize = "gemini-2.0-flash")]
-    Gemini2Flash,
+    #[strum(serialize = "gemini-2.5-flash")]
+    Gemini25Flash,
     /// Adaptive thinking, cost efficiency
     #[strum(serialize = "gemini-2.5-flash-preview-04-17")]
-    Gemini2FlashPreview,
+    Gemini25FlashPreview,
     /// Enhanced thinking and reasoning, multimodal understanding, advanced coding, and more
     #[strum(serialize = "gemini-2.5-pro-preview-03-25")]
-    Gemini2FlashProPreview,
+    Gemini25FlashProPreview,
 }
 
 pub struct GeminiProvider {

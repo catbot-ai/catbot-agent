@@ -1,3 +1,4 @@
+use crate::sources::cooker::clean_json_string;
 use anyhow::{anyhow, Context, Result};
 use serde::de::DeserializeOwned;
 use std::time::Duration; // Import Duration
@@ -179,10 +180,12 @@ impl ServiceBinding {
             .map_err(|e| anyhow!("Failed to read service binding response text: {}", e))?; // Convert worker::Error
 
         // Deserialize the JSON response text
-        serde_json::from_str(&response_text).with_context(|| {
+        let cleaned_response_text = clean_json_string(&response_text);
+        serde_json::from_str(cleaned_response_text).with_context(|| {
             format!(
-                "Failed to deserialize service binding response into {}",
-                std::any::type_name::<T>()
+                "Failed to deserialize service binding response into {}. Original text: '{}'",
+                std::any::type_name::<T>(),
+                response_text
             )
         })
     }

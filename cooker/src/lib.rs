@@ -15,7 +15,7 @@ use worker::*;
 
 pub async fn handle_root(_req: Request, _ctx: RouteContext<()>) -> worker::Result<Response> {
     Response::from_html(
-        r#"<a href="/api/v1/suggest/SOL_USDT">SUGGEST</a><br><a href="/api/v1/predict/SOL_USDT/1h">PREDICT</a><br>"#,
+        r#"v1<br/><a href="/api/v1/suggest/SOL_USDT">SUGGEST</a><br><a href="/api/v1/predict/SOL_USDT/1h">PREDICT</a><br>"#,
     )
 }
 
@@ -252,7 +252,7 @@ pub async fn predict_with_gemini(
     // Access fields from the request struct
     let gemini_model = if request.images.is_some() {
         println!("✨ Some images");
-        GeminiModel::Gemini2Flash
+        GeminiModel::Gemini25Flash
     } else {
         GeminiModel::default()
     };

@@ -6,6 +6,18 @@ use serde::de::DeserializeOwned; // Import DeserializeOwned
 #[cfg(feature = "service_binding")]
 use worker::*;
 
+/// Cleans a JSON string that might be wrapped in Markdown code blocks.
+pub fn clean_json_string(json_string: &str) -> &str {
+    let trimmed = json_string.trim();
+    if trimmed.starts_with("```json") && trimmed.ends_with("```") {
+        return trimmed
+            .trim_start_matches("```json")
+            .trim_end_matches("```")
+            .trim();
+    }
+    trimmed
+}
+
 /// Generic function to call a relative path on another worker service.
 #[cfg(feature = "service_binding")]
 pub async fn call_worker_service<T: DeserializeOwned>(
@@ -51,8 +63,11 @@ pub async fn call_worker_service<T: DeserializeOwned>(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to read worker response text: {}", e))?; // Convert worker::Error
 
+    // Clean the JSON string before parsing
+    let cleaned_text = clean_json_string(&response_text);
+
     // Deserialize the JSON response text
-    serde_json::from_str(&response_text).with_context(|| {
+    serde_json::from_str(cleaned_text).with_context(|| {
         format!(
             "Failed to deserialize worker response into {}",
             std::any::type_name::<T>()
@@ -93,10 +108,16 @@ pub async fn fetch_graph_prediction(
         ));
     }
 
-    // Deserialize the response body into RefinedGraphPredictionResponse
-    let prediction = response
-        .json::<RefinedGraphPredictionResponse>()
+    // Read the response body as text to allow for cleaning
+    let response_text = response
+        .text()
         .await
+        .map_err(|e| anyhow::anyhow!("Failed to read response text: {}", e))?;
+
+    let cleaned_text = clean_json_string(&response_text);
+
+    // Deserialize the cleaned response body into RefinedGraphPredictionResponse
+    let prediction = serde_json::from_str(cleaned_text)
         .map_err(|e| anyhow::anyhow!("Failed to deserialize response: {}", e))?;
 
     Ok(prediction)
