@@ -20,11 +20,13 @@ pub fn draw_signals(
 ) -> Result<(), Box<dyn Error>> {
     signals.iter().for_each(|signal| {
         let x = price_bounding_rect.left() as f32;
-        let y = price_bounding_rect.top() as f32 + (AXIS_SCALE.y - ORDER_LABEL_SCALE.y) / 2.0;
+        let mut y = price_bounding_rect.top() as f32 + (AXIS_SCALE.y - ORDER_LABEL_SCALE.y) / 2.0;
         let h = price_bounding_rect.height() as f32;
 
-        // Too high
-        println!("price_bounding_rect.top:{}", price_bounding_rect.top());
+        // Too high?
+        if price_bounding_rect.top() < 150 {
+            y += 150.0;
+        }
 
         let target_percent =
             ((signal.predicted.target_price - current_price) / current_price) * 100.0;

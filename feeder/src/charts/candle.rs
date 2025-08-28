@@ -794,10 +794,9 @@ mod test {
         let font_data = include_bytes!("../../RobotoMono-Regular.ttf").to_vec();
 
         let limit = 24 * 10;
-        let candle_data =
-            fetch_binance_kline_usdt::<Kline>(&binance_pair_symbol, &interval, limit)
-                .await
-                .unwrap();
+        let candle_data = fetch_binance_kline_usdt::<Kline>(&binance_pair_symbol, &interval, limit)
+            .await
+            .unwrap();
 
         let orderbook = fetch_orderbook_depth_usdt(&binance_pair_symbol, 2000)
             .await
@@ -991,7 +990,7 @@ mod test {
             .with_stoch_rsi()
             .with_orderbook(orderbook)
             .with_bollinger_band()
-            // .with_signals(signals)
+            .with_signals(signals)
             .build()
             .unwrap();
 
