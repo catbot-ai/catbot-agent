@@ -240,7 +240,7 @@ pub fn draw_macd(
         let bar_width = parse_interval_duration(interval);
 
         for (t, _, _, h) in macd_lines.iter() {
-            let is_lower = previous_h.map_or(false, |prev| *h < prev);
+            let is_lower = previous_h.map_or_else(|| false, |prev| *h < prev);
             let is_predicted = last_past_time < t.timestamp_millis();
             let fill_color = if is_predicted {
                 if *h > 0.0 {
@@ -558,7 +558,7 @@ pub fn draw_orderbook(
             draw_label(
                 img,
                 font,
-                &format!("{:.0}", price),
+                &format!("{price:.0}"),
                 offset_x,
                 offset_y + current_y as f32,
                 ORDER_LABEL_SCALE,
@@ -600,7 +600,7 @@ pub fn draw_orderbook(
             draw_label(
                 img,
                 font,
-                &format!("{:.0}", price),
+                &format!("{price:.0}"),
                 offset_x,
                 offset_y + current_y as f32,
                 ORDER_LABEL_SCALE,

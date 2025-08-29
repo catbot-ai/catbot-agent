@@ -322,7 +322,7 @@ impl Chart {
         let low_bounding_rect = draw_hallow_label(
             img,
             font,
-            &format!("LOW:{:.2}", lowest_price),
+            &format!("LOW:{lowest_price:.2}"),
             new_label_low_x,
             label_low_y,
             label_scale,
@@ -346,7 +346,7 @@ impl Chart {
         let high_bounding_rect = draw_hallow_label(
             img,
             font,
-            &format!("HIGH:{:.2}", highest_price),
+            &format!("HIGH:{highest_price:.2}"),
             new_label_high_x,
             label_high_y,
             label_scale,

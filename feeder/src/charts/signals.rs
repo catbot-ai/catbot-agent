@@ -100,7 +100,7 @@ pub fn draw_signals(
         let _ = draw_label(
             img,
             font,
-            &format!("{}{:.2}%", prefix, stop_percent),
+            &format!("{prefix}{stop_percent:.2}%"),
             x + 1.0,
             stop_percent_y,
             label_scale,
@@ -133,7 +133,7 @@ pub fn draw_signals(
         let _ = draw_label(
             img,
             font,
-            &format!("{}{:.2}%", prefix, target_percent),
+            &format!("{prefix}{target_percent:.2}%"),
             x + 1.0,
             target_percent_y,
             label_scale,

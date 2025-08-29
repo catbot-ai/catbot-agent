@@ -59,9 +59,9 @@ pub fn format_short_number(num: i64) -> String {
     let float_num = num as f64;
     if num < 1_000_000 {
         let result = float_num / 1000.0;
-        format!("{:.2}K", result)
+        format!("{result:.2}K")
     } else {
         let result = float_num / 1_000_000.0;
-        format!("{:.2}M", result)
+        format!("{result:.2}M")
     }
 }

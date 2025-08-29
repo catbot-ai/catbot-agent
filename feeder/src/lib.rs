@@ -126,8 +126,7 @@ pub async fn handle_chart_prediction(
                         .await
                         .map_err(|e| {
                             worker::Error::RustError(format!(
-                                "Failed service binding prediction fetch: {}",
-                                e
+                                "Failed service binding prediction fetch: {e}"
                             ))
                         })
                 }
@@ -140,7 +139,7 @@ pub async fn handle_chart_prediction(
                     console_error!("Prediction fetch failed: {}", worker_err);
                     // Return a worker::Response error
                     return Response::error(
-                        format!("Bad Request - Missing prediction data: {}", worker_err),
+                        format!("Bad Request - Missing prediction data: {worker_err}"),
                         400,
                     );
                 }
