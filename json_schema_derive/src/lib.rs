@@ -26,12 +26,12 @@ pub fn derive_to_json_schema(input: TokenStream) -> TokenStream {
                 } else {
                     Err(meta.error("unsupported gemini attribute at struct level, expected 'name' or 'description'"))
                 }
-            }).unwrap_or_else(|e| panic!("Failed to parse struct-level gemini attribute: {}", e));
+            }).unwrap_or_else(|e| panic!("Failed to parse struct-level gemini attribute: {e}"));
         }
     }
 
     let fn_name = fn_name.unwrap_or_else(|| format!("execute_{}", name.to_string().to_lowercase()));
-    let fn_description = fn_description.unwrap_or_else(|| format!("Function for {}", name));
+    let fn_description = fn_description.unwrap_or_else(|| format!("Function for {name}"));
 
     let fields = match input.data {
         Data::Struct(ref data) => match data.fields {
@@ -87,16 +87,12 @@ pub fn derive_to_json_schema(input: TokenStream) -> TokenStream {
                     }
                 })
                 .unwrap_or_else(|e| {
-                    panic!(
-                        "Failed to parse field gemini attribute for '{}': {}",
-                        field_name, e
-                    )
+                    panic!("Failed to parse field gemini attribute for '{field_name}': {e}",)
                 });
             }
         }
 
-        let description =
-            description.unwrap_or_else(|| format!("No description for {}", field_name));
+        let description = description.unwrap_or_else(|| format!("No description for {field_name}"));
 
         properties.push(quote! {
             #field_name: {

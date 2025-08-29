@@ -5,7 +5,7 @@ async fn get_signals(intervals: Vec<&str>) -> Result<Response> {
     // 1. get signals from worker KV by interval:time_stamp `1h:`
 
     // TODO
-    let html = format!("Fetching signals for intervals: {:?}", intervals);
+    let html = format!("Fetching signals for intervals: {intervals:?}");
     Response::from_html(html)
 }
 
