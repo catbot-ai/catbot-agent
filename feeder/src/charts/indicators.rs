@@ -81,10 +81,11 @@ pub fn draw_bollinger_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     klines: &[Kline],
     font: &impl Font,
+    y: f32,
 ) -> Result<(), Box<dyn Error>> {
     if !klines.is_empty() {
         let ma_bb_detail = get_latest_bb_ma(klines)?;
-        let mut y_offset = 50.0;
+        let mut y_offset = y;
         for line in ma_bb_detail.lines() {
             draw_label(
                 img,
@@ -429,7 +430,7 @@ pub fn draw_orderbook(
     let price_rect_height_half = price_rect_height / 2;
 
     // Group the order book data f32 type.
-    let (grouped_bids, grouped_asks) = group_by_fractional_part(orderbook, FractionalPart::Two);
+    let (grouped_bids, grouped_asks) = group_by_fractional_part(orderbook, FractionalPart::One);
 
     // Prepare bid data for the histogram
     let mut bid_data: Vec<(f32, f32)> = grouped_bids

@@ -289,17 +289,21 @@ impl Chart {
 
         // Map prices to y-coordinates
         let price_range = (max_price * 1.05 - min_price * 0.95) as f64;
-        let lowest_y = if price_range != 0.0 {
+        let mut lowest_y = if price_range != 0.0 {
             (chart_height * (1.0 - ((lowest_price - min_price * 0.95) as f64 / price_range))) as f32
         } else {
             chart_height as f32 / 2.0
         };
-        let highest_y = if price_range != 0.0 {
+        let mut highest_y = if price_range != 0.0 {
             (chart_height * (1.0 - ((highest_price - min_price * 0.95) as f64 / price_range)))
                 as f32
         } else {
             chart_height as f32 / 2.0
         };
+
+        // Correct y
+        lowest_y += chart_height as f32 * 1.5 - 7.0;
+        highest_y += chart_height as f32 * 1.0 - 7.0;
 
         // Calculate label top-left coordinates
         let label_low_x = lowest_x;
@@ -509,14 +513,23 @@ impl Chart {
             min_price,
             max_price,
             chart_width,
-            (root_height as f32 * 0.5) as f64,
+            (root_height as f32 * 0.25) as f64,
             candle_width,
         )?;
+
+        // RSI
+        let mut current_y = 10.0;
+        if self.stoch_rsi_enabled {
+            draw_stoch_rsi_detail(&mut cropped_img, past_candles, &font, current_y)?;
+            current_y += root_height as f32 * 0.25
+        }
+
+        // Date
 
         let label_scale = PxScale { x: 20.0, y: 20.0 };
         let label_color = Rgb([255, 255, 255]);
         let background_color = Rgb([0, 0, 0]);
-        let chart_bottom_y = (root_height as f32 * 0.5) - 20.0;
+        let chart_bottom_y = (root_height as f32 * 0.7) - 20.0;
 
         let start_label = start_visible.format("%Y-%m-%d %H:%M").to_string();
         draw_label(
@@ -547,36 +560,28 @@ impl Chart {
             Some(background_color),
         )?;
 
-        draw_candle_detail(&mut cropped_img, &self, &font)?;
+        draw_candle_detail(&mut cropped_img, &self, &font, root_height as f32 * 0.225)?;
         if self.bollinger_enabled {
-            draw_bollinger_detail(&mut cropped_img, past_candles, &font)?;
+            draw_bollinger_detail(&mut cropped_img, past_candles, &font, current_y)?;
         }
 
-        if self.volume_enabled || self.macd_enabled || self.stoch_rsi_enabled {
-            let num_indicators = [
-                self.volume_enabled,
-                self.macd_enabled,
-                self.stoch_rsi_enabled,
-            ]
-            .iter()
-            .filter(|&&enabled| enabled)
-            .count() as f32;
+        if self.volume_enabled || self.macd_enabled {
+            let num_indicators = [self.volume_enabled, self.macd_enabled]
+                .iter()
+                .filter(|&&enabled| enabled)
+                .count() as f32;
 
-            let section_height = root_height as f32 * 0.5 / num_indicators;
-            let top_section_height = root_height as f32 * 0.5;
+            let section_height = root_height as f32 * 0.3 / num_indicators;
+            let top_section_height = root_height as f32 * 0.7;
 
             let mut current_y = top_section_height;
 
             if self.volume_enabled {
-                draw_volume_detail(&mut cropped_img, past_candles, &font, current_y)?;
+                draw_volume_detail(&mut cropped_img, past_candles, &font, current_y + 10.0)?;
                 current_y += section_height;
             }
             if self.macd_enabled {
-                draw_macd_detail(&mut cropped_img, past_candles, &font, current_y)?;
-                current_y += section_height;
-            }
-            if self.stoch_rsi_enabled {
-                draw_stoch_rsi_detail(&mut cropped_img, past_candles, &font, current_y)?;
+                draw_macd_detail(&mut cropped_img, past_candles, &font, current_y + 10.0)?;
             }
         }
 
@@ -744,6 +749,7 @@ pub fn draw_candle_detail(
     img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
     chart: &Chart,
     font: &impl Font,
+    y: f32,
 ) -> Result<(), Box<dyn Error>> {
     if let Some(past_candle_data) = &chart.past_candle_data {
         let latest_candle = past_candle_data.last().unwrap();
@@ -768,7 +774,7 @@ pub fn draw_candle_detail(
             font,
             &candle_detail,
             10.0,
-            10.0,
+            y,
             HEAD_SCALE,
             LABEL_COLOR,
             Some(TRANSPARENT_BLACK_50),
@@ -990,7 +996,7 @@ mod test {
             .with_stoch_rsi()
             .with_orderbook(orderbook)
             .with_bollinger_band()
-            // .with_signals(signals)
+            .with_signals(signals)
             .build()
             .unwrap();
 
