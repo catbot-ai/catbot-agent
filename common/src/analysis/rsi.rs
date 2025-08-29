@@ -121,7 +121,7 @@ pub fn parse_bb_csv(past_bb_lines: &Vec<(u64, f32, f32, f32)>) -> String {
     csv_string.push_str("at,avg,upper,lower\n"); // Add CSV header
 
     for &(at, avg, upper, lower) in past_bb_lines {
-        csv_string.push_str(&format!("{},{:.2},{:.2},{:.2}\n", at, avg, upper, lower));
+        csv_string.push_str(&format!("{at},{avg:.2},{upper:.2},{lower:.2}\n"));
     }
 
     csv_string

@@ -141,12 +141,12 @@ impl ServiceBinding {
 
         // Construct the new URI for the target service path
         let path_to_append = relative_path.trim_start_matches('/');
-        let new_uri_str = format!("{}://{}/{}", scheme, authority, path_to_append);
+        let new_uri_str = format!("{scheme}://{authority}/{path_to_append}");
 
         // Update the HttpRequest URI
         *http_request.uri_mut() = new_uri_str
             .parse()
-            .with_context(|| format!("Failed to parse new service binding URI: {}", new_uri_str))?;
+            .with_context(|| format!("Failed to parse new service binding URI: {new_uri_str}"))?;
 
         // Fetch the request from the target service using the fetcher
         let fetcher_response = self

@@ -125,10 +125,10 @@ impl KlineValue {
             KlineValue::String(s) => {
                 let float_val = s
                     .parse::<f64>()
-                    .with_context(|| format!("Failed to parse string '{}' as f64", s))?;
+                    .with_context(|| format!("Failed to parse string '{s}' as f64"))?;
                 Ok(JsonValue::Number(
                     JsonNumber::from_f64(float_val).ok_or_else(|| {
-                        anyhow::anyhow!("Failed to convert {} to JsonNumber", float_val)
+                        anyhow::anyhow!("Failed to convert {float_val} to JsonNumber")
                     })?,
                 ))
             }

@@ -52,7 +52,7 @@ mod test {
         let current_ts: i64 = now.timestamp(); // Get current Unix timestamp (seconds)
 
         println!("Current Time: {}", now.to_rfc3339());
-        println!("Current Timestamp (seconds): {}", current_ts);
+        println!("Current Timestamp (seconds): {current_ts}");
         println!("---");
 
         // Calculate the keys using the new function and enum

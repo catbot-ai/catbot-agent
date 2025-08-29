@@ -30,11 +30,10 @@ where
     // https://adversely-amazing-wildcat.edgecompute.app/?url=https://data-api.binance.vision/api/v3/uiKlines?limit=1&symbol=SOLUSDT&interval=1s
 
     let url = format!(
-        "https://adversely-amazing-wildcat.edgecompute.app/?url={BINANCE_API_URL}/uiKlines?limit={}&symbol={}&interval={}",
-        limit, binance_pair_symbol, interval
+        "https://adversely-amazing-wildcat.edgecompute.app/?url={BINANCE_API_URL}/uiKlines?limit={limit}&symbol={binance_pair_symbol}&interval={interval}"
     );
 
-    println!("Fetching data from: {}", url);
+    println!("Fetching data from: {url}");
 
     let response = client
         .get(&url)
@@ -63,8 +62,7 @@ pub async fn fetch_orderbook_depth_usdt(pair_symbol: &str, limit: i32) -> Result
     let client = Client::new();
     // https://adversely-amazing-wildcat.edgecompute.app/?url=https://api.binance.com/api/v3/depth?symbol=SOLUSDT&limit=1
     let url = format!(
-        "https://adversely-amazing-wildcat.edgecompute.app/?url={BINANCE_API_URL}/depth?symbol={}&limit={}",
-        binance_pair_symbol, limit
+        "https://adversely-amazing-wildcat.edgecompute.app/?url={BINANCE_API_URL}/depth?symbol={binance_pair_symbol}&limit={limit}"
     );
     let response = client.get(&url).send().await?;
     let orderbook_data: OrderBook = response.json().await?;
@@ -168,10 +166,7 @@ mod test {
         let pair_symbol = "SOL_USDT";
         let interval = "1h";
 
-        println!(
-            "Fetcher started for symbol: {}, interval: {}",
-            pair_symbol, interval
-        );
+        println!("Fetcher started for symbol: {pair_symbol}, interval: {interval}");
 
         let kline_data = fetch_binance_kline_usdt::<Kline>(pair_symbol, interval, 1)
             .await

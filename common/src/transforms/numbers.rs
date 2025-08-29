@@ -31,7 +31,6 @@ pub fn group_by_fractional_part(
         FractionalPart::Two => 0.5,
         FractionalPart::Five => 0.2,
         FractionalPart::Ten => 0.1,
-        FractionalPart::Ten => 0.1,
         FractionalPart::Hundred => 0.01,
     };
 
@@ -40,7 +39,7 @@ pub fn group_by_fractional_part(
             if let (Ok(price_str), Ok(amount_str)) = (bid[0].parse::<f64>(), bid[1].parse::<f64>())
             {
                 let price = (price_str * multiplier).floor() / multiplier;
-                let price_str = format!("{:.0}", price); // Format to avoid floating point issues in keys
+                let price_str = format!("{price:.0}"); // Format to avoid floating point issues in keys
                 *grouped_bids.entry(price_str).or_insert(0.0) += amount_str;
             }
         }
@@ -51,14 +50,14 @@ pub fn group_by_fractional_part(
             if let (Ok(price_str), Ok(amount_str)) = (ask[0].parse::<f64>(), ask[1].parse::<f64>())
             {
                 let price = (price_str * multiplier).ceil() / multiplier;
-                let price_str = format!("{:.0}", price); // Format to avoid floating point issues in keys
+                let price_str = format!("{price:.0}"); // Format to avoid floating point issues in keys
                 *grouped_asks.entry(price_str).or_insert(0.0) += amount_str;
             }
         }
     }
 
-    println!("Grouped Bids: {:?}", grouped_bids);
-    println!("Grouped Asks: {:?}", grouped_asks);
+    println!("Grouped Bids: {grouped_bids:?}");
+    println!("Grouped Asks: {grouped_asks:?}");
 
     (grouped_bids, grouped_asks)
 }
@@ -109,11 +108,11 @@ pub fn top_n_bids_asks(
                         cumulative_amount: amount_f64,
                     })
                 } else {
-                    eprintln!("Error parsing amount: {}", amount);
+                    eprintln!("Error parsing amount: {amount}");
                     None
                 }
             } else {
-                eprintln!("Error parsing price: {}", price_str);
+                eprintln!("Error parsing price: {price_str}");
                 None
             }
         })
@@ -144,9 +143,9 @@ pub fn btree_map_to_csv(grouped_data: &BTreeMap<String, f64>) -> String {
     for (price_str, amount) in grouped_data.iter() {
         // Parse price_str to f64 for formatting (as in your to_csv function)
         if let Ok(price) = price_str.parse::<f64>() {
-            csv_string.push_str(&format!("{:.0},{:.3}\n", price, amount));
+            csv_string.push_str(&format!("{price:.0},{amount:.3}\n"));
         } else {
-            eprintln!("Error parsing price: {}", price_str);
+            eprintln!("Error parsing price: {price_str}");
         }
     }
     csv_string

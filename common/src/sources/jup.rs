@@ -13,7 +13,7 @@ pub async fn get_preps_position(
 
     let perps_fetcher = PerpsFetcher::default();
 
-    println!("Fetching positions for wallet: {:?}", wallet_address);
+    println!("Fetching positions for wallet: {wallet_address:?}");
     match perps_fetcher.fetch_positions(&wallet_address).await {
         Ok(positions_result) => {
             let positions: Vec<PerpsPosition> = positions_result

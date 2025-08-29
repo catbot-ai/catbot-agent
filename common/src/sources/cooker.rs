@@ -41,12 +41,12 @@ pub async fn call_worker_service<T: DeserializeOwned>(
     // Ensure relative_path doesn't start with a slash if the authority ends with one, or vice-versa.
     // Basic handling, might need refinement depending on expected path formats.
     let path_to_append = relative_path.trim_start_matches('/');
-    let new_uri_str = format!("{}://{}/{}", scheme, authority, path_to_append);
+    let new_uri_str = format!("{scheme}://{authority}/{path_to_append}");
 
     // Update the HttpRequest URI
     *http_request.uri_mut() = new_uri_str
         .parse()
-        .with_context(|| format!("Failed to parse new URI: {}", new_uri_str))?;
+        .with_context(|| format!("Failed to parse new URI: {new_uri_str}"))?;
 
     // Fetch the request from the target service
     let resp = fetcher
@@ -91,7 +91,7 @@ pub async fn fetch_graph_prediction(
 
     // Add API key to headers if provided
     if let Some(key) = api_key {
-        request = request.header("Authorization", format!("Bearer {}", key));
+        request = request.header("Authorization", format!("Bearer {key}"));
     }
 
     // Send the request and get the response

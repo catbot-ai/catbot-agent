@@ -16,8 +16,7 @@ fn parse_interval_spec(spec: &str) -> (String, Option<i32>) {
                 return (interval_part.to_string(), Some(limit));
             }
             println!(
-                "Warning: Invalid limit '{}' in spec '{}'. Treating whole as interval name.",
-                limit_part, spec
+                "Warning: Invalid limit '{limit_part}' in spec '{spec}'. Treating whole as interval name."
             );
         }
     }
@@ -119,18 +118,12 @@ impl<'a> PriceHistoryBuilder<'a> {
             let interval = interval_name.clone();
             let pair_symbol_for_fetch = self.pair_symbol.to_string();
 
-            println!(
-                "Builder: Fetching data for {} interval {} with limit {}",
-                pair_symbol_for_fetch, interval, limit_to_use
-            );
-
             let kline_data: Vec<Kline> =
                 fetch_binance_kline_usdt::<Kline>(&pair_symbol_for_fetch, &interval, limit_to_use)
                     .await
                     .with_context(|| {
                         format!(
-                            "Builder: Failed fetching klines for {} interval {} with limit {}",
-                            pair_symbol_for_fetch, interval, limit_to_use
+                            "Builder: Failed fetching klines for {pair_symbol_for_fetch} interval {interval} with limit {limit_to_use}"
                         )
                     })?;
 
@@ -163,41 +156,35 @@ impl<'a> PriceHistoryBuilder<'a> {
 
         for (interval_name, opt_limit) in &sorted_requested_klines {
             let display_interval = match opt_limit {
-                Some(limit) => format!("{}:{}", interval_name, limit),
+                Some(limit) => format!("{interval_name}:{limit}"),
                 None => interval_name.clone(),
             };
 
             if let Some(data) = kline_data_map.get(interval_name) {
                 if data.is_empty() {
-                    klines_output.push_str(&format!(" ({}) No data found.\n", display_interval));
+                    klines_output.push_str(&format!(" ({display_interval}) No data found.\n"));
                     continue;
                 }
                 match klines_to_csv(data) {
                     Ok(csv_data) => {
-                        klines_output.push_str(&format!("\n* Price: {}\n", interval_name));
+                        klines_output.push_str(&format!("\n* Price: {interval_name}\n"));
                         klines_output.push_str("```csv\n");
                         klines_output.push_str(&csv_data);
                         klines_output.push_str("```\n");
                     }
                     Err(e) => {
                         klines_output.push_str(&format!(
-                            "\n* Interval: {} (Error formatting Klines to CSV: {})\n",
-                            display_interval, e
+                            "\n* Interval: {display_interval} (Error formatting Klines to CSV: {e})\n"
                         ));
-                        eprintln!(
-                            "Error formatting klines to CSV for {}: {}",
-                            interval_name, e
-                        );
+                        eprintln!("Error formatting klines to CSV for {interval_name}: {e}");
                     }
                 }
             } else {
                 klines_output.push_str(&format!(
-                    "\n* Interval: {} (Data unexpectedly missing after fetch)\n",
-                    display_interval
+                    "\n* Interval: {display_interval} (Data unexpectedly missing after fetch)\n"
                 ));
                 eprintln!(
-                    "Warning: Kline data for interval {} requested via with_klines but not found in map.",
-                    interval_name
+                    "Warning: Kline data for interval {interval_name} requested via with_klines but not found in map."
                 );
             }
         }
@@ -221,42 +208,38 @@ impl<'a> PriceHistoryBuilder<'a> {
 
         for (interval_name, opt_limit) in &sorted_requested_rsi {
             let display_interval = match opt_limit {
-                Some(limit) => format!("{}:{}", interval_name, limit),
+                Some(limit) => format!("{interval_name}:{limit}"),
                 None => interval_name.clone(),
             };
 
             if let Some(data) = kline_data_map.get(interval_name) {
                 if data.is_empty() {
                     stoch_rsi_output.push_str(&format!(
-                        " ({}) No kline data available to calculate StochRSI.\n",
-                        display_interval
+                        " ({display_interval}) No kline data available to calculate StochRSI.\n"
                     ));
                     continue;
                 }
                 match get_stoch_rsi_csv(data) {
                     Ok(stoch_rsi_csv) => {
                         stoch_rsi_output
-                            .push_str(&format!("\n* Stochastic RSI: {}\n", interval_name));
+                            .push_str(&format!("\n* Stochastic RSI: {interval_name}\n"));
                         stoch_rsi_output.push_str("```csv\n");
                         stoch_rsi_output.push_str(&stoch_rsi_csv);
                         stoch_rsi_output.push_str("```\n");
                     }
                     Err(e) => {
                         stoch_rsi_output.push_str(&format!(
-                            "\n* Interval: {} (Error calculating StochRSI: {})\n",
-                            display_interval, e
+                            "\n* Interval: {display_interval} (Error calculating StochRSI: {e})\n"
                         ));
-                        eprintln!("Error calculating StochRSI for {}: {}", interval_name, e);
+                        eprintln!("Error calculating StochRSI for {interval_name}: {e}");
                     }
                 }
             } else {
                 stoch_rsi_output.push_str(&format!(
-                    "\n* Interval: {} (Kline data unexpectedly missing for StochRSI calculation)\n",
-                    display_interval
+                    "\n* Interval: {display_interval} (Kline data unexpectedly missing for StochRSI calculation)\n"
                 ));
                 eprintln!(
-                    "Warning: Kline data for interval {} needed for StochRSI but not found in map.",
-                    interval_name
+                    "Warning: Kline data for interval {interval_name} needed for StochRSI but not found in map."
                 );
             }
         }
@@ -276,44 +259,37 @@ impl<'a> PriceHistoryBuilder<'a> {
 
         for (interval_name, opt_limit) in &sorted_requested_bb {
             let display_interval = match opt_limit {
-                Some(limit) => format!("{}:{}", interval_name, limit),
+                Some(limit) => format!("{interval_name}:{limit}"),
                 None => interval_name.clone(),
             };
 
             if let Some(data) = kline_data_map.get(interval_name) {
                 if data.is_empty() {
                     output.push_str(&format!(
-                        " ({}) No kline data available to calculate Boilinger Band.\n",
-                        display_interval
+                        " ({display_interval}) No kline data available to calculate Boilinger Band.\n"
                     ));
                     continue;
                 }
                 match get_latest_bb_ma(data) {
                     Ok(csv) => {
-                        output.push_str(&format!("\n* Boilinger Band: {}\n", interval_name));
+                        output.push_str(&format!("\n* Boilinger Band: {interval_name}\n"));
                         output.push_str("```csv\n");
                         output.push_str(&csv);
                         output.push_str("```\n");
                     }
                     Err(e) => {
                         output.push_str(&format!(
-                            "\n* Interval: {} (Error calculating Boilinger Band: {})\n",
-                            display_interval, e
+                            "\n* Interval: {display_interval} (Error calculating Boilinger Band: {e})\n"
                         ));
-                        eprintln!(
-                            "Error calculating Boilinger Band for {}: {}",
-                            interval_name, e
-                        );
+                        eprintln!("Error calculating Boilinger Band for {interval_name}: {e}");
                     }
                 }
             } else {
                 output.push_str(&format!(
-                    "\n* Interval: {} (Boilinger Band data unexpectedly missing for Boilinger Band calculation)\n",
-                    display_interval
+                    "\n* Interval: {display_interval} (Boilinger Band data unexpectedly missing for Boilinger Band calculation)\n"
                 ));
                 eprintln!(
-                    "Warning: Boilinger Band data for interval {} needed for Boilinger Band but not found in map.",
-                    interval_name
+                    "Warning: Boilinger Band data for interval {interval_name} needed for Boilinger Band but not found in map."
                 );
             }
         }
@@ -336,23 +312,21 @@ impl<'a> PriceHistoryBuilder<'a> {
 
         for (interval_name, opt_limit) in &sorted_requested_bb_ma {
             let display_interval = match opt_limit {
-                Some(limit) => format!("{}:{}", interval_name, limit),
+                Some(limit) => format!("{interval_name}:{limit}"),
                 None => interval_name.clone(),
             };
 
             if let Some(data) = kline_data_map.get(interval_name) {
                 if data.is_empty() {
                     output.push_str(&format!(
-                        " ({}) No kline data available to calculate Boilinger Band and Moving Average.\n",
-                        display_interval
+                        " ({display_interval}) No kline data available to calculate Boilinger Band and Moving Average.\n"
                     ));
                     continue;
                 }
                 match get_latest_bb_ma(data) {
                     Ok(detail) => {
                         output.push_str(&format!(
-                            "\n* Boilinger Band and Moving Average: {}\n",
-                            interval_name
+                            "\n* Boilinger Band and Moving Average: {interval_name}\n"
                         ));
                         output.push_str("```\n");
                         output.push_str(&detail);
@@ -360,23 +334,19 @@ impl<'a> PriceHistoryBuilder<'a> {
                     }
                     Err(e) => {
                         output.push_str(&format!(
-                            "\n* Interval: {} (Error calculating Boilinger Band and Moving Average: {})\n",
-                            display_interval, e
+                            "\n* Interval: {display_interval} (Error calculating Boilinger Band and Moving Average: {e})\n"
                         ));
                         eprintln!(
-                            "Error calculating Boilinger Band and Moving Average for {}: {}",
-                            interval_name, e
+                            "Error calculating Boilinger Band and Moving Average for {interval_name}: {e}"
                         );
                     }
                 }
             } else {
                 output.push_str(&format!(
-                        "\n* Interval: {} (Boilinger Band data unexpectedly missing for Boilinger Band calculation)\n",
-                        display_interval
+                        "\n* Interval: {display_interval} (Boilinger Band data unexpectedly missing for Boilinger Band calculation)\n"
                     ));
                 eprintln!(
-                        "Warning: Boilinger Band data for interval {} needed for Boilinger Band but not found in map.",
-                        interval_name
+                        "Warning: Boilinger Band data for interval {interval_name} needed for Boilinger Band but not found in map."
                     );
             }
         }
@@ -456,10 +426,8 @@ mod tests {
         interval_display: &str,
         expected_header: &str,
     ) -> bool {
-        let block_start_marker = format!(
-            "\n* Interval: {}\n```csv\n{}",
-            interval_display, expected_header
-        );
+        let block_start_marker =
+            format!("\n* Interval: {interval_display}\n```csv\n{expected_header}");
         if let Some(header_start) = content.find(&block_start_marker) {
             let data_start = header_start + block_start_marker.len();
             if let Some(block_end) = content[data_start..].find("\n```\n") {
@@ -489,10 +457,7 @@ mod tests {
             .with_stoch_rsi(&stoch_rsi_intervals);
 
         let result_string = builder.build().await?; // Use build()
-        println!(
-            "--- Basic Report Test Output ---\n{}\n--- End ---",
-            result_string
-        );
+        println!("--- Basic Report Test Output ---\n{result_string}\n--- End ---");
 
         // Check Klines Section
         assert!(result_string.contains("\n**Klines (Price History):**\n"));
@@ -528,10 +493,7 @@ mod tests {
             PriceHistoryBuilder::new(pair_symbol, default_limit).with_klines(&kline_intervals);
 
         let result_string = builder.build().await?; // Use build()
-        println!(
-            "--- Klines Only Report Test Output ---\n{}\n--- End ---",
-            result_string
-        );
+        println!("--- Klines Only Report Test Output ---\n{result_string}\n--- End ---");
 
         assert!(result_string.contains("\n**Klines (Price History):**\n"));
         assert!(!result_string.contains("\n**Stochastic RSI:**\n")); // Ensure RSI section is absent
@@ -558,10 +520,7 @@ mod tests {
             .with_stoch_rsi(&stoch_rsi_intervals);
 
         let result_string = builder.build().await?; // Use build()
-        println!(
-            "--- RSI Only Report Test Output ---\n{}\n--- End ---",
-            result_string
-        );
+        println!("--- RSI Only Report Test Output ---\n{result_string}\n--- End ---");
 
         assert!(!result_string.contains("\n**Klines (Price History):**\n")); // Ensure Klines section is absent
         assert!(result_string.contains("\n**Stochastic RSI:**\n"));
@@ -581,10 +540,7 @@ mod tests {
         let builder = PriceHistoryBuilder::new(pair_symbol, default_limit); // No .with calls
 
         let result_string = builder.build().await?; // Use build()
-        println!(
-            "--- No Request Report Test Output ---\n{}\n--- End ---",
-            result_string
-        );
+        println!("--- No Request Report Test Output ---\n{result_string}\n--- End ---");
 
         assert_eq!(result_string, "No historical data intervals specified.\n");
         Ok(())
