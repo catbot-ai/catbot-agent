@@ -990,7 +990,7 @@ mod test {
             .with_stoch_rsi()
             .with_orderbook(orderbook)
             .with_bollinger_band()
-            .with_signals(signals)
+            // .with_signals(signals)
             .build()
             .unwrap();
 

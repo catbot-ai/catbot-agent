@@ -8,6 +8,10 @@ pub enum FractionalPart {
     OneTenth,
     #[strum(serialize = "1")]
     One,
+    #[strum(serialize = "2")]
+    Two,
+    #[strum(serialize = "5")]
+    Five,
     #[strum(serialize = "10")]
     Ten,
     #[strum(serialize = "100")]
@@ -24,6 +28,9 @@ pub fn group_by_fractional_part(
     let multiplier = match fractional_part {
         FractionalPart::OneTenth => 10.0,
         FractionalPart::One => 1.0,
+        FractionalPart::Two => 0.5,
+        FractionalPart::Five => 0.2,
+        FractionalPart::Ten => 0.1,
         FractionalPart::Ten => 0.1,
         FractionalPart::Hundred => 0.01,
     };
