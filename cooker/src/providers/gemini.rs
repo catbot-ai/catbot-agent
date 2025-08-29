@@ -167,7 +167,7 @@ impl<'a> GeminiCallBuilder<'a> {
             payload_json["tools"] = json!([{"function_declarations": self.function_declarations}]);
         }
 
-        println!("Request URL: {}", gemini_api_url);
+        println!("Request URL: {gemini_api_url}");
         println!(
             "Request Payload: {}",
             serde_json::to_string_pretty(&payload_json)?

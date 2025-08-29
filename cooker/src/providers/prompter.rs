@@ -129,10 +129,7 @@ mod tests {
         // let stoch_rsi_intervals = ["4h:100"];
         // let latest_bb_ma_intervals = ["4h:100"];
 
-        println!(
-            "Building historical data report for {} using PriceHistoryBuilder...",
-            pair_symbol
-        );
+        println!("Building historical data report for {pair_symbol} using PriceHistoryBuilder...");
 
         // Instantiate and configure the builder
         let full_report = PriceHistoryBuilder::new(pair_symbol, 100) // Base limit (can be overridden per item)
@@ -141,7 +138,7 @@ mod tests {
             .with_latest_bb_ma(latest_bb_ma_intervals)
             .build()
             .await
-            .with_context(|| format!("Failed to build historical report for {}", pair_symbol))?;
+            .with_context(|| format!("Failed to build historical report for {pair_symbol}"))?;
 
         Ok(full_report)
     }
@@ -155,7 +152,7 @@ mod tests {
         let interval = "1h".to_string(); // Example interval for context (instruction generation)
 
         // Fetch 1-second kline data to get current price
-        println!("Fetching current price for {}...", pair_symbol);
+        println!("Fetching current price for {pair_symbol}...");
         let kline_data_1s =
             fetch_binance_kline_usdt::<ConciseKline>(&token_symbol, "1s", 1).await?;
         let current_price = kline_data_1s
@@ -218,7 +215,7 @@ mod tests {
         );
 
         // Fetch orderbook
-        println!("Fetching order book for {}...", pair_symbol);
+        println!("Fetching order book for {pair_symbol}...");
         let orderbook = fetch_orderbook_depth_usdt(&pair_symbol, 1000).await?; // Use USDT pair symbol
 
         // Create a model instance (using default for example)
@@ -239,7 +236,7 @@ mod tests {
         println!("----------------------");
         // --- Assertions (Basic Checks) ---
         println!("Verifying prompt content...");
-        assert!(prompt.contains(&format!("Analyze {}", pair_symbol)));
+        assert!(prompt.contains(&format!("Analyze {pair_symbol}")));
         assert!(prompt.contains("## Historical Data:"));
         assert!(prompt.contains("## Consolidated Order Book Data (Grouped by 1.0):"));
         assert!(prompt.contains("price,cumulative_amount")); // Check for CSV headers in order book
@@ -264,7 +261,7 @@ mod tests {
         let interval = "4h".to_string(); // Example different interval for context
 
         // Fetch current price
-        println!("Fetching current price for {}...", binance_pair_symbol);
+        println!("Fetching current price for {binance_pair_symbol}...");
         let kline_data_1s =
             fetch_binance_kline_usdt::<ConciseKline>(&binance_pair_symbol, "1s", 1).await?;
         let current_price = kline_data_1s
@@ -314,7 +311,7 @@ mod tests {
         );
 
         // Fetch orderbook
-        println!("Fetching order book for {}...", pair_symbol);
+        println!("Fetching order book for {pair_symbol}...");
         let orderbook = fetch_orderbook_depth_usdt(&pair_symbol, 1000).await?;
 
         // Create a model instance
@@ -332,8 +329,8 @@ mod tests {
 
         // --- Assertions (Basic Checks) ---
         println!("Verifying prompt content...");
-        assert!(prompt.contains(&format!("Analyze {}", pair_symbol)));
-        assert!(prompt.contains(&format!("interval={}", interval))); // Check correct interval in input data section
+        assert!(prompt.contains(&format!("Analyze {pair_symbol}")));
+        assert!(prompt.contains(&format!("interval={interval}"))); // Check correct interval in input data section
         assert!(prompt.contains("## Historical Data:"));
         assert!(prompt.contains("## Consolidated Order Book Data (Grouped by 1.0):"));
         assert!(prompt.contains("price,cumulative_amount"));

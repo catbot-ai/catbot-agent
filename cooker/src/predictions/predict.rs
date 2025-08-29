@@ -52,7 +52,7 @@ where
         // TOFIX: Use base prompt hash
         let prompt_hash = md5::compute(self.prompt)
             .iter()
-            .fold(String::new(), |acc, b| format!("{acc}{:02x}", b));
+            .fold(String::new(), |acc, b| format!("{acc}{b:02x}"));
         let refined_output = gemini_response.refine(Tokyo, &model_name, &prompt_hash, self.context);
 
         Ok(refined_output)

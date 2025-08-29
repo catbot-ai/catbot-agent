@@ -155,10 +155,10 @@ async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response
         match output_result {
             Ok(output) => match serde_json::from_str::<serde_json::Value>(&output) {
                 Ok(output_json) => Response::from_json(&output_json),
-                Err(e) => Response::error(format!("Failed to parse prediction JSON: {}", e), 500),
+                Err(e) => Response::error(format!("Failed to parse prediction JSON: {e}"), 500),
             },
             Err(error_message) => {
-                Response::error(format!("Prediction failed: {}", error_message), 500)
+                Response::error(format!("Prediction failed: {error_message}"), 500)
             }
         }
     }
@@ -348,9 +348,7 @@ pub async fn predict_with_gemini(
 
             match prediction_result {
                 Ok(prediction_output) => Ok(serde_json::to_string_pretty(&prediction_output)
-                    .map_err(|e| {
-                        format!("Failed to serialize prediction output to JSON: {}", e)
-                    })?),
+                    .map_err(|e| format!("Failed to serialize prediction output to JSON: {e}"))?),
                 Err(error) => Err(error.to_string()),
             }
         }
@@ -364,9 +362,7 @@ pub async fn predict_with_gemini(
 
             match prediction_result {
                 Ok(prediction_output) => Ok(serde_json::to_string_pretty(&prediction_output)
-                    .map_err(|e| {
-                        format!("Failed to serialize prediction output to JSON: {}", e)
-                    })?),
+                    .map_err(|e| format!("Failed to serialize prediction output to JSON: {e}"))?),
                 Err(error) => Err(error.to_string()),
             }
         }
@@ -467,9 +463,9 @@ mod tests {
             Ok(json_string) => {
                 let parsed_result: serde_json::Value =
                     serde_json::from_str(&json_string).expect("Failed to parse result as JSON");
-                println!("{:#?}", parsed_result);
+                println!("{parsed_result:#?}");
             }
-            Err(error) => panic!("Prediction failed: {}", error),
+            Err(error) => panic!("Prediction failed: {error}"),
         }
     }
 }
